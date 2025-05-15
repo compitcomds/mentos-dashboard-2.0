@@ -72,9 +72,10 @@ export const getCategory = async (id: string, userTenentId: string): Promise<Cat
       console.warn(`[getCategory] Category ${id} not found or no data returned for tenent_id ${userTenentId}.`);
       return null;
     }
+    // Verify tenent_id after fetching
     if (response.data.data.tenent_id !== userTenentId) {
-      console.warn(`[getCategory] tenent_id mismatch for category ${id}. Expected ${userTenentId}, got ${response.data.data.tenent_id}.`);
-      return null; // Or throw authorization error
+      console.warn(`[getCategory] tenent_id mismatch for category ${id}. Expected ${userTenentId}, got ${response.data.data.tenent_id}. Access denied.`);
+      return null; 
     }
     console.log(`[getCategory] Fetched Category ${id} Data for tenent_id ${userTenentId}:`, response.data.data);
     return response.data.data;
@@ -89,6 +90,7 @@ export const getCategory = async (id: string, userTenentId: string): Promise<Cat
   }
 };
 
+// Create a category, ensuring the userTenentId is included in the payload
 export const createCategory = async (category: CreateCategoryPayload): Promise<Category> => {
   if (!category.tenent_id) {
     throw new Error('User tenent_id is required in the payload to create a category.');
@@ -110,18 +112,25 @@ export const createCategory = async (category: CreateCategoryPayload): Promise<C
   }
 };
 
-export const updateCategory = async (id: number, category: Partial<CreateCategoryPayload>): Promise<Category> => {
-  const userTenentId = category.tenent_id;
+// Update a category by id, ensuring it's for the correct userTenentId
+export const updateCategory = async (id: number, categoryUpdatePayload: Partial<CreateCategoryPayload>, userTenentId: string): Promise<Category> => {
   if (!userTenentId) {
-    throw new Error('User tenent_id is required in the payload to update a category.');
+    throw new Error('User tenent_id is required to authorize category update.');
   }
+  
+  // Ensure tenent_id is not part of the actual update data payload sent to Strapi
+  const { tenent_id, ...updateData } = categoryUpdatePayload;
+  if (tenent_id && tenent_id !== userTenentId) {
+    console.warn(`[Service updateCategory]: Attempted to change tenent_id during update for category ${id}. This is not allowed. The original tenent_id will be preserved if the update proceeds based on authorization for ${userTenentId}.`);
+    // Do not include tenent_id in updateData if it was in categoryUpdatePayload
+  }
+
   const url = `/categories/${id}`;
-  const { tenent_id, ...updateData } = category;
-  console.log(`[updateCategory] Updating category ${id} for tenent_id ${userTenentId} with payload:`, { data: updateData });
+  console.log(`[updateCategory] Updating category ${id} for user with tenent_id ${userTenentId}. Payload:`, { data: updateData });
 
   try {
     const headers = await getAuthHeader();
-    // First, verify ownership if possible (or rely on backend policies)
+    // First, verify ownership by fetching the category and checking its tenent_id
     const existingCategory = await getCategory(String(id), userTenentId);
     if (!existingCategory) {
         throw new Error(`Category with ID ${id} not found or user ${userTenentId} is not authorized to update it.`);
@@ -135,20 +144,21 @@ export const updateCategory = async (id: number, category: Partial<CreateCategor
     return response.data.data;
   } catch (error: unknown) {
     const message = error instanceof AxiosError ? error.response?.data?.error?.message || error.message : (error as Error).message;
-    console.error(`[updateCategory] Failed for ID ${id}, tenent_id ${userTenentId}:`, message, error instanceof AxiosError ? error.response?.data : '');
+    console.error(`[updateCategory] Failed for ID ${id}, user tenent_id ${userTenentId}:`, message, error instanceof AxiosError ? error.response?.data : '');
     throw new Error(message || `Failed to update category ${id}.`);
   }
 };
 
+// Delete a category by id, ensuring it's for the correct userTenentId
 export const deleteCategory = async (id: number, userTenentId: string): Promise<Category | void> => {
   if (!userTenentId) {
-    throw new Error('User tenent_id is required to delete a category.');
+    throw new Error('User tenent_id is required to authorize category deletion.');
   }
   const url = `/categories/${id}`;
-  console.log(`[deleteCategory] Deleting category ${id} for tenent_id ${userTenentId}`);
+  console.log(`[deleteCategory] Deleting category ${id} for user with tenent_id ${userTenentId}`);
   try {
     const headers = await getAuthHeader();
-    // First, verify ownership if possible (or rely on backend policies)
+    // First, verify ownership
     const existingCategory = await getCategory(String(id), userTenentId);
     if (!existingCategory) {
         throw new Error(`Category with ID ${id} not found or user ${userTenentId} is not authorized to delete it.`);
@@ -157,19 +167,19 @@ export const deleteCategory = async (id: number, userTenentId: string): Promise<
      if (response.status === 200 && response.data && response.data.data) {
         console.log(`[deleteCategory] Successfully deleted category ${id} for tenent_id ${userTenentId}.`);
         return response.data.data;
-    } else if (response.status === 204) {
+    } else if (response.status === 204) { // Strapi might return 204 No Content on successful delete
         console.log(`[deleteCategory] Successfully deleted category ${id} (no content returned) for tenent_id ${userTenentId}.`);
-        return;
+        return; // Return void for 204
     }
     console.warn(`[deleteCategory] Unexpected status ${response.status} for category ${id}.`);
-    return response.data?.data;
+    return response.data?.data; // Return data if present, even with unexpected status
   } catch (error: unknown) {
     const message = error instanceof AxiosError ? error.response?.data?.error?.message || error.message : (error as Error).message;
     if (error instanceof AxiosError && error.response?.status === 404) {
       console.warn(`[deleteCategory] Category ${id} not found (404) for tenent_id ${userTenentId}.`);
-      return;
+      return; // Return void for 404
     }
-    console.error(`[deleteCategory] Failed for ID ${id}, tenent_id ${userTenentId}:`, message, error instanceof AxiosError ? error.response?.data : '');
+    console.error(`[deleteCategory] Failed for ID ${id}, user tenent_id ${userTenentId}:`, message, error instanceof AxiosError ? error.response?.data : '');
     throw new Error(message || `Failed to delete category ${id}.`);
   }
 };

@@ -81,10 +81,10 @@ export const getQueryForm = async (id: string, userTenentId: string): Promise<Qu
             return null;
         }
         
-        // Verify tenent_id if the API doesn't filter by it and it's present in the response
-        if (response.data.data.tenent_id && response.data.data.tenent_id !== userTenentId) {
-            console.warn(`[getQueryForm] Fetched query form ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}).`);
-            return null; // Or throw authorization error
+        // Verify tenent_id after fetching
+        if (response.data.data.tenent_id !== userTenentId) {
+            console.warn(`[getQueryForm] Fetched query form ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}). Access denied.`);
+            return null; 
         }
 
         console.log(`[getQueryForm] Fetched Query Form ${id} Data for tenent_id ${userTenentId}:`, response.data.data);
@@ -110,3 +110,8 @@ export const getQueryForm = async (id: string, userTenentId: string): Promise<Qu
         throw new Error(message);
     }
 };
+// Note: Create, Update, Delete for Query Forms are not implemented.
+// If they were, they would follow a similar pattern:
+// - Create: Include tenent_id in payload.
+// - Update/Delete: Authorize using user's tenent_id (e.g., pre-fetch and check),
+//   and ensure tenent_id is not in the update payload's data object.

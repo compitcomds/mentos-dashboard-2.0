@@ -79,9 +79,10 @@ export const getEvent = async (id: string, userTenentId: string): Promise<Event 
             console.warn(`[getEvent] Event ${id} not found or no data returned for tenent_id ${userTenentId}.`);
             return null;
         }
+        // Verify tenent_id after fetching
         if (response.data.data.tenent_id !== userTenentId) {
-             console.warn(`[getEvent] Fetched event ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}).`);
-             return null; // Or throw authorization error
+             console.warn(`[getEvent] Fetched event ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}). Access denied.`);
+             return null; 
         }
 
         console.log(`[getEvent] Fetched Event ${id} Data for tenent_id ${userTenentId}:`, response.data.data);
@@ -109,6 +110,7 @@ export const getEvent = async (id: string, userTenentId: string): Promise<Event 
     }
 };
 
+// Create an event, ensuring the userTenentId is included in the payload
 export const createEvent = async (event: CreateEventPayload): Promise<Event> => {
     if (!event.tenent_id) {
         console.error('[Service createEvent]: tenent_id is missing in payload.');
@@ -152,26 +154,29 @@ export const createEvent = async (event: CreateEventPayload): Promise<Event> => 
     }
 };
 
-export const updateEvent = async (id: string, event: Partial<CreateEventPayload>, userTenentId: string): Promise<Event> => {
+// Update an event by id, ensuring it's for the correct userTenentId
+export const updateEvent = async (id: string, eventUpdatePayload: Partial<CreateEventPayload>, userTenentId: string): Promise<Event> => {
     if (!userTenentId) {
         console.error(`[Service updateEvent]: userTenentId is missing for update of event ID ${id}.`);
-        throw new Error('User tenent_id is required to update an event.');
+        throw new Error('User tenent_id is required to authorize event update.');
     }
-     const { tenent_id, ...updateData } = event;
+    
+    // Ensure tenent_id is not part of the actual update data payload sent to Strapi
+     const { tenent_id, ...updateData } = eventUpdatePayload;
      if (tenent_id && tenent_id !== userTenentId) {
-         console.warn(`[Service updateEvent]: Attempted to change tenent_id during update for event ${id}. Tenent_id change ignored.`);
+         console.warn(`[Service updateEvent]: Attempted to change tenent_id during update for event ${id}. This is not allowed.`);
      }
 
-    // First, verify ownership if possible (or rely on backend policies)
-    const existingEvent = await getEvent(id, userTenentId);
-    if (!existingEvent) {
-        throw new Error(`Event with ID ${id} not found or user ${userTenentId} is not authorized to update it.`);
-    }
-
     const url = `/events/${id}`;
-    console.log(`[updateEvent] Updating event ${id} at ${url} (userTenentId: ${userTenentId}) with payload:`, JSON.stringify({ data: updateData }, null, 2));
+    console.log(`[updateEvent] Updating event ${id} for user with tenent_id ${userTenentId}. Payload:`, JSON.stringify({ data: updateData }, null, 2));
     try {
         const headers = await getAuthHeader();
+        // First, verify ownership by fetching the event and checking its tenent_id
+        const existingEvent = await getEvent(id, userTenentId);
+        if (!existingEvent) {
+            throw new Error(`Event with ID ${id} not found or user ${userTenentId} is not authorized to update it.`);
+        }
+
         const response = await axiosInstance.put<FindOne<Event>>(url,
             { data: updateData },
             {
@@ -211,33 +216,34 @@ export const updateEvent = async (id: string, event: Partial<CreateEventPayload>
     }
 };
 
+// Delete an event by id, ensuring it's for the correct userTenentId
 export const deleteEvent = async (id: string, userTenentId: string): Promise<Event | void> => {
      if (!userTenentId) {
         console.error(`[Service deleteEvent]: userTenentId is missing for deletion of event ID ${id}.`);
-        throw new Error('User tenent_id is required to delete an event.');
-    }
-
-    // First, verify ownership if possible (or rely on backend policies)
-    const existingEvent = await getEvent(id, userTenentId);
-    if (!existingEvent) {
-        throw new Error(`Event with ID ${id} not found or user ${userTenentId} is not authorized to delete it.`);
+        throw new Error('User tenent_id is required to authorize event deletion.');
     }
 
     const url = `/events/${id}`;
-    console.log(`[deleteEvent] Deleting event ${id} at ${url} (userTenentId: ${userTenentId})`);
+    console.log(`[deleteEvent] Deleting event ${id} for user with tenent_id ${userTenentId}`);
     try {
         const headers = await getAuthHeader();
+        // First, verify ownership
+        const existingEvent = await getEvent(id, userTenentId);
+        if (!existingEvent) {
+            throw new Error(`Event with ID ${id} not found or user ${userTenentId} is not authorized to delete it.`);
+        }
+        
         const response = await axiosInstance.delete<FindOne<Event>>(url, { headers });
 
         if (response.status === 200 && response.data && response.data.data) {
             console.log(`[deleteEvent] Successfully deleted event ${id} for tenent_id ${userTenentId}.`);
             return response.data.data;
-        } else if (response.status === 204) {
+        } else if (response.status === 204) { // Strapi might return 204 No Content on successful delete
             console.log(`[deleteEvent] Successfully deleted event ${id} (no content returned) for tenent_id ${userTenentId}.`);
-            return;
+            return; // Return void for 204
         } else {
              console.warn(`[deleteEvent] Unexpected success status ${response.status} when deleting event ${id} at ${url} for tenent_id ${userTenentId}.`);
-             return response.data?.data;
+             return response.data?.data; // Return data if present, even with unexpected status
         }
 
     } catch (error: unknown) {

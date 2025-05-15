@@ -10,7 +10,7 @@ export interface Categorie {
   locale?: string | null;
   name: string;
   description?: string | null; // description is optional
-  tenent_id: string; // Changed from key
+  tenent_id: string; 
   slug?: string | null; // slug is optional
   user?: User | null; // user relation is optional
 }
@@ -20,6 +20,6 @@ export interface CreateCategoryPayload {
   name: string;
   description?: string | null;
   slug?: string | null; // slug is optional
-  tenent_id: string; // Changed from key
+  tenent_id: string; 
   user?: number | null; // Send user ID for relation
 }

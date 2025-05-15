@@ -8,12 +8,12 @@ export interface QueryForm {
   updatedAt?: Date | string;
   publishedAt?: Date | string;
   locale?: string | null;
-  name?: string; // Optional
-  email?: string; // Optional
-  description?: string | null; // Optional
-  other_meta?: Record<string, any> | null; // JSON can be 'any' or a more specific type
-  user?: User | null; // Optional user relation
-  tenent_id?: string; // Changed from key, made optional as per user's QueryForm
+  name?: string; 
+  email?: string; 
+  description?: string | null; 
+  other_meta?: Record<string, any> | null; 
+  user?: User | null; 
+  tenent_id: string; // Changed from optional to mandatory
 }
   
 // Payload for creating a query form
@@ -22,6 +22,6 @@ export interface CreateQueryFormPayload {
   email?: string;
   description?: string | null;
   other_meta?: Record<string, any> | null;
-  tenent_id: string; // Changed from key, assuming this is mandatory for creation
+  tenent_id: string; 
   user?: number | null; // Send user ID for relation
 }
