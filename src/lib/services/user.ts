@@ -5,6 +5,7 @@ import axiosInstance from '@/lib/axios';
 import { getAccessToken } from '@/lib/actions/auth';
 import type { User } from '@/types/auth'; // Import the User type
 
+
 /**
  * Fetches the details of the currently authenticated user, including their unique key.
  * Retrieves the access token (from cookie or hardcoded preview token) and sends it in the Authorization header.
