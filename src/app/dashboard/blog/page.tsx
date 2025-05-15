@@ -28,6 +28,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
+    AlertDialogTrigger, // Added AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -438,3 +439,4 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
     </div>
   );
 }
+
