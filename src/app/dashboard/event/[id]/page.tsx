@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -24,9 +25,10 @@ import type {
   Event,
   EventFormValues,
   CreateEventPayload,
-  TagComponent,
+  // TagComponent, // Replaced by OtherTag
   GetTagValuesFunction,
 } from "@/types/event";
+import type { OtherTag } from "@/types/common"; // Import OtherTag
 import {
   Select,
   SelectContent,
@@ -43,10 +45,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea"; // Use for description if not using Tiptap
+// import { Textarea } from "@/components/ui/textarea"; // TipTap used for description
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Loader2, X, Image as ImageIcon, PlusCircle, Calendar as CalendarIconLucide } from "lucide-react";
+import { CalendarIcon as CalendarIconLucide, Loader2, X, Image as ImageIcon } from "lucide-react"; // Renamed CalendarIcon to avoid conflict
 import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO } from "date-fns";
 import { useCreateEvent, useGetEvent, useUpdateEvent } from "@/lib/queries/event";
@@ -54,24 +56,25 @@ import { useCurrentUser } from "@/lib/queries/user";
 import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
 import NextImage from "next/image";
 import { eventFormSchema } from "@/types/event";
-import type { CombinedMediaData } from "@/types/media"; // Import CombinedMediaData
+import type { CombinedMediaData, Media } from "@/types/media";
 
 // Helper to get nested tag values safely
 const getTagValues: GetTagValuesFunction = (tagField) => {
   if (!tagField || !Array.isArray(tagField)) return [];
-  return tagField.map((t) => t.value).filter(Boolean);
+  return tagField.map((t) => t.tag_value).filter(Boolean) as string[]; // Use tag_value
 };
 
 // Helper to get nested media ID safely
-const getMediaId = (mediaField: any): number | null => {
-  return mediaField?.id ?? null; // Return the ID or null
+const getMediaId = (mediaField: Media | null | undefined): number | null => { // Use Media type
+  return mediaField?.id ?? null;
 };
 
 // Helper to get media URL safely
-const getMediaUrl = (mediaField: any): string | null => {
+const getMediaUrl = (mediaField: Media | null | undefined): string | null => { // Use Media type
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || "";
   if (!mediaField || !mediaField.url) return null;
-  const relativeUrl = mediaField.formats?.thumbnail?.url || mediaField.url; // Prefer thumbnail
+  // Prefer thumbnail from formats if available
+  const relativeUrl = mediaField.formats?.thumbnail?.url || mediaField.formats?.small?.url || mediaField.url;
   if (!relativeUrl) return null;
   const fullUrl = relativeUrl.startsWith("http")
     ? relativeUrl
@@ -79,25 +82,23 @@ const getMediaUrl = (mediaField: any): string | null => {
   return fullUrl;
 };
 
-// Manually define default values
 const defaultFormValues: EventFormValues = {
   title: "",
-  des: "<p></p>",
-  event_date_time: new Date(), // Use current date as default for picker
+  description: "<p></p>", // Changed from 'des'
+  event_date_time: new Date(),
   category: "",
   location: "",
   location_url: null,
   organizer_name: "",
   poster: null,
-  target_audience: "", // Keep as comma-separated string for RHF
-  Speakers: "",       // Keep as comma-separated string for RHF
+  tags: "", // Changed from target_audience
+  speakers: "", // Changed from Speakers
   registration_link: null,
-  event_status: "Draft", // Default status to Draft
-  publish_date: null, // Default publish date to null (optional)
-  key: '', // Will be set from user data
+  event_status: "Draft",
+  publish_date: null,
+  tenent_id: '', // Changed from key
 };
 
-// Mock data (replace later)
 const mockCategories = ["Conference", "Workshop", "Webinar", "Meetup", "Party"];
 
 export default function EventFormPage() {
@@ -107,15 +108,13 @@ export default function EventFormPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
-  const userKey = currentUser?.key;
+  const userTenentId = currentUser?.tenent_id; // Use tenent_id
 
   const [isLoading, setIsLoading] = useState(true);
-  // Separate state for managing the UI representation of tags
-  const [targetAudienceTags, setTargetAudienceTags] = useState<string[]>([]);
-  const [speakersTags, setSpeakersTags] = useState<string[]>([]);
-  // Separate state for the input field values
-  const [tagInputTarget, setTagInputTarget] = useState("");
-  const [tagInputSpeakers, setTagInputSpeakers] = useState("");
+  const [tagsUI, setTagsUI] = useState<string[]>([]); // For 'tags' field
+  const [speakersUI, setSpeakersUI] = useState<string[]>([]); // For 'speakers' field
+  const [tagInputTags, setTagInputTags] = useState(""); // Input for 'tags'
+  const [tagInputSpeakers, setTagInputSpeakers] = useState(""); // Input for 'speakers'
 
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
   const [posterPreview, setPosterPreview] = useState<string | null>(null);
@@ -131,134 +130,123 @@ export default function EventFormPage() {
     defaultValues: defaultFormValues,
   });
 
-  const { control, handleSubmit, reset, setValue, watch } = form;
+  const { control, handleSubmit, reset, setValue } = form;
 
-  // Fetch and populate form data
   useEffect(() => {
     if (isLoadingUser) return;
-    if (!userKey && !isEditing) {
-      console.error("User key is missing. Cannot create a new event.");
-      toast({ variant: "destructive", title: "Error", description: "Cannot create event without user key." });
+    if (!userTenentId && !isEditing) { // Check tenent_id
+      console.error("User tenent_id is missing. Cannot create a new event.");
+      toast({ variant: "destructive", title: "Error", description: "Cannot create event without user tenent_id." });
       setIsLoading(false);
       return;
     }
 
-    let initialValues = { ...defaultFormValues, key: userKey || '' }; // Use empty string as fallback for key if needed
+    let initialValues = { ...defaultFormValues, tenent_id: userTenentId || '' };
 
     if (isEditing && eventData) {
       setIsLoading(true);
-      if (eventData.key !== userKey) {
-        console.error("Authorization Error: User key mismatch.");
+      if (eventData.tenent_id !== userTenentId) { // Check tenent_id
+        console.error("Authorization Error: User tenent_id mismatch.");
         toast({ variant: "destructive", title: "Authorization Error", description: "You cannot edit this event." });
         router.push('/dashboard/event');
         setIsLoading(false);
         return;
       }
 
-      // Get tags from the fetched data
-      const fetchedTargetTags = getTagValues(eventData.target_audience);
-      const fetchedSpeakersTags = getTagValues(eventData.Speakers);
+      const fetchedTags = getTagValues(eventData.tags);
+      const fetchedSpeakers = getTagValues(eventData.speakers);
 
-      // Set the UI state for tags
-      setTargetAudienceTags(fetchedTargetTags);
-      setSpeakersTags(fetchedSpeakersTags);
+      setTagsUI(fetchedTags);
+      setSpeakersUI(fetchedSpeakers);
 
       initialValues = {
         ...initialValues,
         title: eventData.title || "",
-        des: eventData.des || "<p></p>",
-        // Parse ISO string to Date object
-        event_date_time: eventData.event_date_time ? parseISO(eventData.event_date_time) : new Date(),
+        description: eventData.description || "<p></p>", // Use description
+        event_date_time: eventData.event_date_time ? parseISO(eventData.event_date_time as string) : new Date(),
         category: eventData.category || "",
         location: eventData.location || "",
         location_url: eventData.location_url || null,
         organizer_name: eventData.organizer_name || "",
         poster: getMediaId(eventData.poster),
-        // Set the RHF value as a comma-separated string
-        target_audience: fetchedTargetTags.join(", "),
-        Speakers: fetchedSpeakersTags.join(", "),
+        tags: fetchedTags.join(", "), // Use tags
+        speakers: fetchedSpeakers.join(", "), // Use speakers
         registration_link: eventData.registration_link || null,
         event_status: eventData.event_status || "Draft",
-        publish_date: eventData.publish_date ? parseISO(eventData.publish_date) : null, // Parse or keep null
-        key: eventData.key || userKey || '', // Ensure key is populated
+        publish_date: eventData.publish_date ? parseISO(eventData.publish_date as string) : null,
+        tenent_id: eventData.tenent_id || userTenentId || '', // Ensure tenent_id
       };
       setPosterPreview(getMediaUrl(eventData.poster));
 
     } else if (!isEditing) {
-        // Reset tags and preview for new form
-        setTargetAudienceTags([]);
-        setSpeakersTags([]);
+        setTagsUI([]);
+        setSpeakersUI([]);
         setPosterPreview(null);
-        setTagInputTarget(""); // Clear input fields
+        setTagInputTags("");
         setTagInputSpeakers("");
     }
 
-    reset(initialValues); // Reset the form with initial values
+    reset(initialValues);
     setIsLoading(false);
-  }, [isEditing, eventData, reset, isLoadingUser, userKey, router, toast]);
+  }, [isEditing, eventData, reset, isLoadingUser, userTenentId, router, toast]);
 
 
-  // Generic handler for input changes - UPDATES LOCAL STATE ONLY
   const handleTagInputChange = (
       e: React.ChangeEvent<HTMLInputElement>,
       setTagInputState: React.Dispatch<React.SetStateAction<string>>
   ) => {
-      setTagInputState(e.target.value); // Update the specific input's state directly
+      setTagInputState(e.target.value);
   };
 
-  // Generic handler for keydown events (Enter, Comma, Backspace)
   const handleTagKeyDown = (
       e: React.KeyboardEvent<HTMLInputElement>,
-      currentTags: string[],
-      setTagsState: React.Dispatch<React.SetStateAction<string[]>>,
-      tagInput: string, // Use the current input state
+      currentTagsState: string[],
+      setTagsUIState: React.Dispatch<React.SetStateAction<string[]>>,
+      tagInputState: string,
       setTagInputState: React.Dispatch<React.SetStateAction<string>>,
-      fieldName: "target_audience" | "Speakers"
+      rhfFieldName: "tags" | "speakers" // Use correct RHF field names
   ) => {
-      if ((e.key === "," || e.key === "Enter") && tagInput.trim()) {
+      if ((e.key === "," || e.key === "Enter") && tagInputState.trim()) {
           e.preventDefault();
-          const newTag = tagInput.trim();
-          if (!currentTags.includes(newTag)) {
-              const updatedTags = [...currentTags, newTag];
-              setTagsState(updatedTags); // Update UI state
-              setValue(fieldName, updatedTags.join(", "), { shouldValidate: true }); // Update RHF value
+          const newTag = tagInputState.trim();
+          if (!currentTagsState.includes(newTag)) {
+              const updatedTags = [...currentTagsState, newTag];
+              setTagsUIState(updatedTags);
+              setValue(rhfFieldName, updatedTags.join(", "), { shouldValidate: true });
           }
-          setTagInputState(""); // Clear the local input field state
-      } else if (e.key === "Backspace" && !tagInput && currentTags.length > 0) {
+          setTagInputState("");
+      } else if (e.key === "Backspace" && !tagInputState && currentTagsState.length > 0) {
           e.preventDefault();
-          const updatedTags = currentTags.slice(0, -1);
-          setTagsState(updatedTags); // Update UI state
-          setValue(fieldName, updatedTags.join(", "), { shouldValidate: true }); // Update RHF value
+          const updatedTags = currentTagsState.slice(0, -1);
+          setTagsUIState(updatedTags);
+          setValue(rhfFieldName, updatedTags.join(", "), { shouldValidate: true });
       }
-      // Allow normal character input, which will trigger onChange handled by handleTagInputChange
   };
 
-  // Generic handler for removing a tag
-  const removeTag = (
+  const removeTagUI = (
       tagToRemove: string,
-      currentTags: string[],
-      setTagsState: React.Dispatch<React.SetStateAction<string[]>>,
-      fieldName: "target_audience" | "Speakers"
+      currentTagsState: string[],
+      setTagsUIState: React.Dispatch<React.SetStateAction<string[]>>,
+      rhfFieldName: "tags" | "speakers" // Use correct RHF field names
   ) => {
-      const updatedTags = currentTags.filter((tag) => tag !== tagToRemove);
-      setTagsState(updatedTags); // Update UI state
-      setValue(fieldName, updatedTags.join(", "), { shouldValidate: true }); // Update RHF value
+      const updatedTags = currentTagsState.filter((tag) => tag !== tagToRemove);
+      setTagsUIState(updatedTags);
+      setValue(rhfFieldName, updatedTags.join(", "), { shouldValidate: true });
   };
 
 
-  // Media Selection
   const openMediaSelector = () => setIsMediaSelectorOpen(true);
 
   const handleMediaSelect = useCallback(
-    (selectedMedia: CombinedMediaData) => { // Use CombinedMediaData type
-      if (selectedMedia && selectedMedia.webMediaId) {
-        const fileId = selectedMedia.fileId; // Use fileId for relation
-        const previewUrl = selectedMedia.thumbnailUrl || selectedMedia.fileUrl;
+    (selectedMediaItem: CombinedMediaData) => {
+      if (selectedMediaItem && selectedMediaItem.fileId) { // Ensure fileId exists
+        const fileId = selectedMediaItem.fileId;
+        const previewUrl = selectedMediaItem.thumbnailUrl || selectedMediaItem.fileUrl;
         setValue("poster", fileId, { shouldValidate: true });
         setPosterPreview(previewUrl);
         toast({ title: "Poster Image Selected", description: `Set poster to image ID: ${fileId}` });
       } else {
-        toast({ variant: "destructive", title: "Error", description: "Media selection failed." });
+        toast({ variant: "destructive", title: "Error", description: "Media selection failed or file ID missing." });
       }
       setIsMediaSelectorOpen(false);
     }, [setValue, toast]
@@ -269,31 +257,27 @@ export default function EventFormPage() {
     setPosterPreview(null);
   };
 
-  // Form Submission
   const onSubmit: SubmitHandler<EventFormValues> = async (data) => {
-    if (!userKey) {
-      toast({ variant: "destructive", title: "Error", description: "User key is missing." });
+    if (!userTenentId) { // Check tenent_id
+      toast({ variant: "destructive", title: "Error", description: "User tenent_id is missing." });
       return;
     }
 
-    const transformTags = (tagsString: string | undefined): TagComponent[] => {
-        return tagsString ? tagsString.split(",").map(tag => tag.trim()).filter(Boolean).map(val => ({ value: val })) : [];
+    const transformTagsToPayload = (tagsString: string | undefined): OtherTag[] => {
+        return tagsString ? tagsString.split(",").map(tag => tag.trim()).filter(Boolean).map(val => ({ tag_value: val })) : []; // Use tag_value
     };
 
-    // Ensure dates are correctly formatted *before* sending
     const payload: CreateEventPayload = {
       ...data,
-      key: userKey,
-      // Convert Date objects to ISO strings for API
+      tenent_id: userTenentId, // Use tenent_id
       event_date_time: data.event_date_time.toISOString(),
       publish_date: data.publish_date ? data.publish_date.toISOString() : null,
-      // Transform comma-separated strings back to arrays of TagComponent
-      target_audience: transformTags(data.target_audience),
-      Speakers: transformTags(data.Speakers),
+      tags: transformTagsToPayload(data.tags), // Use tags
+      speakers: transformTagsToPayload(data.speakers), // Use speakers
+      description: data.description, // Map form field
     };
+    delete (payload as any).key; // Remove if 'key' was part of form data via spread
 
-
-    console.log("Submitting payload:", JSON.stringify(payload, null, 2));
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
     const mutation = isEditing ? updateMutation : createMutation;
@@ -303,9 +287,7 @@ export default function EventFormPage() {
         router.push("/dashboard/event");
       },
       onError: (err: any) => {
-        console.error("Event submission error:", err);
         setSubmissionPayloadJson(`Error: ${err.message}\n\n${JSON.stringify(err.response?.data || err, null, 2)}`);
-        // Error toast is handled globally in the mutation hook
       },
     };
 
@@ -330,47 +312,46 @@ export default function EventFormPage() {
       </div>
     );
   }
-   if (!userKey && !isLoadingUser) {
+   if (!userTenentId && !isLoadingUser) { // Check tenent_id
       return (
           <div className="p-6 text-center">
-              <h1 className="text-2xl font-bold text-destructive mb-4">User Key Missing</h1>
-              <p>Cannot create or edit events without a user key.</p>
+              <h1 className="text-2xl font-bold text-destructive mb-4">User Tenent ID Missing</h1>
+              <p>Cannot create or edit events without a user tenent_id.</p>
               <Button onClick={() => router.refresh()} className="mt-4">Refresh</Button>
           </div>
       );
   }
 
-  // Component for rendering tag input fields - Refactored
   const TagInputComponent = ({
       label,
-      tags, // UI state (array of strings)
-      setTagsState, // Function to update UI state
-      tagInput, // Input field state (string)
-      setTagInputState, // Function to update input field state
-      fieldName // RHF field name ("target_audience" or "Speakers")
+      tagsUIState,
+      setTagsUIState,
+      tagInputState,
+      setTagInputState,
+      rhfFieldName
   }: {
       label: string;
-      tags: string[];
-      setTagsState: React.Dispatch<React.SetStateAction<string[]>>;
-      tagInput: string;
+      tagsUIState: string[];
+      setTagsUIState: React.Dispatch<React.SetStateAction<string[]>>;
+      tagInputState: string;
       setTagInputState: React.Dispatch<React.SetStateAction<string>>;
-      fieldName: "target_audience" | "Speakers";
+      rhfFieldName: "tags" | "speakers"; // Use correct RHF names
   }) => (
       <FormField
           control={control}
-          name={fieldName} // RHF field name
-          render={({ field }) => ( // Use field from render prop to bind hidden input
+          name={rhfFieldName}
+          render={({ field }) => (
               <FormItem>
-                  <FormLabel htmlFor={`${fieldName}-input`}>{label}</FormLabel>
+                  <FormLabel htmlFor={`${rhfFieldName}-input`}>{label}</FormLabel>
                   <FormControl>
                       <div>
                           <div className="flex flex-wrap items-center gap-2 p-2 border border-input rounded-md min-h-[40px]">
-                              {tags.map(tag => (
+                              {tagsUIState.map(tag => (
                                   <Badge key={tag} variant="secondary" className="flex items-center gap-1">
                                       {tag}
                                       <button
                                           type="button"
-                                          onClick={() => removeTag(tag, tags, setTagsState, fieldName)}
+                                          onClick={() => removeTagUI(tag, tagsUIState, setTagsUIState, rhfFieldName)}
                                           className="ml-1 rounded-full outline-none focus:ring-1 focus:ring-ring"
                                           disabled={mutationLoading}
                                       >
@@ -378,24 +359,21 @@ export default function EventFormPage() {
                                       </button>
                                   </Badge>
                               ))}
-                              {/* Input field binds directly to local state, not RHF field */}
                               <input
-                                  id={`${fieldName}-input`}
+                                  id={`${rhfFieldName}-input`}
                                   type="text"
-                                  value={tagInput} // Bind to the dedicated local input state
-                                  onChange={(e) => handleTagInputChange(e, setTagInputState)} // Update local input state only
-                                  onKeyDown={(e) => handleTagKeyDown(e, tags, setTagsState, tagInput, setTagInputState, fieldName)} // Handle key events using local state
-                                  placeholder={tags.length === 0 ? "Add tags (comma/Enter)..." : ""}
+                                  value={tagInputState}
+                                  onChange={(e) => handleTagInputChange(e, setTagInputState)}
+                                  onKeyDown={(e) => handleTagKeyDown(e, tagsUIState, setTagsUIState, tagInputState, setTagInputState, rhfFieldName)}
+                                  placeholder={tagsUIState.length === 0 ? "Add tags (comma/Enter)..." : ""}
                                   className="flex-1 bg-transparent outline-none text-sm min-w-[150px]"
                                   disabled={mutationLoading}
                               />
                           </div>
-                          {/* Hidden input bound to RHF using field from render prop */}
-                           {/* This input ensures RHF value (comma-separated string) stays synced */}
                            <input
                              type="hidden"
-                             {...field} // Spread field props (value, onChange, etc.) from RHF
-                             value={tags.join(", ")} // Value is derived from the UI state (tags array)
+                             {...field}
+                             value={tagsUIState.join(", ")}
                            />
                       </div>
                   </FormControl>
@@ -430,7 +408,6 @@ export default function EventFormPage() {
             </CardHeader>
 
             <CardContent className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
-              {/* Basic Info */}
               <FormField
                 control={control}
                 name="title"
@@ -447,16 +424,16 @@ export default function EventFormPage() {
 
               <FormField
                   control={control}
-                  name="des"
+                  name="description" // Use 'description'
                   render={({ field }) => (
-                    <FormItem className="flex-1 flex flex-col min-h-[300px]"> {/* Ensure it takes space */}
+                    <FormItem className="flex-1 flex flex-col min-h-[300px]">
                       <FormLabel htmlFor="content">Description</FormLabel>
                       <FormControl>
                          <TipTapEditor
-                              key={eventId || "new-event"} // Re-mount editor when ID changes
-                              content={field.value || "<p></p>"} // Use field value
-                              onContentChange={field.onChange} // Update field value
-                              className="flex-1 min-h-full border border-input rounded-md" // Styling
+                              key={eventId || "new-event"}
+                              content={field.value || "<p></p>"}
+                              onContentChange={field.onChange}
+                              className="flex-1 min-h-full border border-input rounded-md"
                           />
                       </FormControl>
                       <FormDescription>Optional. Describe your event.</FormDescription>
@@ -465,7 +442,6 @@ export default function EventFormPage() {
                   )}
                 />
 
-              {/* Date, Time, Location */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={control}
@@ -485,7 +461,7 @@ export default function EventFormPage() {
                               disabled={mutationLoading}
                             >
                               {field.value ? (
-                                format(field.value, "PPP HH:mm") // Show date and time
+                                format(field.value, "PPP HH:mm")
                               ) : (
                                 <span>Pick a date and time</span>
                               )}
@@ -498,10 +474,9 @@ export default function EventFormPage() {
                             mode="single"
                             selected={field.value}
                             onSelect={field.onChange}
-                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || mutationLoading} // Disable past dates
+                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || mutationLoading}
                             initialFocus
                           />
-                           {/* Basic Time Input - Consider a dedicated time picker component for better UX */}
                            <div className="p-3 border-t border-border">
                                <Label>Time (HH:mm)</Label>
                                <Input
@@ -574,7 +549,6 @@ export default function EventFormPage() {
               />
 
 
-               {/* Organizer & Poster */}
                <FormField
                  control={control}
                  name="organizer_name"
@@ -637,27 +611,24 @@ export default function EventFormPage() {
                   )}
                 />
 
-                {/* Tags - Target Audience & Speakers */}
-                 {/* Use TagInputComponent, passing the correct state and handlers */}
                  <TagInputComponent
-                     label="Target Audience"
-                     tags={targetAudienceTags}
-                     setTagsState={setTargetAudienceTags}
-                     tagInput={tagInputTarget}
-                     setTagInputState={setTagInputTarget}
-                     fieldName="target_audience"
+                     label="Tags" // Changed from Target Audience
+                     tagsUIState={tagsUI}
+                     setTagsUIState={setTagsUI}
+                     tagInputState={tagInputTags}
+                     setTagInputState={setTagInputTags}
+                     rhfFieldName="tags" // Use 'tags'
                  />
                  <TagInputComponent
                      label="Speakers"
-                     tags={speakersTags}
-                     setTagsState={setSpeakersTags}
-                     tagInput={tagInputSpeakers}
+                     tagsUIState={speakersUI}
+                     setTagsUIState={setSpeakersUI}
+                     tagInputState={tagInputSpeakers}
                      setTagInputState={setTagInputSpeakers}
-                     fieldName="Speakers"
+                     rhfFieldName="speakers" // Use 'speakers'
                  />
 
 
-                {/* Links & Status */}
                  <FormField
                    control={control}
                    name="registration_link"
@@ -711,7 +682,7 @@ export default function EventFormPage() {
                                   disabled={mutationLoading}
                                 >
                                   {field.value ? (
-                                    format(field.value, "PPP") // Only date needed
+                                    format(field.value, "PPP")
                                   ) : (
                                     <span>Pick a publish date</span>
                                   )}
@@ -724,8 +695,6 @@ export default function EventFormPage() {
                                 mode="single"
                                 selected={field.value}
                                 onSelect={field.onChange}
-                                // Allow past dates for editing, maybe disable for new if needed
-                                // disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || mutationLoading}
                                 disabled={mutationLoading}
                                 initialFocus
                               />
@@ -768,12 +737,11 @@ export default function EventFormPage() {
         </form>
       </Form>
 
-      {/* Media Selector Dialog */}
       <MediaSelectorDialog
         isOpen={isMediaSelectorOpen}
         onOpenChange={setIsMediaSelectorOpen}
         onMediaSelect={handleMediaSelect}
-        returnType="id" // Return ID for the poster field
+        returnType="id"
       />
     </div>
   );
@@ -792,17 +760,14 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
           <Skeleton className="h-4 w-1/2" />
         </CardHeader>
         <CardContent className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
-          {/* Title */}
           <div className="space-y-1.5">
             <Skeleton className="h-4 w-1/4 mb-1" />
             <Skeleton className="h-10 w-full" />
           </div>
-           {/* Description */}
            <div className="space-y-1.5 flex-1 min-h-[300px]">
                <Skeleton className="h-4 w-1/4 mb-1" />
                <Skeleton className="h-full w-full rounded-md" />
            </div>
-           {/* Date/Time & Category */}
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
                     <Skeleton className="h-4 w-1/4 mb-1" />
@@ -813,7 +778,6 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
                     <Skeleton className="h-10 w-full" />
                  </div>
            </div>
-           {/* Location & URL */}
             <div className="space-y-1.5">
                 <Skeleton className="h-4 w-1/4 mb-1" />
                 <Skeleton className="h-10 w-full" />
@@ -822,7 +786,6 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
                  <Skeleton className="h-4 w-1/4 mb-1" />
                  <Skeleton className="h-10 w-full" />
              </div>
-             {/* Organizer & Poster */}
              <div className="space-y-1.5">
                 <Skeleton className="h-4 w-1/4 mb-1" />
                 <Skeleton className="h-10 w-full" />
@@ -831,7 +794,6 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
                   <Skeleton className="h-4 w-1/6 mb-1" />
                   <Skeleton className="h-10 w-32" />
               </div>
-              {/* Tags */}
               <div className="space-y-1.5">
                  <Skeleton className="h-4 w-1/6 mb-1" />
                  <Skeleton className="h-10 w-full" />
@@ -840,12 +802,10 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
                  <Skeleton className="h-4 w-1/6 mb-1" />
                  <Skeleton className="h-10 w-full" />
               </div>
-               {/* Registration Link */}
                <div className="space-y-1.5">
                    <Skeleton className="h-4 w-1/4 mb-1" />
                    <Skeleton className="h-10 w-full" />
                </div>
-                {/* Status & Publish Date */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-1.5">
                         <Skeleton className="h-4 w-1/4 mb-1" />

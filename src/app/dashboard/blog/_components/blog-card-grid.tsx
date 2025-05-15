@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -26,31 +27,32 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger, // Added import
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Blog } from '@/types/blog';
+import type { Media } from '@/types/media'; // Import Media type
 
 interface BlogCardGridProps {
   blogPosts: Blog[];
-  getImageUrl: (post: Blog) => string | null; // Use the passed getImageUrl function
+  getImageUrl: (post: Blog) => string | null;
   onDelete: (id: string) => void;
   deleteMutation: UseMutationResult<Blog | void, Error, string, unknown>;
 }
 
 export default function BlogCardGrid({
   blogPosts,
-  getImageUrl, // Use the passed function
+  getImageUrl,
   onDelete,
   deleteMutation,
 }: BlogCardGridProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {blogPosts.map((post) => {
-        const imageUrl = getImageUrl(post); // Use the passed getImageUrl function
-        const authorName = typeof post.authors === 'object' && post.authors !== null && 'name' in post.authors ? post.authors.name : 'N/A';
+        const imageUrl = getImageUrl(post);
+        const authorName = post.author || 'N/A'; // Use post.author (string)
         const categoryName = Array.isArray(post.categories) && post.categories.length > 0 && post.categories[0]?.name ? post.categories[0].name : 'N/A';
-        const createdAtDate = post.createdAt ? new Date(post.createdAt) : null;
+        const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null; // Cast to string for Date constructor
 
         return (
           <Card key={post.id} className="flex flex-col">
@@ -98,6 +100,7 @@ export default function BlogCardGrid({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button asChild size="icon" variant="ghost" className="h-8 w-8">
+                    {/* Assuming public blog view path, adjust if necessary */}
                     <Link href={`/blog/${post.slug}`} target="_blank">
                       <Eye className="h-4 w-4" />
                     </Link>
@@ -161,5 +164,3 @@ export default function BlogCardGrid({
     </div>
   );
 }
-
-    

@@ -1,4 +1,5 @@
-'use client'; // Required for hooks and client-side interactions
+
+'use client'; 
 
 import * as React from 'react';
 import {
@@ -7,7 +8,6 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Pencil, Trash2, Loader2, AlertCircle, Eye, ImageIcon, LayoutGrid, List, Search, X } from "lucide-react";
@@ -28,7 +28,6 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger, // Added import
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -39,23 +38,23 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import Image from 'next/image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Blog } from "@/types/blog";
+import type { Media } from "@/types/media"; // Import Media type
 import { useCurrentUser } from "@/lib/queries/user";
 import BlogCardGrid from './_components/blog-card-grid';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useGetCategories } from '@/lib/queries/category';
-import type { Category } from '@/types/category';
+import type { Categorie as Category } from '@/types/category'; // Use new Categorie type
 
-// Get the API base URL from environment variables, remove trailing '/api' if present
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || '';
 
 type ViewMode = 'table' | 'card';
 
 export default function BlogPage() {
    const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser();
-   const userKey = currentUser?.tenent_id;
+   const userTenentId = currentUser?.tenent_id; // Use tenent_id
    const { data: blogPosts, isLoading: isLoadingBlogs, isError: isBlogsError, error: blogsError, refetch, isFetching } = useGetBlogs();
-   const { data: categories, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories(userKey);
+   const { data: categories, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories(userTenentId);
    const deleteMutation = useDeleteBlog();
 
    const [viewMode, setViewMode] = React.useState<ViewMode>('table');
@@ -72,9 +71,9 @@ export default function BlogPage() {
   };
 
   const getImageUrl = (post: Blog): string | null => {
-      const relativeUrl = post.image?.url;
+      const mediaFile = post.image as Media | null; // Cast to Media
+      const relativeUrl = mediaFile?.url;
       if (!relativeUrl) return null;
-      // Ensure the base URL does not have a trailing slash if the relativeUrl starts with one
       const cleanBaseUrl = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
       const cleanRelativeUrl = relativeUrl.startsWith('/') ? relativeUrl.substring(1) : relativeUrl;
       const fullUrl = `${cleanBaseUrl}/${cleanRelativeUrl}`;
@@ -84,7 +83,7 @@ export default function BlogPage() {
   const filteredBlogPosts = React.useMemo(() => {
     if (!blogPosts) return [];
     return blogPosts.filter(post => {
-      const matchesSearchTerm = post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearchTerm = post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 (post.slug && post.slug.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCategory = !selectedCategoryId || (post.categories && post.categories.some(cat => String(cat.id) === selectedCategoryId));
       return matchesSearchTerm && matchesCategory;
@@ -126,14 +125,13 @@ export default function BlogPage() {
                     <TooltipContent>Card View</TooltipContent>
                 </Tooltip>
                 <Link href="/dashboard/blog/new">
-                <Button disabled={isLoadingUser || !userKey}>
+                <Button disabled={isLoadingUser || !userTenentId}>
                     <PlusCircle className="mr-2 h-4 w-4" /> New Post
                 </Button>
                 </Link>
             </div>
         </div>
 
-        {/* Filter Bar */}
         <Card>
             <CardContent className="p-4 flex flex-col md:flex-row items-center gap-4">
                 <div className="relative w-full md:flex-grow">
@@ -200,13 +198,13 @@ export default function BlogPage() {
              </Alert>
          )}
 
-         {!isLoading && !isError && userKey && filteredBlogPosts.length === 0 && (
+         {!isLoading && !isError && userTenentId && filteredBlogPosts.length === 0 && (
             <div className="mt-4 border border-dashed border-border rounded-md p-8 text-center text-muted-foreground">
-            {blogPosts && blogPosts.length > 0 ? 'No blog posts match your current filters.' : `No blog posts found for your key (${userKey}). Click "New Post" to create one.`}
+            {blogPosts && blogPosts.length > 0 ? 'No blog posts match your current filters.' : `No blog posts found for your tenent_id (${userTenentId}). Click "New Post" to create one.`}
             </div>
          )}
 
-         {!isLoading && !isError && userKey && filteredBlogPosts.length > 0 && (
+         {!isLoading && !isError && userTenentId && filteredBlogPosts.length > 0 && (
            viewMode === 'table' ? (
             <Card className="w-full overflow-x-auto">
                 <CardHeader>
@@ -233,8 +231,8 @@ export default function BlogPage() {
                     <TableBody>
                         {filteredBlogPosts.map((post) => {
                             const imageUrl = getImageUrl(post);
-                            const authorName = typeof post.authors === 'object' && post.authors !== null && 'name' in post.authors ? post.authors.name : 'N/A';
-                             const createdAtDate = post.createdAt ? new Date(post.createdAt) : null;
+                            const authorName = post.author || 'N/A'; // Use post.author (string)
+                             const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null; // Cast for Date constructor
 
                             return (
                              <TableRow key={post.id}>
@@ -282,7 +280,7 @@ export default function BlogPage() {
                                    <Tooltip>
                                         <TooltipTrigger asChild>
                                              <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                                                 <Link href={`/blog/${post.slug}`} target="_blank">
+                                                 <Link href={`/blog/${post.slug}`} target="_blank"> {/* Adjust public link if needed */}
                                                      <Eye className="h-4 w-4" />
                                                  </Link>
                                              </Button>
@@ -356,9 +354,9 @@ export default function BlogPage() {
              />
            )
          )}
-         {!isLoadingUser && !isUserError && !userKey && (
+         {!isLoadingUser && !isUserError && !userTenentId && (
              <div className="mt-4 border border-dashed border-border rounded-md p-8 text-center text-muted-foreground">
-                User key is missing. Cannot display blogs.
+                User tenent_id is missing. Cannot display blogs.
              </div>
          )}
         </div>
@@ -370,7 +368,6 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
   const skeletonItems = Array(viewMode === 'table' ? 5 : 6).fill(0);
   return (
     <div className="space-y-4">
-      {/* Skeleton for Filter Bar */}
       <Card>
         <CardContent className="p-4 flex flex-col md:flex-row items-center gap-4">
           <Skeleton className="h-10 w-full md:flex-grow" />
@@ -420,14 +417,14 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
             {skeletonItems.map((_, i) => (
               <Card key={i}>
                 <CardHeader>
-                    <Skeleton className="h-32 w-full mb-2 rounded-md" /> {/* Image skeleton */}
-                    <Skeleton className="h-5 w-3/4" /> {/* Title skeleton */}
-                    <Skeleton className="h-4 w-1/2 mt-1" /> {/* Slug skeleton */}
+                    <Skeleton className="h-32 w-full mb-2 rounded-md" />
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-1/2 mt-1" />
                 </CardHeader>
                 <CardContent className="space-y-1.5">
-                    <Skeleton className="h-4 w-1/4" /> {/* Status skeleton */}
-                    <Skeleton className="h-4 w-3/4" /> {/* Author/Category skeleton */}
-                    <Skeleton className="h-4 w-1/2" /> {/* Date skeleton */}
+                    <Skeleton className="h-4 w-1/4" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
                 </CardContent>
                 <CardFooter className="flex justify-end space-x-1 pt-4">
                     <Skeleton className="h-8 w-8" />
@@ -441,5 +438,3 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
     </div>
   );
 }
-
-    

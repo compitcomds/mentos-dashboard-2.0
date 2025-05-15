@@ -1,4 +1,4 @@
-
+import type { Role } from './common'; // Import Role
 import * as z from 'zod';
 
 // Schema for the registration form UI
@@ -35,37 +35,34 @@ export type LoginFormValues = z.infer<typeof loginSchema>;
 // --- API Payload and Response Types ---
 
 // Payload expected by the /api/auth/local/register endpoint
-// Based on user's provided service code
 export interface RegisterPayload {
     username: string;
     email: string;
     password: string;
-    full_name?: string; // Optional: include if API accepts directly
-    phone?: number | string; // Allow string initially, convert in service if needed
-    address?: string;     // Optional: include if API accepts directly
-    key?: string; // User specific key
+    full_name?: string;
+    phone?: number | string;
+    address?: string;
+    tenent_id?: string; // Changed from key to tenent_id
 }
 
 // Structure of the response from the /api/auth/local/register endpoint
-// Based on user's provided service code
 export interface RegisterResponse {
     jwt: string;
-    user: User; // Use the User interface
-    message?: string; // Optional success message from API
+    user: User;
+    message?: string;
     status?: number;
 }
 
 
 // Structure of the response from the /api/auth/local (login) endpoint
-// Based on user's provided service code and typical Strapi responses
 export interface LoginResponse {
     jwt: string;
-    user: User; // Use the User interface
-    message?: string; // Optional success message from API
-    data?: { // Keep data structure for consistency with TanStack hook usage in components
+    user: User;
+    message?: string;
+    data?: {
         accessToken: string;
         accessTokenExpiry: string;
-        user?: User; // Use the User interface
+        user?: User;
     };
     status?: number;
 }
@@ -77,7 +74,6 @@ export interface ForgotPasswordPayload {
 }
 
 // Payload for the /api/auth/reset-password endpoint
-// Based on user's provided service code
 export interface ResetPasswordPayload {
   code: string; // The reset token/code from the email link
   password: string;
@@ -88,23 +84,25 @@ export interface ResetPasswordPayload {
 export interface GenericResponse {
     message: string;
     status?: number;
-    // other potential fields
 }
 
-// Optional: Define a more specific User type if needed across the app
+// Updated User type based on user's provided interface
 export interface User {
-    id: number;
+    id?: number;
     username: string;
     email: string;
     provider?: string;
     confirmed?: boolean;
     blocked?: boolean;
-    createdAt?: string;
-    updatedAt?: string;
-    publishedAt?: string | null;
-    full_name?: string;
-    phone?: string | number; // Use string if displaying, number if processing
-    address?: string;
-    tenent_id?: string; // Add the key field
-    // Add other relevant user fields (e.g., role)
+    createdAt?: Date | string;
+    updatedAt?: Date | string;
+    role?: Role | null | number; // Using the new Role interface
+    tenent_id?: string; // Added to maintain compatibility with existing services
+    // Fields like full_name, phone, address are not in the provided User,
+    // they are usually part of a related profile or custom fields.
+    // If they come from /users/me, they should be added here.
+    // For now, assuming they are not standard fields on the User object from /users/me.
+    full_name?: string; // Keeping for compatibility if Strapi returns it on /users/me
+    phone?: string | number; // Keeping for compatibility
+    address?: string; // Keeping for compatibility
 }
