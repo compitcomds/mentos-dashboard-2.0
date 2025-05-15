@@ -148,7 +148,7 @@ const defaultFormValues: BlogFormValues = {
         canonicalURL: null,
         structuredData: '{ "@context": "https://schema.org", "@type": "Article" }',
     },
-    key: '', // Will be set from user data (tenent_id)
+    tenent_id: '', // Changed from key, will be set from user data
 };
 
 
@@ -159,7 +159,7 @@ export default function BlogFormPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
-  const userTenentId = currentUser?.tenent_id; // Use tenent_id
+  const userTenentId = currentUser?.tenent_id;
 
   const { data: fetchedCategories, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories(userTenentId);
 
@@ -220,15 +220,13 @@ export default function BlogFormPage() {
     if (isLoadingUser) return;
 
     // Mock authors (replace with actual data fetching if needed)
-    // If authors are now just a string, this mock list might not be directly used for form submission
-    // but could be for a suggestions dropdown if the UI changes.
     setAuthorsList([{ id: "John Doe", name: "John Doe" }, { id: "Jane Smith", name: "Jane Smith" }]);
 
 
     let initialValues = { ...defaultFormValues };
 
-    if (userTenentId) { // Use tenent_id
-         initialValues.key = userTenentId; // Form schema uses 'key', which will be mapped to tenent_id
+    if (userTenentId) {
+         initialValues.tenent_id = userTenentId; // Form schema uses 'tenent_id'
     } else if (!isEditing) {
          console.error("User tenent_id is missing. Cannot create a new blog post.");
     }
@@ -236,14 +234,14 @@ export default function BlogFormPage() {
 
     if (isEditing && blogData && fetchedCategories) {
         setIsLoading(true);
-        if (blogData.tenent_id !== userTenentId) { // Check tenent_id
+        if (blogData.tenent_id !== userTenentId) {
             toast({ variant: "destructive", title: "Authorization Error", description: "You are not authorized to edit this blog post." });
             router.push('/dashboard/blog');
             setIsLoading(false);
             return;
         }
 
-        const fetchedTags = getTagValues(blogData.tags); // Uses new getTagValues for OtherTag[]
+        const fetchedTags = getTagValues(blogData.tags);
         setTags(fetchedTags);
 
         initialValues = {
@@ -252,9 +250,9 @@ export default function BlogFormPage() {
             excerpt: blogData.excerpt || "",
             slug: blogData.slug || "",
             content: blogData.content || "<p></p>",
-            image: getMediaId(blogData.image as Media | null), // Cast to Media
+            image: getMediaId(blogData.image as Media | null),
             categories: blogData.categories && blogData.categories.length > 0 ? blogData.categories[0].id : null,
-            authors: blogData.author || null, // Now a string
+            authors: blogData.author || null,
             tags: fetchedTags.join(", "),
             view: blogData.view ?? 0,
             Blog_status: blogData.Blog_status || "draft",
@@ -275,7 +273,7 @@ export default function BlogFormPage() {
                 canonicalURL: blogData.seo_blog.canonicalURL || null,
                 structuredData: formatStructuredData(blogData.seo_blog.structuredData),
             } : defaultFormValues.seo_blog,
-            key: blogData.tenent_id || userTenentId || '', // Ensure key (tenent_id) is populated
+            tenent_id: blogData.tenent_id || userTenentId || '', // Ensure tenent_id is populated
         };
 
         setImagePreviews({
@@ -344,14 +342,14 @@ export default function BlogFormPage() {
         return;
       }
 
-      const fileId = selectedMedia.fileId; // Use fileId for the relation
+      const fileId = selectedMedia.fileId; 
       const previewUrl = selectedMedia.thumbnailUrl || selectedMedia.fileUrl;
 
       if (selectedMedia.mime?.startsWith("image/")) {
         const targetFieldName = currentMediaTarget;
         const previewTarget = targetFieldName === "image" ? "featured" : targetFieldName === "seo_blog.metaImage" ? "meta" : "og";
 
-        setValue(targetFieldName, fileId, { shouldValidate: true }); // Set the numeric ID
+        setValue(targetFieldName, fileId, { shouldValidate: true }); 
         setImagePreviews((prev) => ({ ...prev, [previewTarget]: previewUrl }));
 
         toast({ title: "Image Selected", description: `Set ${targetFieldName} to image ID: ${fileId}` });
@@ -389,27 +387,21 @@ export default function BlogFormPage() {
       },
     };
 
-    // Map comma-separated tags string to OtherTag[] for payload
     const tagsPayload: OtherTag[] = data.tags
       ? data.tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tagVal) => ({ tag_value: tagVal }))
       : [];
 
     const payload: CreateBlogPayload = {
       ...data,
-      tags: tagsPayload, // Use the transformed tags
-      tenent_id: userTenentId, // Ensure tenent_id is in the payload
+      tags: tagsPayload, 
+      tenent_id: userTenentId, 
       seo_blog: data.seo_blog ? {
           ...data.seo_blog,
           openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}) ,
       } : undefined,
-      // Map form 'key' (which holds tenent_id) to 'tenent_id' if necessary,
-      // or ensure CreateBlogPayload expects 'tenent_id'
-      // The spread already includes 'key' from form, which is userTenentId.
-      // CreateBlogPayload expects 'tenent_id'.
-      author: data.authors, // authors from form is now string
+      author: data.authors, 
     };
-    delete (payload as any).key; // Remove 'key' if it was spread from form values, use 'tenent_id'
-    delete (payload as any).tags; // Remove the string version of tags from RHF
+    // delete (payload as any).key; // 'key' is not in BlogFormValues, it's tenent_id
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
@@ -445,7 +437,7 @@ export default function BlogFormPage() {
       </div>
     );
   }
-   if (!userTenentId && !isLoadingUser) { // Use tenent_id
+   if (!userTenentId && !isLoadingUser) { 
        return (
            <div className="flex flex-col space-y-6 items-center justify-center h-full">
                 <h1 className="text-2xl font-bold tracking-tight text-destructive">
@@ -737,50 +729,18 @@ export default function BlogFormPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                 <FormField
                   control={control}
-                  name="authors" // This should now be 'author' based on schema
+                  name="authors"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Author</FormLabel>
-                       {/* If author is now a string, a Select with IDs is incorrect.
-                           This UI needs to change to an Input if author is a simple string.
-                           For now, keeping UI as is, but payload will send string.
-                           User must adjust UI or API contract.
-                        */}
                       <FormControl>
                         <Input
                             placeholder="Author Name"
                             {...field}
-                            value={field.value || ""} // Ensure value is string
+                            value={field.value || ""}
                             disabled={isSubmittingForm}
                         />
                       </FormControl>
-                      {/* <Select
-                        onValueChange={(value) => field.onChange(value)} // Assuming value is string name
-                        value={field.value || ""}
-                        disabled={authorsList.length === 0 || isSubmittingForm}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue
-                              placeholder={
-                                authorsList.length === 0
-                                  ? "No authors"
-                                  : "Select author"
-                              }
-                            />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {authorsList.map((author) => (
-                            <SelectItem
-                              key={author.id} // Use author.name if ID is no longer relevant
-                              value={author.name} // Value is author name
-                            >
-                              {author.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select> */}
                       <FormDescription>Optional. Enter author's name.</FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -813,7 +773,7 @@ export default function BlogFormPage() {
                             {fetchedCategories && fetchedCategories.map((category: Category) => (
                               <SelectItem
                                 key={category.id}
-                                value={category.id!.toString()} // Ensure ID is not undefined
+                                value={category.id!.toString()}
                               >
                                 {category.name}
                               </SelectItem>
@@ -1272,7 +1232,7 @@ export default function BlogFormPage() {
         isOpen={isMediaSelectorOpen}
         onOpenChange={setIsMediaSelectorOpen}
         onMediaSelect={handleMediaSelect}
-        returnType="id" // Form expects numeric ID for media relations
+        returnType="id" 
       />
     </div>
   );
@@ -1373,3 +1333,5 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
+
+    
