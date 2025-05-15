@@ -2,6 +2,7 @@
 'use server';
 
 import type { Event, CreateEventPayload } from "@/types/event";
+import type { FindMany, FindOne } from "@/types/strapi_response"; // Import Strapi response types
 import axiosInstance from "@/lib/axios";
 import { getAccessToken } from "@/lib/actions/auth";
 import { AxiosError } from 'axios';
@@ -23,21 +24,25 @@ export const getEvents = async (userKey: string): Promise<Event[]> => {
     }
      const params = {
         'filters[tenent_id][$eq]':userKey,
-        'populate':'*', // Keep populate params
+        'populate':'*',
     };
     const url = '/events';
     console.log(`[getEvents] Fetching URL: ${url} with params:`, params);
 
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.get<Event[]>(url, { params, headers });
+        const response = await axiosInstance.get<FindMany<Event>>(url, { params, headers });
 
-        if (!response.data || !Array.isArray(response.data)) {
-            console.error(`[getEvents] Unexpected API response structure for key ${userKey}. Expected an array, received:`, response.data);
-            throw new Error('Unexpected API response structure. Expected an array.');
+        if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
+            console.error(`[getEvents] Unexpected API response structure for key ${userKey}. Expected 'data' array, received:`, response.data);
+             if (response.data === null || response.data === undefined || (response.data && !response.data.data)) {
+                console.warn(`[getEvents] API returned null, undefined, or no 'data' property for key ${userKey}. Returning empty array.`);
+                return [];
+            }
+            throw new Error('Unexpected API response structure. Expected an array within a "data" property.');
         }
-        console.log(`[getEvents] Fetched ${response.data.length} Events for key ${userKey}.`);
-        return response.data;
+        console.log(`[getEvents] Fetched ${response.data.data.length} Events for key ${userKey}.`);
+        return response.data.data;
 
     } catch (error: unknown) {
         let message = `Failed to fetch events for key ${userKey}`;
@@ -63,29 +68,29 @@ export const getEvent = async (id: string, userKey: string): Promise<Event | nul
         console.error(`[Service getEvent]: userKey is missing for event ID ${id}.`);
         throw new Error('User key is required to fetch a specific event.');
     }
-        const params = {
-        'filters[tenent_id][$eq]':userKey,
-        'populate':'*', // Keep populate params
+    const params = {
+        // 'filters[tenent_id][$eq]':userKey, // Assuming backend policy handles this for single fetch
+        'populate':'*',
     };
     const url = `/events/${id}`;
     console.log(`[getEvent] Fetching URL: ${url} with params:`, params);
 
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.get<Event>(url, { params, headers });
+        const response = await axiosInstance.get<FindOne<Event>>(url, { params, headers });
 
-        if (!response || !response.data || typeof response.data !== 'object' || response.data === null) {
-            console.error(`[getEvent] Unexpected API response structure for event ${id} from ${url}. Expected an object, received:`, response.data);
-            throw new Error('Unexpected API response structure.');
+        if (!response.data || !response.data.data) {
+            console.warn(`[getEvent] Event ${id} not found or no data returned for key ${userKey}.`);
+            return null;
         }
-
-        if (response.data.key !== userKey) {
-             console.warn(`[getEvent] Fetched event ${id} key (${response.data.key}) does not match requested userKey (${userKey}).`);
+        // For Strapi v5, `tenent_id` is directly on the event object
+        if (response.data.data.tenent_id !== userKey) {
+             console.warn(`[getEvent] Fetched event ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userKey (${userKey}).`);
              return null;
         }
 
-        console.log(`[getEvent] Fetched Event ${id} Data for key ${userKey}:`, response.data);
-        return response.data;
+        console.log(`[getEvent] Fetched Event ${id} Data for key ${userKey}:`, response.data.data);
+        return response.data.data;
 
     } catch (error: unknown) {
          let message = `Failed to fetch event ${id} for key ${userKey}`;
@@ -111,17 +116,17 @@ export const getEvent = async (id: string, userKey: string): Promise<Event | nul
 
 // Create an event, ensuring the userKey is included in the payload
 export const createEvent = async (event: CreateEventPayload): Promise<Event> => {
-    if (!event.key) {
-        console.error('[Service createEvent]: userKey (event.key) is missing in payload.');
-        throw new Error('User key is required in the payload to create an event.');
+    if (!event.tenent_id) { // Check tenent_id directly from payload
+        console.error('[Service createEvent]: tenent_id is missing in payload.');
+        throw new Error('User tenent_id is required in the payload to create an event.');
     }
-    const userKey = event.key;
+    const userKey = event.tenent_id;
     const url = '/events';
-    const params = { populate: '*' }; // Populate to get full response
+    const params = { populate: '*' };
     console.log(`[createEvent] Creating event at ${url} with key ${userKey} and payload:`, JSON.stringify({ data: event }, null, 2));
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.post<{ data: Event }>(url,
+        const response = await axiosInstance.post<FindOne<Event>>(url,
             { data: event },
             { headers, params }
         );
@@ -159,22 +164,22 @@ export const updateEvent = async (id: string, event: Partial<CreateEventPayload>
         console.error(`[Service updateEvent]: userKey is missing for update of event ID ${id}.`);
         throw new Error('User key is required to update an event.');
     }
-     const { key, ...updateData } = event;
-     if (key && key !== userKey) {
-         console.warn(`[Service updateEvent]: Attempted to change key during update for event ${id}. Key change ignored.`);
+     const { tenent_id, ...updateData } = event; // Use tenent_id from payload
+     if (tenent_id && tenent_id !== userKey) {
+         console.warn(`[Service updateEvent]: Attempted to change tenent_id during update for event ${id}. Tenent_id change ignored.`);
      }
 
     const url = `/events/${id}`;
     console.log(`[updateEvent] Updating event ${id} at ${url} (userKey: ${userKey}) with payload:`, JSON.stringify({ data: updateData }, null, 2));
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.put<{ data: Event }>(url,
+        const response = await axiosInstance.put<FindOne<Event>>(url,
             { data: updateData },
             {
                 headers,
                 params: {
                     populate: '*',
-                    key: userKey // Optionally send key in params if backend uses it for validation on PUT
+                    // 'filters[tenent_id][$eq]': userKey // Ensure backend policy handles ownership
                 }
             }
         );
@@ -183,8 +188,8 @@ export const updateEvent = async (id: string, event: Partial<CreateEventPayload>
             console.error(`[updateEvent] Unexpected API response structure after update for event ${id} from ${url}:`, response.data);
             throw new Error('Unexpected API response structure after update.');
         }
-        if (response.data.data.key !== userKey) {
-            console.error(`[updateEvent] Key mismatch after update for event ${id}. Expected ${userKey}, got ${response.data.data.key}.`);
+        if (response.data.data.tenent_id !== userKey) {
+            console.error(`[updateEvent] Key mismatch after update for event ${id}. Expected ${userKey}, got ${response.data.data.tenent_id}.`);
             throw new Error('Event update resulted in key mismatch.');
         }
         console.log(`[updateEvent] Updated Event ${id} Data for key ${userKey}:`, response.data.data);
@@ -224,14 +229,14 @@ export const deleteEvent = async (id: string, userKey: string): Promise<Event | 
     console.log(`[deleteEvent] Deleting event ${id} at ${url} (userKey: ${userKey})`);
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.delete<{ data?: Event }>(url, {
+        const response = await axiosInstance.delete<FindOne<Event>>(url, { // Expect FindOne<Event>
             headers,
-            params: { key: userKey } // Optional: Add if backend validates key on delete
+            // params: { 'filters[tenent_id][$eq]': userKey } // Backend policy should handle ownership
         });
 
         if (response.status === 200 || response.status === 204) {
             console.log(`[deleteEvent] Successfully deleted event ${id} for key ${userKey}.`);
-            return response.data?.data;
+            return response.data?.data; // response.data.data will contain the deleted item if status 200
         } else {
              console.warn(`[deleteEvent] Unexpected success status ${response.status} when deleting event ${id} at ${url} for key ${userKey}.`);
              return response.data?.data;
