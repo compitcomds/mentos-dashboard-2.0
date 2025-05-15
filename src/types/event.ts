@@ -56,21 +56,21 @@ export type Event = {
   updatedAt?: Date | string;
   publishedAt?: Date | string;
   locale?: string | null;
-  category?: string;
-  title?: string;
-  event_date_time?: Date | string; // API returns Date or string
-  location?: string;
-  location_url?: string | null; // Changed from string to string | null
-  description?: string | null; // Changed from des: string | null
-  poster?: Media | null; // Populated media object
-  tags?: OtherTag[] | null; // Updated to use OtherTag
-  speakers?: OtherTag[] | null; // Updated to use OtherTag
-  registration_link?: string | null; // Changed
-  publish_date?: Date | string | null; // Changed
-  tenent_id?: string; // Changed from key
-  organizer_name?: string;
-  event_status?: "Draft" | "Published";
-  user?: User | null; // Populated user object
+  category?: string | null;
+  title?: string | null;
+  event_date_time?: Date | string | null;
+  location?: string | null;
+  location_url?: string | null;
+  description?: string | null;
+  poster?: Media | null;
+  tags?: OtherTag[] | null;
+  speakers?: OtherTag[] | null;
+  registration_link?: string | null;
+  publish_date?: Date | string | null;
+  tenent_id: string; // Made mandatory
+  organizer_name?: string | null;
+  event_status?: "Draft" | "Published" | null;
+  user?: User | null;
 };
 
 

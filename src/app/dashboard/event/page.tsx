@@ -39,14 +39,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useGetEvents, useDeleteEvent } from "@/lib/queries/event";
 import { useCurrentUser } from '@/lib/queries/user';
-import type { Event } from "@/types/event";
 import EventCardGrid from './_components/event-card-grid'; // Import new component
 
 type ViewMode = 'table' | 'card';
 
 export default function EventPage() {
    const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser();
-   const userKey = currentUser?.key;
+   const userKey = currentUser?.tenent_id;
    const { data: events, isLoading: isLoadingEvents, isError: isEventsError, error: eventsError, refetch, isFetching } = useGetEvents();
    const deleteMutation = useDeleteEvent();
    const [viewMode, setViewMode] = React.useState<ViewMode>('table');
@@ -54,6 +53,21 @@ export default function EventPage() {
    const isLoading = isLoadingUser || isLoadingEvents;
    const isError = isUserError || isEventsError;
    const error = isUserError ? new Error("Failed to load user data.") : eventsError;
+
+    React.useEffect(() => {
+        console.log("[EventPage] Current User:", currentUser);
+        console.log("[EventPage] User Key (tenent_id):", userKey);
+        console.log("[EventPage] Events Data:", events);
+        console.log("[EventPage] Is Loading User:", isLoadingUser);
+        console.log("[EventPage] Is Loading Events:", isLoadingEvents);
+        console.log("[EventPage] Is Combined Loading:", isLoading);
+        console.log("[EventPage] Is Events Error:", isEventsError);
+        console.log("[EventPage] Events Error Object:", eventsError);
+        console.log("[EventPage] Is Combined Error:", isError);
+        console.log("[EventPage] Combined Error Object:", error);
+        console.log("[EventPage] Is Fetching (useGetEvents):", isFetching);
+    }, [currentUser, userKey, events, isLoadingUser, isLoadingEvents, isLoading, isEventsError, eventsError, isError, error, isFetching]);
+
 
    const handleDelete = (id: string) => {
        deleteMutation.mutate(id);
@@ -148,11 +162,11 @@ export default function EventPage() {
                     </TableHeader>
                     <TableBody>
                     {events.map((event) => {
-                        const eventDateTime = event.event_date_time ? new Date(event.event_date_time) : null;
+                        const eventDateTime = event.event_date_time ? new Date(event.event_date_time as string) : null;
                         return (
                         <TableRow key={event.id}>
-                            <TableCell className="font-medium">{event.title}</TableCell>
-                            <TableCell className="hidden md:table-cell text-muted-foreground">{event.category}</TableCell>
+                            <TableCell className="font-medium">{event.title || 'N/A'}</TableCell>
+                            <TableCell className="hidden md:table-cell text-muted-foreground">{event.category || 'N/A'}</TableCell>
                             <TableCell className="hidden sm:table-cell">
                             {eventDateTime ? (
                                 <Tooltip>
@@ -172,22 +186,22 @@ export default function EventPage() {
                                 <Tooltip>
                                     <TooltipTrigger className="flex items-center gap-1 text-muted-foreground truncate max-w-xs">
                                         <MapPin className="h-4 w-4 flex-shrink-0" />
-                                        <span>{event.location}</span>
+                                        <span>{event.location || 'N/A'}</span>
                                     </TooltipTrigger>
                                     <TooltipContent>
                                         {event.location_url ? (
                                             <a href={event.location_url} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                                                {event.location} (View Map)
+                                                {event.location || 'N/A'} (View Map)
                                             </a>
                                         ) : (
-                                            event.location
+                                            event.location || 'N/A'
                                         )}
                                     </TooltipContent>
                                 </Tooltip>
                             </TableCell>
                             <TableCell className="hidden sm:table-cell">
                             <Badge variant={event.event_status === 'Published' ? 'default' : 'secondary'}>
-                                {event.event_status}
+                                {event.event_status || 'N/A'}
                             </Badge>
                             </TableCell>
                             <TableCell className="text-right">
@@ -232,7 +246,7 @@ export default function EventPage() {
                                     <AlertDialogHeader>
                                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        This will permanently delete the event: "{event.title}".
+                                        This will permanently delete the event: "{event.title || 'this event'}".
                                     </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -268,7 +282,7 @@ export default function EventPage() {
 
          {!isLoadingUser && !isUserError && !userKey && (
            <div className="mt-4 border border-dashed border-border rounded-md p-8 text-center text-muted-foreground">
-             User key is missing. Cannot display events.
+             User tenent_id is missing. Cannot display events.
            </div>
          )}
        </div>

@@ -80,7 +80,7 @@ type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 export default function CategoriesPage() {
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
-  const userKey = currentUser?.key;
+  const userKey = currentUser?.tenent_id;
 
   const { data: categories, isLoading: isLoadingCategories, isError, error, refetch, isFetching } = useGetCategories(userKey);
   const createMutation = useCreateCategory();
