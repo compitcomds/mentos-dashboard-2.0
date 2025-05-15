@@ -1,44 +1,44 @@
+
 'use client';
 
 import { useQuery } from "@tanstack/react-query";
 import { getQueryForms, getQueryForm } from "@/lib/services/query-form";
 import type { QueryForm } from "@/types/query-form";
-// REMOVED: import { useCurrentUser } from './user'; // Not needed if userKey isn't passed
+import { useCurrentUser } from './user'; 
 
-const QUERY_FORMS_QUERY_KEY = ['queryForms']; // Updated: Removed userKey
-const QUERY_FORM_DETAIL_QUERY_KEY = (id?: string) => ['queryForm', id || 'detail']; // Updated: Removed userKey
+const QUERY_FORMS_QUERY_KEY = (userTenentId?: string) => ['queryForms', userTenentId || 'all'];
+const QUERY_FORM_DETAIL_QUERY_KEY = (id?: string, userTenentId?: string) => ['queryForm', id || 'detail', userTenentId || 'all'];
 
 export const useGetQueryForms = () => {
-  // REMOVED: const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
-  // REMOVED: const userKey = currentUser?.key;
+  const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
+  const userTenentId = currentUser?.tenent_id;
 
   return useQuery<QueryForm[], Error>({
-    queryKey: QUERY_FORMS_QUERY_KEY, // Updated: Use key without userKey
+    queryKey: QUERY_FORMS_QUERY_KEY(userTenentId),
     queryFn: () => {
-        // REMOVED: userKey check
-        return getQueryForms(); // Updated: Call without userKey
+        if (!userTenentId) {
+            console.warn("useGetQueryForms: User tenent_id not available. Returning empty array.");
+            return Promise.resolve([]);
+        }
+        return getQueryForms(userTenentId);
     },
-    // REMOVED: enabled condition based on userKey and isLoadingUser
-    // The query will now enable as soon as the component mounts,
-    // assuming authentication (JWT) is handled by getAuthHeader in the service.
-    enabled: true, 
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 15,  // 15 minutes
+    enabled: !!userTenentId && !isLoadingUser,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 15,
   });
 };
 
 export const useGetQueryForm = (id: string | null) => {
-  // REMOVED: const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
-  // REMOVED: const userKey = currentUser?.key;
+  const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
+  const userTenentId = currentUser?.tenent_id;
 
   return useQuery<QueryForm | null, Error>({
-    queryKey: QUERY_FORM_DETAIL_QUERY_KEY(id ?? undefined), // Updated: Use key without userKey
+    queryKey: QUERY_FORM_DETAIL_QUERY_KEY(id ?? undefined, userTenentId),
     queryFn: () => {
-        if (!id) return null;
-        // REMOVED: userKey check
-        return getQueryForm(id); // Updated: Call without userKey
+        if (!id || !userTenentId) return null;
+        return getQueryForm(id, userTenentId);
     },
-    enabled: !!id, // Updated: Enable only based on id
+    enabled: !!id && !!userTenentId && !isLoadingUser,
     staleTime: 1000 * 60 * 5,
   });
 };
