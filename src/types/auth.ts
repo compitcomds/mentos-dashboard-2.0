@@ -105,6 +105,6 @@ export interface User {
     full_name?: string;
     phone?: string | number; // Use string if displaying, number if processing
     address?: string;
-    key?: string; // Add the key field
+    tenent_id?: string; // Add the key field
     // Add other relevant user fields (e.g., role)
 }

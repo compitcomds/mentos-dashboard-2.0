@@ -37,7 +37,7 @@ export async function fetchCurrentUser(): Promise<User> {
     console.log('[Service fetchCurrentUser]: User data fetched successfully:', response.data);
 
     // Verify that the key field is present in the response
-    if (typeof response.data.key !== 'string' || !response.data.key) {
+    if (typeof response.data.tenent_id !== 'string' || !response.data.tenent_id) {
         console.warn('[Service fetchCurrentUser]: User data fetched, but "key" field is missing or not a string.');
         // Depending on requirements, you might throw an error here or proceed with caution
         // throw new Error('User key is missing from the fetched user data.');
