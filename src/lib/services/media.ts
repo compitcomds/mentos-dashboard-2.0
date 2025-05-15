@@ -36,10 +36,9 @@ export async function fetchMediaFiles(userKey: string): Promise<CombinedMediaDat
     console.log(`[Service fetchMediaFiles]: Fetching web media entries with key '${userKey}'...`);
     const headers = await getAuthHeader();
     // Change filtering method to use 'key' directly as requested
-    const params = {
-        'populate[media]': '*', // Populate the media relation
-        'sort[0]': 'createdAt:desc', // Sort by creation date
-        'key': userKey, // Filter by the key field using direct parameter
+     const params = {
+        'filters[tenent_id][$eq]':userKey,
+        'populate':'*', // Keep populate params
     };
     const url = '/web-medias';
     console.log(`[fetchMediaFiles] Fetching URL: ${url} with params:`, JSON.stringify(params));
@@ -197,6 +196,7 @@ export async function createWebMedia(payload: CreateWebMediaPayload): Promise<We
      console.log('[Service createWebMedia]: Attempting to create web media entry with payload:', JSON.stringify({ data: payload }, null, 2));
      const headers = await getAuthHeader();
      try {
+            
          // Strapi v5 expects payload wrapped in 'data' object
          const response = await axiosInstance.post<{ data: WebMedia }>('/web-medias', { data: payload }, {
              headers,

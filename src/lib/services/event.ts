@@ -21,12 +21,9 @@ export const getEvents = async (userKey: string): Promise<Event[]> => {
         console.error('[Service getEvents]: userKey is missing.');
         throw new Error('User key is required to fetch events.');
     }
-    const params = {
-        'populate[poster]': '*',
-        'populate[target_audience]': '*', // Populate repeatable components
-        'populate[Speakers]': '*',       // Populate repeatable components
-        'sort[0]': 'event_date_time:asc', // Sort by event date
-        'key': userKey,
+     const params = {
+        'filters[tenent_id][$eq]':userKey,
+        'populate':'*', // Keep populate params
     };
     const url = '/events';
     console.log(`[getEvents] Fetching URL: ${url} with params:`, params);
@@ -66,11 +63,9 @@ export const getEvent = async (id: string, userKey: string): Promise<Event | nul
         console.error(`[Service getEvent]: userKey is missing for event ID ${id}.`);
         throw new Error('User key is required to fetch a specific event.');
     }
-    const params = {
-        'key': userKey,
-        'populate[poster]': '*',
-        'populate[target_audience]': '*',
-        'populate[Speakers]': '*',
+        const params = {
+        'filters[tenent_id][$eq]':userKey,
+        'populate':'*', // Keep populate params
     };
     const url = `/events/${id}`;
     console.log(`[getEvent] Fetching URL: ${url} with params:`, params);

@@ -19,10 +19,10 @@ export const getCategories = async (userKey: string): Promise<Category[]> => {
     throw new Error('User key is required to fetch categories.');
   }
   // Pass userKey directly as a query parameter named 'key'
-  const params = {
-    'sort[0]': 'name:asc',
-    'key': userKey, 
-  };
+     const params = {
+        'filters[tenent_id][$eq]':userKey,
+        'populate':'*', // Keep populate params
+    };
   const url = '/categories';
   console.log(`[getCategories] Fetching URL: ${url} with params:`, params);
   try {
@@ -64,7 +64,10 @@ export const getCategories = async (userKey: string): Promise<Category[]> => {
 export const getCategory = async (id: string, userKey: string): Promise<Category | null> => {
   if (!id || !userKey) return null;
   // Pass userKey directly as a query parameter named 'key'
-  const params = { 'key': userKey }; 
+     const params = {
+        'filters[tenent_id][$eq]':userKey,
+        'populate':'*', // Keep populate params
+    };
   const url = `/categories/${id}`;
   console.log(`[getCategory] Fetching URL: ${url} with params:`, params);
   try {

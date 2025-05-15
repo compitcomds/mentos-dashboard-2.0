@@ -8,7 +8,8 @@ import { AxiosError } from 'axios';
 
 // Helper to get Authorization header
 async function getAuthHeader() {
-  const token = getAccessToken();
+  const token = await getAccessToken();
+  console.log(`[getAuthHeader] Blog Token: ${token}`);
   if (!token) {
     throw new Error("Authentication token not found.");
   }
@@ -21,15 +22,9 @@ export const getBlogs = async (userKey: string): Promise<Blog[]> => {
         console.error('[Service getBlogs]: userKey is missing.');
         throw new Error('User key is required to fetch blogs.');
     }
-    const params = {
-        'fields[0]':'title',
-        'fields[1]': 'slug',
-        'fields[2]': 'Blog_status',
-        'fields[3]': 'createdAt',
-        'populate[image][fields][0]': 'url',
-        'populate[categories][fields][0]': 'name',
-        'populate[authors][fields][0]': 'name',
-        'key': userKey, // Use dynamic userKey
+     const params = {
+        'filters[tenent_id][$eq]':userKey,
+        'populate':'*', // Keep populate params
     };
     const url = '/blogs';
     console.log(`[getBlogs] Fetching URL: ${url} with params:`, params);
@@ -37,7 +32,6 @@ export const getBlogs = async (userKey: string): Promise<Blog[]> => {
     try {
         const headers = await getAuthHeader();
         const response = await axiosInstance.get<Blog[]>(url, { params, headers });
-        console
         if (!response.data || !Array.isArray(response.data)) {
            console.error(`[getBlogs] Unexpected API response structure for key ${userKey}. Expected an array, received:`, response.data);
             // Handle cases where API might return non-array for empty results
@@ -73,11 +67,8 @@ export const getBlog = async (id: string, userKey: string): Promise<Blog | null>
         throw new Error('User key is required to fetch a specific blog.');
     }
     const params = {
-        'key': userKey, // Use dynamic userKey
-        'populate[seo_blog][populate][openGraph][populate]':'*', // Keep populate params
-        'populate[image]': '*',
-        'populate[authors]': '*',
-        'populate[categories]': '*',
+        'filters[tenent_id][$eq]':userKey,
+        'populate':'*', // Keep populate params
     };
     const url = `/blogs/${id}`;
     console.log(`[getBlog] Fetching URL: ${url} with params:`, params);
