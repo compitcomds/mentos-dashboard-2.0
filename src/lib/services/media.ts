@@ -67,10 +67,10 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
             const mediaFile = item.media;
 
             if (!mediaFile || typeof mediaFile !== 'object' || typeof mediaFile.id !== 'number') {
-                console.warn(`[fetchMediaFiles] Item ID ${item.id} has missing or invalid media relation or media.id is not a number. Skipping. Media file:`, mediaFile);
+                console.warn(`[fetchMediaFiles] Item WebMedia ID ${item.id} has missing or invalid media relation or media.id is not a number. Skipping. Media file:`, mediaFile);
                 return null;
             }
-            if (item.id === undefined) { // WebMedia ID should be a number
+            if (item.id === undefined) { 
                  console.warn(`[fetchMediaFiles] WebMedia item has undefined ID. Skipping. Item:`, item);
                  return null;
             }
@@ -79,7 +79,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
 
             return {
                 webMediaId: item.id, 
-                webMediaDocumentId: item.documentId,
+                webMediaDocumentId: item.documentId, // Keep this if it exists and is used elsewhere
                 name: item.name || mediaFile.name || 'Unnamed Media',
                 alt: item.alt || null,
                 tenent_id: item.tenent_id,
@@ -87,7 +87,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
                 updatedAt: item.updatedAt!,
                 publishedAt: item.publishedAt || null,
                 fileId: mediaFile.id, 
-                fileDocumentId: mediaFile.documentId,
+                fileDocumentId: mediaFile.documentId, // Keep this if it exists and is used elsewhere
                 fileUrl: constructUrl(mediaFile.url),
                 fileName: mediaFile.name ?? 'N/A',
                 mime: mediaFile.mime ?? null,
@@ -211,33 +211,48 @@ export async function updateWebMedia(webMediaId: number, payload: UpdateWebMedia
     }
 }
 
-export async function deleteUploadFile(fileDocumentId: string): Promise<Media> {
-    console.log(`[Service deleteUploadFile]: Attempting to delete file with documentId: ${fileDocumentId}`);
+// Updated to use numeric fileId
+export async function deleteUploadFile(fileId: number): Promise<Media> {
+    console.log(`[Service deleteUploadFile]: Attempting to delete file with numeric ID: ${fileId}`);
     const headers = await getAuthHeader();
+    const url = `/upload/files/${fileId}`;
+    console.log(`[Service deleteUploadFile]: Requesting DELETE on URL: ${url}`);
     try {
-        const response = await axiosInstance.delete<Media>(`/upload/files/${fileDocumentId}`, { headers });
-        console.log(`[Service deleteUploadFile]: File ${fileDocumentId} deleted successfully from uploads.`);
-        if (!response.data || typeof response.data !== 'object') {
-            // Strapi v5 might return the deleted entity for upload/files delete
-            // If it returns 204, response.data might be empty or undefined.
-            // For now, we expect the Media object. If it can be empty, adjust type and handling.
-            throw new Error("Invalid response structure after deleting file. Expected the deleted Media object.");
+        const response = await axiosInstance.delete<Media>(url, { headers });
+        console.log(`[Service deleteUploadFile]: File ${fileId} deleted successfully from uploads. Response status: ${response.status}`);
+        
+        // Strapi v5 delete for /upload/files typically returns the deleted file object or 200/204.
+        if (response.status === 200 && response.data && typeof response.data === 'object') {
+            return { ...response.data, id: Number(response.data.id) };
+        } else if (response.status === 204) {
+             console.warn(`[Service deleteUploadFile]: File ${fileId} deleted (204 No Content), but no data returned. This is acceptable for delete operations.`);
+             // If no data is returned, we can't return the Media object.
+             // Adjust the return type or how this is handled if necessary. For now, throw error if data expected.
+             // For simplicity, let's assume if it's 204, it was successful but we can't return the object.
+             // To make the mutation hook consistent, we need to decide what to return or how to handle.
+             // Throwing a specific kind of "success but no data" error or adjusting `useDeleteMediaMutation`'s expected success type might be needed.
+             // For now, let's assume for a 204, we can't return the specific Media object, and rely on the HTTP status.
+             // To satisfy the return type Media, we would need a dummy object or adjust the function signature.
+             // Let's throw an error if the data isn't what's expected for a 200 response to keep return type Media.
+             throw new Error(`File deletion successful (204 No Content) but expected Media object was not returned for file ID ${fileId}.`);
+
+        } else {
+            console.error(`[Service deleteUploadFile]: Unexpected response status ${response.status} or data structure for file ${fileId}:`, response.data);
+            throw new Error(`Unexpected response after deleting file ${fileId}. Status: ${response.status}`);
         }
-        return { ...response.data, id: Number(response.data.id) };
     } catch (error: unknown) {
-        let message = `Failed to delete file ${fileDocumentId}`;
+        let message = `Failed to delete file ${fileId}`;
         if (error instanceof AxiosError) {
-            console.error(`[Service deleteUploadFile] Axios Error deleting ${fileDocumentId}:`, error.response?.status, error.response?.data || error.message);
+            console.error(`[Service deleteUploadFile] Axios Error deleting ${fileId}:`, error.response?.status, error.response?.data || error.message);
             if (error.response?.status === 404) {
-                console.warn(`[Service deleteUploadFile] File ${fileDocumentId} not found (404).`);
-                // Decide if this should be an error or handled gracefully
+                console.warn(`[Service deleteUploadFile] File ${fileId} not found (404).`);
             }
             message = error.response?.data?.error?.message || error.message || message;
         } else if (error instanceof Error) {
-            console.error(`[Service deleteUploadFile] Generic Error deleting ${fileDocumentId}:`, error.message);
+            console.error(`[Service deleteUploadFile] Generic Error deleting ${fileId}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[Service deleteUploadFile] Unknown Error deleting ${fileDocumentId}:`, error);
+            console.error(`[Service deleteUploadFile] Unknown Error deleting ${fileId}:`, error);
         }
         throw new Error(message);
     }
@@ -246,8 +261,10 @@ export async function deleteUploadFile(fileDocumentId: string): Promise<Media> {
 export async function deleteWebMedia(webMediaId: number): Promise<WebMedia> {
     console.log(`[Service deleteWebMedia]: Attempting to delete web media entry with ID: ${webMediaId}`);
     const headers = await getAuthHeader();
+    const url = `/web-medias/${webMediaId}`;
+    console.log(`[Service deleteWebMedia]: Requesting DELETE on URL: ${url}`);
     try {
-        const response = await axiosInstance.delete<FindOne<WebMedia>>(`/web-medias/${webMediaId}`, { headers });
+        const response = await axiosInstance.delete<FindOne<WebMedia>>(url, { headers });
 
         if (!response || !response.data || !response.data.data) {
             throw new Error(`Invalid response structure after deleting web media ${webMediaId}.`);
@@ -270,8 +287,9 @@ export async function deleteWebMedia(webMediaId: number): Promise<WebMedia> {
     }
 }
 
-export async function deleteMediaAndFile(webMediaId: number, fileDocumentId: string | null): Promise<{ webMediaDeleted: boolean; fileDeleted: boolean }> {
-    console.log(`[Service deleteMediaAndFile]: Initiating delete for webMediaId: ${webMediaId}, fileDocumentId: ${fileDocumentId}`);
+// Updated to use numeric fileId
+export async function deleteMediaAndFile(webMediaId: number, fileId: number | null): Promise<{ webMediaDeleted: boolean; fileDeleted: boolean }> {
+    console.log(`[Service deleteMediaAndFile]: Initiating delete for webMediaId: ${webMediaId}, fileId: ${fileId}`);
     let webMediaDeleted = false;
     let fileDeleted = false;
 
@@ -281,21 +299,23 @@ export async function deleteMediaAndFile(webMediaId: number, fileDocumentId: str
         console.log(`[Service deleteMediaAndFile]: Web media entry ${webMediaId} deleted.`);
     } catch (error) {
         console.error(`[Service deleteMediaAndFile]: Error deleting web media entry ${webMediaId}:`, error);
-        throw new Error(`Failed to delete web media entry ${webMediaId}. Associated file (Document ID: ${fileDocumentId}) was not attempted to be deleted.`);
+        // If deleting the WebMedia entry fails, we shouldn't proceed to delete the file.
+        throw new Error(`Failed to delete web media entry ${webMediaId}. Associated file (ID: ${fileId}) was not attempted to be deleted.`);
     }
 
-    if (webMediaDeleted && fileDocumentId) {
+    if (webMediaDeleted && fileId !== null) {
+        console.log(`[Service deleteMediaAndFile]: WebMedia entry ${webMediaId} deleted. Proceeding to delete file with ID: ${fileId}`);
         try {
-            await deleteUploadFile(fileDocumentId);
+            await deleteUploadFile(fileId);
             fileDeleted = true;
-            console.log(`[Service deleteMediaAndFile]: Associated file ${fileDocumentId} deleted.`);
+            console.log(`[Service deleteMediaAndFile]: Associated file ${fileId} deleted.`);
         } catch (error) {
-            console.error(`[Service deleteMediaAndFile]: Error deleting associated file ${fileDocumentId} (WebMedia entry ${webMediaId} was already deleted):`, error);
+            console.error(`[Service deleteMediaAndFile]: Error deleting associated file ${fileId} (WebMedia entry ${webMediaId} was already deleted):`, error);
             // File deletion failed, but WebMedia entry was deleted.
             // Caller can decide how to handle this partial success.
         }
-    } else if (webMediaDeleted && !fileDocumentId) {
-        console.log(`[Service deleteMediaAndFile]: Web media entry ${webMediaId} deleted, but no associated file Document ID was provided to delete.`);
+    } else if (webMediaDeleted && fileId === null) {
+        console.log(`[Service deleteMediaAndFile]: Web media entry ${webMediaId} deleted, but no associated file ID was provided to delete.`);
     }
 
     return { webMediaDeleted, fileDeleted };

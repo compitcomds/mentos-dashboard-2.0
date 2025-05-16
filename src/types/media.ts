@@ -62,7 +62,7 @@ export interface WebMedia {
 // Combined type often useful for display components like the table
 export interface CombinedMediaData {
   webMediaId: number; // Numeric WebMedia.id
-  webMediaDocumentId?: string; // Optional if you have a separate string documentId
+  webMediaDocumentId: string; // Optional if you have a separate string documentId
   name: string;
   alt: string | null;
   tenent_id: string;
@@ -72,7 +72,7 @@ export interface CombinedMediaData {
 
   // --- File related data from Media (WebMedia.media) ---
   fileId: number | null; // Numeric Media.id
-  fileDocumentId?: string | null; // Optional if Media has a separate string documentId
+  fileDocumentId: string | null; // Optional if Media has a separate string documentId
   fileUrl: string | null;
   fileName: string | null;
   mime: string | null;

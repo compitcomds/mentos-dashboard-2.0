@@ -15,7 +15,7 @@ import type {
     UpdateWebMediaPayload,
     CreateWebMediaPayload,
     WebMedia,
-    Media,
+    Media, // Media type is imported but useDeleteMediaMutation below expects { webMediaDeleted: boolean; fileDeleted: boolean }
 } from '@/types/media';
 import { AxiosError } from 'axios';
 import { useCurrentUser } from './user';
@@ -57,8 +57,8 @@ export function useUploadMediaMutation() {
 
             const uploadResponseArray = await uploadFile(formData);
 
-            if (!uploadResponseArray || uploadResponseArray.length === 0 || !uploadResponseArray[0].id) {
-                throw new Error('File upload response did not contain expected data or failed.');
+            if (!uploadResponseArray || uploadResponseArray.length === 0 || typeof uploadResponseArray[0].id !== 'number') { // Check if id is number
+                throw new Error('File upload response did not contain expected data (numeric ID) or failed.');
             }
 
             const uploadedFile = uploadResponseArray[0]; 
@@ -132,29 +132,30 @@ export function useUpdateMediaMutation() {
 }
 
 
+// Updated to use numeric fileId
 export function useDeleteMediaMutation() {
     const queryClient = useQueryClient();
      const { data: currentUser } = useCurrentUser();
      const userKey = currentUser?.tenent_id;
 
-    return useMutation< { webMediaDeleted: boolean; fileDeleted: boolean }, Error, { webMediaId: number; fileDocumentId: string | null } >({
-        mutationFn: ({ webMediaId, fileDocumentId }) => deleteMediaAndFile(webMediaId, fileDocumentId),
+    return useMutation< { webMediaDeleted: boolean; fileDeleted: boolean }, Error, { webMediaId: number; fileId: number | null } >({
+        mutationFn: ({ webMediaId, fileId }) => deleteMediaAndFile(webMediaId, fileId),
         onSuccess: (data, variables) => {
             let description = `Media entry (ID: ${variables.webMediaId}) deleted successfully.`;
-            if (variables.fileDocumentId) {
-                 description += data.fileDeleted ? ` Associated file (Document ID: ${variables.fileDocumentId}) also deleted.` : ` Could not delete associated file (Document ID: ${variables.fileDocumentId}). Check server logs.`;
+            if (variables.fileId !== null) { // Check if fileId was provided for deletion attempt
+                 description += data.fileDeleted ? ` Associated file (ID: ${variables.fileId}) also deleted.` : ` Could not delete associated file (ID: ${variables.fileId}). Check server logs and permissions.`;
             } else {
-                 description += " No associated file Document ID provided to delete.";
+                 description += " No associated file ID provided to attempt deletion.";
             }
             toast({
                 title: 'Deletion Status',
                 description: description,
-                variant: (variables.fileDocumentId && !data.fileDeleted) ? 'destructive' : 'default',
+                variant: (variables.fileId !== null && !data.fileDeleted) ? 'destructive' : 'default', // Make toast destructive if file deletion failed
             });
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
         },
         onError: (error: unknown, variables) => {
-             let message = `Could not delete media (ID: ${variables.webMediaId}).`;
+             let message = `Could not delete media (WebMedia ID: ${variables.webMediaId}).`;
              if (error instanceof AxiosError) {
                  message = error.response?.data?.error?.message || error.message || message;
                  console.error("Delete Media Axios Error:", error.response?.data || error);

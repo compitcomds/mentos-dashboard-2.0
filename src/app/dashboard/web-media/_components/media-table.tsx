@@ -88,22 +88,25 @@ const MediaActions: React.FC<{
 
     const handleDelete = () => {
         const webMediaIdToDelete = media.webMediaId; // Numeric ID for WebMedia entry
-        const fileDocumentIdToDelete = media.fileDocumentId; // String Document ID for the file
+        const fileIdToDelete = media.fileId; // Numeric ID for the file itself
 
         if (webMediaIdToDelete === undefined || webMediaIdToDelete === null) {
-            toast({ variant: "destructive", title: "Error", description: "Cannot delete media: WebMedia identifier missing."});
+            toast({ variant: "destructive", title: "Error", description: "Cannot delete media: WebMedia identifier (numeric ID) missing."});
             setIsAlertDialogOpen(false);
             return;
         }
+        // fileIdToDelete can be null if there's no associated file, the service handles this.
 
         deleteMutation.mutate(
-            { webMediaId: webMediaIdToDelete, fileDocumentId: fileDocumentIdToDelete },
+            { webMediaId: webMediaIdToDelete, fileId: fileIdToDelete },
             {
                 onSuccess: () => {
                     setIsAlertDialogOpen(false);
+                    // Toast handled by mutation hook
                 },
                 onError: () => {
                     setIsAlertDialogOpen(false);
+                    // Toast handled by mutation hook
                 }
             }
         );
@@ -153,7 +156,7 @@ const MediaActions: React.FC<{
                     <AlertDialogDescription>
                         This action cannot be undone. This will permanently delete the media file
                         <span className="font-semibold"> "{media.name || media.fileName}" </span>
-                         and its associated metadata. The actual file will also be deleted.
+                         and its associated metadata. The actual file in the media library (if linked by ID: {media.fileId || 'N/A'}) will also be attempted to be deleted.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -439,6 +442,7 @@ export default function MediaTable({ data }: MediaTableProps) {
                     media={selectedMedia}
                     onSuccess={() => {
                          setIsEditOpen(false);
+                         // Table data will be refetched by the query invalidation in the hook
                     }}
                 />
             )}

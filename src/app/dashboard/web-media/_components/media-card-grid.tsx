@@ -103,25 +103,32 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
     if (!mediaToDelete) return;
 
     const webMediaIdToDelete = mediaToDelete.webMediaId; // Numeric ID for WebMedia entry
-    const fileDocumentIdToDelete = mediaToDelete.fileDocumentId; // String Document ID for the file
+    const fileIdToDelete = mediaToDelete.fileId; // Numeric ID for the file itself
 
-    if (webMediaIdToDelete === undefined || webMediaIdToDelete === null) { // Check if webMediaId is valid
-        toast({ variant: "destructive", title: "Error", description: "Cannot delete media: WebMedia identifier missing."});
+    if (webMediaIdToDelete === undefined || webMediaIdToDelete === null) { 
+        toast({ variant: "destructive", title: "Error", description: "Cannot delete media: WebMedia identifier (numeric ID) missing."});
         setIsAlertOpen(false);
         setMediaToDelete(null);
         return;
     }
+     // File ID can be null if no associated file, deletion will only target WebMedia entry
+     if (fileIdToDelete === null) {
+      console.warn(`[MediaCardGrid] Deleting WebMedia entry ${webMediaIdToDelete} without an associated file ID.`);
+    }
+
 
     deleteMutation.mutate(
-        { webMediaId: webMediaIdToDelete, fileDocumentId: fileDocumentIdToDelete },
+        { webMediaId: webMediaIdToDelete, fileId: fileIdToDelete },
         {
             onSuccess: () => {
                 setIsAlertOpen(false);
                 setMediaToDelete(null);
+                // Toast is handled by the mutation hook
             },
             onError: (error: any) => {
                 setIsAlertOpen(false);
                 setMediaToDelete(null);
+                // Toast is handled by the mutation hook
             }
         }
     );
@@ -160,6 +167,7 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
             <CardContent className="p-4 pt-0 flex-1 space-y-1 text-xs">
               <Badge variant="outline" className="text-muted-foreground">{media.mime || 'N/A'}</Badge>
               <p className="text-muted-foreground">Size: {formatBytes(media.size)}</p>
+              {/* You can add webMediaDocumentId or fileDocumentId here if needed for display */}
             </CardContent>
             <CardFooter className="p-3 border-t flex justify-end items-center space-x-1">
               <DropdownMenu>
@@ -207,6 +215,7 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
           media={selectedMedia}
           onSuccess={() => {
             setIsEditOpen(false);
+            // Media list will be refetched by the mutation hook
           }}
         />
       )}
@@ -227,7 +236,7 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
                     <AlertDialogDescription>
                         This action cannot be undone. This will permanently delete the media file
                         <span className="font-semibold"> "{mediaToDelete.name || mediaToDelete.fileName}" </span>
-                         and its associated metadata.
+                         and its associated metadata. The actual file in the media library (if linked by ID: {mediaToDelete.fileId || 'N/A'}) will also be attempted to be deleted.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
