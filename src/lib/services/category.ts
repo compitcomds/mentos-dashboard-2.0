@@ -22,7 +22,6 @@ export const getCategories = async (userTenentId: string): Promise<Category[]> =
   }
   const params = {
     'filters[tenent_id][$eq]': userTenentId,
-    'populate': '*', // Populate relations if needed
   };
   const url = '/categories';
   console.log(`[getCategories] Fetching URL: ${url} with params:`, params);

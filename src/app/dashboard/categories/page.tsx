@@ -66,7 +66,7 @@ import {
   useUpdateCategory,
   useDeleteCategory,
 } from '@/lib/queries/category';
-import type { Category, CreateCategoryPayload } from '@/types/category';
+import type { Categorie as Category, CreateCategoryPayload } from '@/types/category';
 
 const categoryFormSchema = z.object({
   name: z.string().min(1, { message: 'Name is required.' }),
@@ -122,20 +122,22 @@ export default function CategoriesPage() {
 
   const onSubmit = (values: CategoryFormValues) => {
     if (!userKey) {
-      toast({ variant: 'destructive', title: 'Error', description: 'User key not found.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'User tenent_id not found.' });
       return;
     }
 
-    const payload: CreateCategoryPayload = { ...values, key: userKey };
-
     if (selectedCategory) {
-      updateMutation.mutate({ id: selectedCategory.id, category: payload }, {
+      // For update, pass 'values' directly, which doesn't include tenent_id.
+      // The updateCategory service function uses userKey for authorization context.
+      updateMutation.mutate({ id: selectedCategory.id, category: values }, {
         onSuccess: () => {
           handleCloseForm();
         },
       });
     } else {
-      createMutation.mutate(payload, {
+      // For create, construct the payload with tenent_id.
+      const createPayload: CreateCategoryPayload = { ...values, tenent_id: userKey };
+      createMutation.mutate(createPayload, {
         onSuccess: () => {
           handleCloseForm();
         },
@@ -150,8 +152,8 @@ export default function CategoriesPage() {
 
   const confirmDelete = () => {
     if (selectedCategory && userKey) {
-      // Pass userKey to deleteMutation
-      deleteMutation.mutate({ id: selectedCategory.id, userKey }, {
+      // Pass userKey to deleteMutation for authorization context if needed by the service
+      deleteMutation.mutate({ id: selectedCategory.id, userKey: userKey }, {
         onSuccess: () => {
           setIsAlertOpen(false);
           setSelectedCategory(null);
@@ -183,7 +185,7 @@ export default function CategoriesPage() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error Loading Categories</AlertTitle>
             <AlertDescription>
-              {error?.message || 'Could not fetch categories.'}
+              {(error as Error)?.message || 'Could not fetch categories.'}
               <Button onClick={() => refetch()} variant="secondary" size="sm" className="ml-2 mt-2" disabled={isFetching}>
                 {isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Retry
@@ -264,7 +266,7 @@ export default function CategoriesPage() {
 
         {!isLoadingUser && !userKey && (
             <div className="mt-4 border border-dashed border-border rounded-md p-8 text-center text-muted-foreground">
-                User key is missing. Cannot display categories.
+                User tenent_id is missing. Cannot display categories.
             </div>
         )}
       </div>
@@ -408,3 +410,5 @@ function CategoryPageSkeleton() {
     </div>
   );
 }
+
+    
