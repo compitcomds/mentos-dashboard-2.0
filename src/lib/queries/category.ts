@@ -1,3 +1,4 @@
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createCategory as createCategoryService,
@@ -11,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from "./user"; 
 
 const CATEGORIES_QUERY_KEY = (userTenentId?: string) => ['categories', userTenentId || 'all'];
-const CATEGORY_DETAIL_QUERY_KEY = (id?: string, userTenentId?: string) => ['category', id || 'new', userTenentId || 'all'];
+const CATEGORY_DETAIL_QUERY_KEY = (id?: string | number, userTenentId?: string) => ['category', id ? String(id) : 'new', userTenentId || 'all'];
 
 export const useCreateCategory = () => {
   const queryClient = useQueryClient();
@@ -19,15 +20,10 @@ export const useCreateCategory = () => {
 
   return useMutation<Category, Error, CreateCategoryPayload>({
     mutationFn: (categoryData: CreateCategoryPayload) => {
-      // The tenent_id should already be in categoryData from the form/component
       if (!categoryData.tenent_id) {
-         // Fallback to current user's tenent_id if not explicitly provided in payload
-         // though it's better if the form provides it based on the current user.
         if (!currentUser?.tenent_id) {
           throw new Error("User tenent_id not available. Cannot create category.");
         }
-        // This modification directly in the mutationFn might be okay for this case,
-        // but generally, the payload should be complete before calling mutate.
         const payloadWithTenentId = { ...categoryData, tenent_id: currentUser.tenent_id };
         return createCategoryService(payloadWithTenentId);
       }
@@ -35,12 +31,18 @@ export const useCreateCategory = () => {
     },
     onSuccess: (data) => {
       toast({ title: "Success", description: "Category created successfully." });
-      // Invalidate based on the tenent_id of the created/fetched category or current user
       queryClient.invalidateQueries({ queryKey: CATEGORIES_QUERY_KEY(data.tenent_id || currentUser?.tenent_id) });
     },
     onError: (error: any) => {
-      const message = error.response?.data?.error?.message || error.message || "Failed to create category.";
-      toast({ variant: "destructive", title: "Error Creating Category", description: message });
+      const strapiError = error.response?.data?.error;
+      const message = strapiError?.message || error.message || "Failed to create category.";
+      const details = strapiError?.details;
+      console.error("Create Category Strapi Error:", strapiError || error.response?.data || error);
+      toast({ 
+        variant: "destructive", 
+        title: "Error Creating Category", 
+        description: `${message}${details ? ` Details: ${JSON.stringify(details)}` : ''}` 
+      });
     }
   });
 };
@@ -48,7 +50,6 @@ export const useCreateCategory = () => {
 export const useGetCategories = (userTenentId?: string) => { 
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const keyToUse = userTenentId || currentUser?.tenent_id;
-
 
   return useQuery<Category[], Error>({
     queryKey: CATEGORIES_QUERY_KEY(keyToUse),
@@ -65,17 +66,19 @@ export const useGetCategories = (userTenentId?: string) => {
   });
 };
 
-export const useGetCategory = (id: string | null, userTenentId?: string) => { 
+export const useGetCategory = (id: string | number | null, userTenentId?: string) => { 
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const keyToUse = userTenentId || currentUser?.tenent_id;
+  const categoryId = id !== null ? String(id) : null;
+
 
   return useQuery<Category | null, Error>({
-    queryKey: CATEGORY_DETAIL_QUERY_KEY(id ?? undefined, keyToUse),
+    queryKey: CATEGORY_DETAIL_QUERY_KEY(categoryId ?? undefined, keyToUse),
     queryFn: () => {
-      if (!id || !keyToUse) return null;
-      return getCategoryService(id, keyToUse); 
+      if (!categoryId || !keyToUse) return null;
+      return getCategoryService(categoryId, keyToUse); 
     },
-    enabled: !!id && !!keyToUse && !isLoadingUser, 
+    enabled: !!categoryId && !!keyToUse && !isLoadingUser, 
     staleTime: 1000 * 60 * 5,
   });
 };
@@ -84,26 +87,29 @@ export const useUpdateCategory = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
-
   return useMutation<Category, Error, { id: number; category: Partial<CreateCategoryPayload> }>({
     mutationFn: ({ id, category }) => {
-      // The user's tenent_id is used for authorization in the service
       if (!currentUser?.tenent_id) {
         throw new Error("User tenent_id not available. Cannot update category.");
       }
-      // The 'category' payload here should NOT contain tenent_id for update
       const { tenent_id, ...updatePayload } = category;
       return updateCategoryService(id, updatePayload, currentUser.tenent_id);
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Category updated successfully." });
-      // Invalidate based on the tenent_id of the updated category or current user
       queryClient.invalidateQueries({ queryKey: CATEGORIES_QUERY_KEY(data.tenent_id || currentUser?.tenent_id) });
-      queryClient.invalidateQueries({ queryKey: CATEGORY_DETAIL_QUERY_KEY(variables.id.toString(), data.tenent_id || currentUser?.tenent_id) });
+      queryClient.invalidateQueries({ queryKey: CATEGORY_DETAIL_QUERY_KEY(variables.id, data.tenent_id || currentUser?.tenent_id) });
     },
     onError: (error: any, variables) => {
-      const message = error.response?.data?.error?.message || error.message || `Failed to update category ${variables.id}.`;
-      toast({ variant: "destructive", title: "Error Updating Category", description: message });
+      const strapiError = error.response?.data?.error;
+      const message = strapiError?.message || error.message || `Failed to update category ${variables.id}.`;
+      const details = strapiError?.details;
+      console.error(`Update Category Strapi Error (ID: ${variables.id}):`, strapiError || error.response?.data || error);
+      toast({ 
+        variant: "destructive", 
+        title: "Error Updating Category", 
+        description: `${message}${details ? ` Details: ${JSON.stringify(details)}` : ''}` 
+      });
     }
   });
 };
@@ -124,11 +130,18 @@ export const useDeleteCategory = () => {
       toast({ title: "Success", description: "Category deleted successfully." });
       const tenentIdForInvalidation = variables.userKey || currentUser?.tenent_id;
       queryClient.invalidateQueries({ queryKey: CATEGORIES_QUERY_KEY(tenentIdForInvalidation) });
-      queryClient.removeQueries({ queryKey: CATEGORY_DETAIL_QUERY_KEY(variables.id.toString(), tenentIdForInvalidation) });
+      queryClient.removeQueries({ queryKey: CATEGORY_DETAIL_QUERY_KEY(variables.id, tenentIdForInvalidation) });
     },
     onError: (error: any, variables) => {
-      const message = error.response?.data?.error?.message || error.message || `Failed to delete category ${variables.id}.`;
-      toast({ variant: "destructive", title: "Error Deleting Category", description: message });
+      const strapiError = error.response?.data?.error;
+      const message = strapiError?.message || error.message || `Failed to delete category ${variables.id}.`;
+      const details = strapiError?.details;
+      console.error(`Delete Category Strapi Error (ID: ${variables.id}):`, strapiError || error.response?.data || error);
+      toast({ 
+        variant: "destructive", 
+        title: "Error Deleting Category", 
+        description: `${message}${details ? ` Details: ${JSON.stringify(details)}` : ''}` 
+      });
     }
   });
 };
