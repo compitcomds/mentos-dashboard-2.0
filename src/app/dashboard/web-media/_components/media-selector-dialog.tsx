@@ -65,7 +65,7 @@ export default function MediaSelectorDialog({
             if (selectedMedia.fileUrl) {
                 (onMediaSelect as (url: string, alt: string | null, mimeType: string | null) => void)(
                     selectedMedia.fileUrl,
-                    selectedMedia.alt || selectedMedia.name, 
+                    selectedMedia.alt || selectedMedia.name,
                     selectedMedia.mime
                 );
             } else {
@@ -74,7 +74,7 @@ export default function MediaSelectorDialog({
         } else {
             (onMediaSelect as (selectedMedia: CombinedMediaData) => void)(selectedMedia);
         }
-        onOpenChange(false); 
+        onOpenChange(false);
     };
 
     const handleOpenChange = (open: boolean) => {
@@ -104,7 +104,7 @@ export default function MediaSelectorDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="flex-1 pr-4 -mr-4"> 
+                <ScrollArea className="flex-1 pr-4 -mr-4">
                     <div className="py-4">
                         {isLoading && (
                             <div className="flex items-center justify-center h-64">
@@ -112,7 +112,7 @@ export default function MediaSelectorDialog({
                                 <p className="ml-2">Loading media...</p>
                             </div>
                         )}
-                        {isError && !isFetching && ( 
+                        {isError && !isFetching && (
                             <Alert variant="destructive" className="my-4">
                                 <AlertCircle className="h-4 w-4" />
                                 <AlertTitle>Error Loading Media</AlertTitle>
@@ -134,7 +134,7 @@ export default function MediaSelectorDialog({
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                 {mediaData.map((media) => (
                                     <button
-                                        key={media.webMediaId} // webMediaId is now string
+                                        key={media.webMediaId} // webMediaId is number
                                         onClick={() => setSelectedMedia(media)}
                                         className={cn(
                                             "relative group border rounded-md overflow-hidden aspect-square focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 flex flex-col items-center justify-center text-center",
@@ -147,10 +147,10 @@ export default function MediaSelectorDialog({
                                             <Image
                                                 src={media.thumbnailUrl}
                                                 alt={media.alt || media.name || 'Media thumbnail'}
-                                                fill 
-                                                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw" 
+                                                fill
+                                                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
                                                 className="object-cover transition-transform group-hover:scale-105"
-                                                unoptimized 
+                                                unoptimized
                                                 onError={(e) => {
                                                      console.error(`Error loading image: ${media.thumbnailUrl}`, e);
                                                 }}
@@ -187,7 +187,7 @@ export default function MediaSelectorDialog({
                     <Button
                         type="button"
                         onClick={handleSelect}
-                        disabled={!selectedMedia} 
+                        disabled={!selectedMedia}
                     >
                         Select Media
                     </Button>

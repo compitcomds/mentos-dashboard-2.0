@@ -12,14 +12,14 @@ export interface MediaFormat {
   width: number;
   height: number;
   size: number; // Assuming bytes, as formatBytes utility expects bytes
-  path: string | null; 
+  path: string | null;
   url: string;
 }
 
 // Based on user-provided 'Media', replaces old 'UploadFile'
 export interface Media {
-  id: string; // Changed from number to string
-  documentId?: string; // Optional separate documentId field if needed
+  id: number; // Numeric primary key
+  documentId?: string; // Optional string identifier if you have one
   name: string;
   alternativeText: string | null;
   caption: string | null;
@@ -44,8 +44,8 @@ export interface Media {
 
 // Based on user-provided 'WebMedia'
 export interface WebMedia {
-  id?: string; // Changed from number to string
-  documentId?: string; // Optional separate documentId field if needed
+  id?: number; // Numeric primary key, optional as it might not be present on create responses before full population
+  documentId?: string; // Optional string identifier
   createdAt?: Date | string;
   updatedAt?: Date | string;
   publishedAt?: Date | string | null; // publishedAt can be null
@@ -55,34 +55,36 @@ export interface WebMedia {
   tenent_id: string;
   tags?: OtherTag[] | null;
   media: Media | null; // Relation to the Media type, can be null
-  user?: User | null; // Changed from any to User
-  category?: string | null; // category can be null
+  user?: User | null;
+  category?: string | null;
 }
 
 // Combined type often useful for display components like the table
 export interface CombinedMediaData {
-  webMediaId: string; // Changed from number to string (now represents WebMedia.id)
-  name: string; 
-  alt: string | null; 
-  tenent_id: string; 
-  createdAt: Date | string; 
-  updatedAt: Date | string; 
+  webMediaId: number; // Numeric WebMedia.id
+  webMediaDocumentId?: string; // Optional if you have a separate string documentId
+  name: string;
+  alt: string | null;
+  tenent_id: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   publishedAt: Date | string | null;
 
   // --- File related data from Media (WebMedia.media) ---
-  fileId: string | null; // Changed from number to string (now represents Media.id)
-  fileUrl: string | null; 
-  fileName: string | null; 
-  mime: string | null; 
-  size: number | null; 
-  thumbnailUrl: string | null; 
-  category?: string | null; 
-  tags?: OtherTag[] | null; 
+  fileId: number | null; // Numeric Media.id
+  fileDocumentId?: string | null; // Optional if Media has a separate string documentId
+  fileUrl: string | null;
+  fileName: string | null;
+  mime: string | null;
+  size: number | null;
+  thumbnailUrl: string | null;
+  category?: string | null;
+  tags?: OtherTag[] | null;
 }
 
 // Type for updating web media metadata
 export interface UpdateWebMediaPayload {
-  name?: string; 
+  name?: string;
   alt?: string | null;
   category?: string | null;
   tags?: number[]; // Assuming tags are updated by their numeric IDs if they have one
@@ -92,10 +94,10 @@ export interface UpdateWebMediaPayload {
 export interface CreateWebMediaPayload {
     name: string;
     alt: string | null;
-    tenent_id: string; 
-    media: string; // The ID of the uploaded file (Media.id), now string
-    category?: string | null; 
-    tags?: number[]; 
+    tenent_id: string;
+    media: number; // The ID of the uploaded file (Media.id), now number
+    category?: string | null;
+    tags?: number[];
 }
 
 // Re-export UploadFile as Media for broader compatibility if needed,

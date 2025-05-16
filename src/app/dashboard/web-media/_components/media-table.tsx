@@ -15,7 +15,7 @@ import {
     getSortedRowModel,
     useReactTable,
 } from '@tanstack/react-table';
-import { MoreHorizontal, ArrowUpDown, Image as ImageIcon, Video, FileText, FileQuestion, Copy, Eye, Edit, Trash2, Loader2 } from 'lucide-react'; 
+import { MoreHorizontal, ArrowUpDown, Image as ImageIcon, Video, FileText, FileQuestion, Copy, Eye, Edit, Trash2, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 // Checkbox removed as it's not used in the current table column definitions.
@@ -74,7 +74,7 @@ const MediaActions: React.FC<{
 }> = ({ media, onEdit, onPreview }) => {
     const { toast } = useToast();
     const deleteMutation = useDeleteMediaMutation();
-    const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false); 
+    const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false);
 
     const handleCopyUrl = () => {
         if (media.fileUrl) {
@@ -87,34 +87,28 @@ const MediaActions: React.FC<{
     };
 
     const handleDelete = () => {
-        if (media.webMediaId && media.fileId) { // Ensure IDs are strings and present
-            deleteMutation.mutate(
-                { webMediaId: media.webMediaId, fileId: media.fileId },
-                {
-                    onSuccess: () => {
-                        setIsAlertDialogOpen(false); 
-                    },
-                    onError: () => {
-                        // Toast handled by hook
-                    }
-                }
-            );
-        } else if (media.webMediaId) { // Case where only webMediaId is present
-             deleteMutation.mutate(
-                { webMediaId: media.webMediaId, fileId: null },
-                {
-                    onSuccess: () => {
-                        setIsAlertDialogOpen(false);
-                    },
-                    onError: () => {
-                        // Toast handled by hook
-                    }
-                }
-            );
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: 'Cannot delete media: ID missing.'});
+        const webMediaDocId = media.webMediaDocumentId || String(media.webMediaId); // Fallback for safety
+        const fileDocId = media.fileDocumentId || (media.fileId ? String(media.fileId) : null); // Fallback for safety
+
+        if (!webMediaDocId) {
+            toast({ variant: "destructive", title: "Error", description: "Cannot delete media: WebMedia identifier missing."});
             setIsAlertDialogOpen(false);
+            return;
         }
+
+        deleteMutation.mutate(
+            { webMediaDocumentId: webMediaDocId, fileDocumentId: fileDocId },
+            {
+                onSuccess: () => {
+                    setIsAlertDialogOpen(false);
+                    // Toast handled by hook
+                },
+                onError: () => {
+                    setIsAlertDialogOpen(false);
+                    // Toast handled by hook
+                }
+            }
+        );
     };
 
 
@@ -142,10 +136,10 @@ const MediaActions: React.FC<{
                      <AlertDialogTrigger asChild>
                         <DropdownMenuItem
                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                             disabled={deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId}
-                             onSelect={(e) => e.preventDefault()} 
+                             disabled={deleteMutation.isPending && deleteMutation.variables?.webMediaDocumentId === (media.webMediaDocumentId || String(media.webMediaId))}
+                             onSelect={(e) => e.preventDefault()}
                         >
-                             {deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId ? (
+                             {deleteMutation.isPending && deleteMutation.variables?.webMediaDocumentId === (media.webMediaDocumentId || String(media.webMediaId)) ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                              ) : (
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -351,8 +345,8 @@ export default function MediaTable({ data }: MediaTableProps) {
              },
              sorting: [{ id: 'createdAt', desc: true }],
          },
-         // Provide a row ID if default (index-based) is problematic with string IDs
-         getRowId: (row) => row.webMediaId, // Use webMediaId (string) as the row ID
+         // Provide a row ID if default (index-based) is problematic with numeric IDs
+         getRowId: (row) => String(row.webMediaId), // Use webMediaId (number) as string for the row ID
     });
 
     return (
@@ -390,7 +384,7 @@ export default function MediaTable({ data }: MediaTableProps) {
                             {table.getRowModel().rows?.length ? (
                                 table.getRowModel().rows.map((row) => (
                                     <TableRow
-                                        key={row.id} // row.id from useReactTable is string
+                                        key={row.id} // row.id from useReactTable
                                         data-state={row.getIsSelected() && 'selected'}
                                     >
                                         {row.getVisibleCells().map((cell) => (

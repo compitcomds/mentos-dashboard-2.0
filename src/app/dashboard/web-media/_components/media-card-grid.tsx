@@ -100,43 +100,33 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
   };
 
   const handleDelete = () => {
-    if (mediaToDelete && mediaToDelete.webMediaId && mediaToDelete.fileId) { // Ensure IDs are strings and present
-        deleteMutation.mutate(
-            { webMediaId: mediaToDelete.webMediaId, fileId: mediaToDelete.fileId },
-            {
-                onSuccess: () => {
-                    toast({ title: "Success", description: "Media deleted successfully." });
-                    setIsAlertOpen(false);
-                    setMediaToDelete(null);
-                },
-                onError: (error: any) => {
-                    toast({ variant: "destructive", title: "Deletion Failed", description: error.message || "Could not delete media." });
-                    setIsAlertOpen(false);
-                    setMediaToDelete(null);
-                }
-            }
-        );
-    } else if (mediaToDelete && mediaToDelete.webMediaId) { // Case where only webMediaId is present (e.g., fileId is null)
-        deleteMutation.mutate(
-            { webMediaId: mediaToDelete.webMediaId, fileId: null },
-            {
-                 onSuccess: () => {
-                    toast({ title: "Success", description: "Media entry deleted (no associated file to delete or fileId was null)." });
-                    setIsAlertOpen(false);
-                    setMediaToDelete(null);
-                },
-                onError: (error: any) => {
-                    toast({ variant: "destructive", title: "Deletion Failed", description: error.message || "Could not delete media entry." });
-                    setIsAlertOpen(false);
-                    setMediaToDelete(null);
-                }
-            }
-        );
-    } else {
-        toast({ variant: "destructive", title: "Error", description: "Cannot delete media: ID missing."});
+    if (!mediaToDelete) return;
+
+    const webMediaDocId = mediaToDelete.webMediaDocumentId || String(mediaToDelete.webMediaId); // Fallback for safety
+    const fileDocId = mediaToDelete.fileDocumentId || (mediaToDelete.fileId ? String(mediaToDelete.fileId) : null); // Fallback for safety
+
+    if (!webMediaDocId) {
+        toast({ variant: "destructive", title: "Error", description: "Cannot delete media: WebMedia identifier missing."});
         setIsAlertOpen(false);
         setMediaToDelete(null);
+        return;
     }
+
+    deleteMutation.mutate(
+        { webMediaDocumentId: webMediaDocId, fileDocumentId: fileDocId },
+        {
+            onSuccess: () => {
+                // Toast handled by hook
+                setIsAlertOpen(false);
+                setMediaToDelete(null);
+            },
+            onError: (error: any) => {
+                // Toast handled by hook
+                setIsAlertOpen(false);
+                setMediaToDelete(null);
+            }
+        }
+    );
   };
 
 
@@ -144,7 +134,7 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         {mediaItems.map((media) => (
-          <Card key={media.webMediaId} className="flex flex-col overflow-hidden"> {/* webMediaId is now string */}
+          <Card key={media.webMediaId} className="flex flex-col overflow-hidden"> {/* webMediaId is number */}
             <div className="relative aspect-square w-full bg-muted border-b">
               {media.thumbnailUrl && media.mime?.startsWith('image/') ? (
                 <Image
@@ -196,9 +186,9 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive focus:bg-destructive/10"
                     onClick={() => confirmDelete(media)}
-                    disabled={deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId}
+                    disabled={deleteMutation.isPending && (deleteMutation.variables?.webMediaDocumentId === (media.webMediaDocumentId || String(media.webMediaId)))}
                   >
-                    {deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId ? (
+                    {deleteMutation.isPending && (deleteMutation.variables?.webMediaDocumentId === (media.webMediaDocumentId || String(media.webMediaId))) ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Trash2 className="mr-2 h-4 w-4" />
@@ -261,4 +251,3 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
     </>
   );
 }
-        

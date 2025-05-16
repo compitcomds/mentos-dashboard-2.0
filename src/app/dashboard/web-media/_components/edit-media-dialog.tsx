@@ -43,17 +43,25 @@ export default function EditMediaDialog({ isOpen, onOpenChange, media, onSuccess
 
     const handleSubmit = () => {
         const payload: UpdateWebMediaPayload = {
-            name: name || media.fileName || 'Untitled', 
+            name: name || media.fileName || 'Untitled',
             alt: alt || null,
         };
 
-        // media.webMediaId is now a string
+        // Use webMediaDocumentId if available, otherwise fall back to webMediaId (number) cast to string for the path
+        // This assumes your API endpoint for update expects a string ID (documentId or numeric ID as string)
+        const idForApi = media.webMediaDocumentId || String(media.webMediaId);
+
+        if (!idForApi) {
+            toast({ variant: "destructive", title: "Error", description: "Media identifier (documentId or ID) is missing."});
+            return;
+        }
+
         updateMutation.mutate(
-            { id: media.webMediaId, payload },
+            { documentId: idForApi, payload }, // Pass documentId to the mutation
             {
                 onSuccess: () => {
-                    onSuccess?.(); 
-                    onOpenChange(false); 
+                    onSuccess?.();
+                    onOpenChange(false);
                 },
                 onError: (error) => {
                     // Error toast handled by hook
@@ -79,12 +87,12 @@ export default function EditMediaDialog({ isOpen, onOpenChange, media, onSuccess
                 {media.thumbnailUrl && media.mime?.startsWith('image/') && (
                     <div className="my-4 flex justify-center">
                         <Image
-                            src={media.thumbnailUrl} 
+                            src={media.thumbnailUrl}
                             alt={media.alt || media.name || "Current media preview"}
                             width={100}
                             height={100}
                             className="rounded-md object-contain border"
-                            unoptimized 
+                            unoptimized
                         />
                     </div>
                  )}
