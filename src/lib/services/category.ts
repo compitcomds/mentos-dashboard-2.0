@@ -114,7 +114,7 @@ export const createCategory = async (category: CreateCategoryPayload): Promise<C
 
 // Update a category by id, relying on Strapi policies for authorization
 export const updateCategory = async (id: number, categoryUpdatePayload: Partial<CreateCategoryPayload>, userTenentId: string): Promise<Category> => {
-  if (!userTenentId) { // Still useful for logging or if parts of payload depend on it
+  if (!userTenentId) { 
     throw new Error('User tenent_id is required for context, even if not used for pre-check.');
   }
   
@@ -128,7 +128,6 @@ export const updateCategory = async (id: number, categoryUpdatePayload: Partial<
 
   try {
     const headers = await getAuthHeader();
-    // Removed pre-flight getCategory check. Relies on Strapi policies for the PUT operation.
     const response = await axiosInstance.put<FindOne<Category>>(url, { data: updateData }, { headers, params: { populate: '*' } });
     if (!response.data || !response.data.data) {
       throw new Error('Unexpected API response structure after update.');
@@ -144,14 +143,13 @@ export const updateCategory = async (id: number, categoryUpdatePayload: Partial<
 
 // Delete a category by id, relying on Strapi policies for authorization
 export const deleteCategory = async (id: number, userTenentId: string): Promise<Category | void> => {
-  if (!userTenentId) { // Still useful for logging or if query invalidation needs it
+  if (!userTenentId) {
     throw new Error('User tenent_id is required for context, even if not used for pre-check.');
   }
   const url = `/categories/${id}`;
   console.log(`[deleteCategory] Deleting category ${id} for user with tenent_id ${userTenentId}`);
   try {
     const headers = await getAuthHeader();
-    // Removed pre-flight getCategory check. Relies on Strapi policies for the DELETE operation.
     const response = await axiosInstance.delete<FindOne<Category>>(url, { headers });
      if (response.status === 200 && response.data && response.data.data) {
         console.log(`[deleteCategory] Successfully deleted category ${id} for tenent_id ${userTenentId}.`);
@@ -163,14 +161,47 @@ export const deleteCategory = async (id: number, userTenentId: string): Promise<
     console.warn(`[deleteCategory] Unexpected status ${response.status} for category ${id}.`);
     return response.data?.data; 
   } catch (error: unknown) {
-    const message = error instanceof AxiosError ? error.response?.data?.error?.message || error.message : (error as Error).message;
-    if (error instanceof AxiosError && error.response?.status === 404) {
-      console.warn(`[deleteCategory] Category ${id} not found (404) during delete attempt for tenent_id ${userTenentId}.`);
-      // For delete, a 404 might mean "already deleted" or "never existed".
-      // Depending on desired behavior, you might return void or re-throw.
-      // Here, we let it throw to be consistent with other errors.
+    let detailedMessage = `Failed to delete category ${id}.`;
+    let loggableErrorData: any = error; // For console logging
+
+    if (error instanceof AxiosError) {
+      loggableErrorData = error.response?.data || error.message;
+      const status = error.response?.status;
+      const strapiError = error.response?.data?.error; // e.g. { status, name, message, details }
+      let apiMsg = strapiError?.message;
+
+      if (!apiMsg && typeof error.response?.data === 'string') {
+        apiMsg = error.response.data; // Error is a plain string
+      } else if (!apiMsg && typeof error.response?.data?.message === 'string') {
+        apiMsg = error.response.data.message; // Error message is directly in data.message
+      }
+      
+      detailedMessage = `API Error (Status ${status || 'unknown'}): ${apiMsg || error.message}.`;
+      
+      if (strapiError?.details && Object.keys(strapiError.details).length > 0) {
+        try {
+          detailedMessage += ` Details: ${JSON.stringify(strapiError.details)}`;
+        } catch (e) { /* ignore stringify error for details */ }
+      } else if (status === 500 && !strapiError) { // If it's a 500 and no structured Strapi error
+          detailedMessage += " This is an Internal Server Error from the API. Please check Strapi server logs for more details."
+          if (typeof error.response?.data === 'object' && error.response?.data !== null) {
+            try {
+                const rawDataString = JSON.stringify(error.response.data);
+                if (rawDataString !== '{}') { 
+                    detailedMessage += ` Raw Response Data: ${rawDataString}`;
+                }
+            } catch (e) { /* ignore stringify error */ }
+          }
+      }
+    } else if (error instanceof Error) {
+      detailedMessage = error.message;
     }
-    console.error(`[deleteCategory] Failed for ID ${id}, user tenent_id ${userTenentId}:`, message, error instanceof AxiosError ? error.response?.data : '');
-    throw new Error(message || `Failed to delete category ${id}.`);
+
+    console.error(
+      `[deleteCategory] Failed for ID ${id}, user tenent_id ${userTenentId}. Error: ${detailedMessage}`,
+      "Full error object/data logged:", loggableErrorData
+    );
+    
+    throw new Error(detailedMessage); // Throw the more detailed message
   }
 };
