@@ -102,10 +102,10 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
   const handleDelete = () => {
     if (!mediaToDelete) return;
 
-    const webMediaDocId = mediaToDelete.webMediaDocumentId || String(mediaToDelete.webMediaId); // Fallback for safety
-    const fileDocId = mediaToDelete.fileDocumentId || (mediaToDelete.fileId ? String(mediaToDelete.fileId) : null); // Fallback for safety
+    const webMediaIdToDelete = mediaToDelete.webMediaId; // Numeric ID for WebMedia entry
+    const fileDocumentIdToDelete = mediaToDelete.fileDocumentId; // String Document ID for the file
 
-    if (!webMediaDocId) {
+    if (webMediaIdToDelete === undefined || webMediaIdToDelete === null) { // Check if webMediaId is valid
         toast({ variant: "destructive", title: "Error", description: "Cannot delete media: WebMedia identifier missing."});
         setIsAlertOpen(false);
         setMediaToDelete(null);
@@ -113,15 +113,13 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
     }
 
     deleteMutation.mutate(
-        { webMediaDocumentId: webMediaDocId, fileDocumentId: fileDocId },
+        { webMediaId: webMediaIdToDelete, fileDocumentId: fileDocumentIdToDelete },
         {
             onSuccess: () => {
-                // Toast handled by hook
                 setIsAlertOpen(false);
                 setMediaToDelete(null);
             },
             onError: (error: any) => {
-                // Toast handled by hook
                 setIsAlertOpen(false);
                 setMediaToDelete(null);
             }
@@ -134,7 +132,7 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         {mediaItems.map((media) => (
-          <Card key={media.webMediaId} className="flex flex-col overflow-hidden"> {/* webMediaId is number */}
+          <Card key={media.webMediaId} className="flex flex-col overflow-hidden">
             <div className="relative aspect-square w-full bg-muted border-b">
               {media.thumbnailUrl && media.mime?.startsWith('image/') ? (
                 <Image
@@ -186,9 +184,9 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive focus:bg-destructive/10"
                     onClick={() => confirmDelete(media)}
-                    disabled={deleteMutation.isPending && (deleteMutation.variables?.webMediaDocumentId === (media.webMediaDocumentId || String(media.webMediaId)))}
+                    disabled={deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId}
                   >
-                    {deleteMutation.isPending && (deleteMutation.variables?.webMediaDocumentId === (media.webMediaDocumentId || String(media.webMediaId))) ? (
+                    {deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Trash2 className="mr-2 h-4 w-4" />

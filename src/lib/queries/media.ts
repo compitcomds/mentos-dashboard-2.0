@@ -61,13 +61,13 @@ export function useUploadMediaMutation() {
                 throw new Error('File upload response did not contain expected data or failed.');
             }
 
-            const uploadedFile = uploadResponseArray[0]; // UploadFile.id is number
+            const uploadedFile = uploadResponseArray[0]; 
 
              const createPayload: CreateWebMediaPayload = {
                 name: name || uploadedFile.name,
                 alt: alt || name || uploadedFile.name || null,
                 tenent_id: userKey,
-                media: uploadedFile.id, // This is Media.id (number)
+                media: uploadedFile.id, 
             };
 
             const webMediaResponse = await createWebMedia(createPayload);
@@ -102,9 +102,8 @@ export function useUpdateMediaMutation() {
      const { data: currentUser } = useCurrentUser();
      const userKey = currentUser?.tenent_id;
 
-    // The `id` here refers to the string `documentId` for the API path
-    return useMutation<WebMedia, Error, { documentId: string; payload: UpdateWebMediaPayload }>({
-        mutationFn: ({ documentId, payload }) => updateWebMedia(documentId, payload),
+    return useMutation<WebMedia, Error, { webMediaId: number; payload: UpdateWebMediaPayload }>({
+        mutationFn: ({ webMediaId, payload }) => updateWebMedia(webMediaId, payload),
         onSuccess: (data) => {
             toast({
                 title: 'Success!',
@@ -113,7 +112,7 @@ export function useUpdateMediaMutation() {
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
         },
         onError: (error: unknown, variables) => {
-             let message = `Could not update media (Document ID: ${variables.documentId}).`;
+             let message = `Could not update media (ID: ${variables.webMediaId}).`;
              if (error instanceof AxiosError) {
                  message = error.response?.data?.error?.message || error.message || message;
                  console.error("Update WebMedia Axios Error:", error.response?.data || error);
@@ -138,25 +137,24 @@ export function useDeleteMediaMutation() {
      const { data: currentUser } = useCurrentUser();
      const userKey = currentUser?.tenent_id;
 
-    // Parameters are string documentIds for the API paths
-    return useMutation< { webMediaDeleted: boolean; fileDeleted: boolean }, Error, { webMediaDocumentId: string; fileDocumentId: string | null } >({
-        mutationFn: ({ webMediaDocumentId, fileDocumentId }) => deleteMediaAndFile(webMediaDocumentId, fileDocumentId),
+    return useMutation< { webMediaDeleted: boolean; fileDeleted: boolean }, Error, { webMediaId: number; fileDocumentId: string | null } >({
+        mutationFn: ({ webMediaId, fileDocumentId }) => deleteMediaAndFile(webMediaId, fileDocumentId),
         onSuccess: (data, variables) => {
-            let description = `Media entry (Document ID: ${variables.webMediaDocumentId}) deleted successfully.`;
-            if (variables.fileDocumentId !== null) {
+            let description = `Media entry (ID: ${variables.webMediaId}) deleted successfully.`;
+            if (variables.fileDocumentId) {
                  description += data.fileDeleted ? ` Associated file (Document ID: ${variables.fileDocumentId}) also deleted.` : ` Could not delete associated file (Document ID: ${variables.fileDocumentId}). Check server logs.`;
             } else {
-                 description += " No associated file to delete.";
+                 description += " No associated file Document ID provided to delete.";
             }
             toast({
                 title: 'Deletion Status',
                 description: description,
-                variant: (variables.fileDocumentId !== null && !data.fileDeleted) ? 'destructive' : 'default',
+                variant: (variables.fileDocumentId && !data.fileDeleted) ? 'destructive' : 'default',
             });
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
         },
         onError: (error: unknown, variables) => {
-             let message = `Could not delete media (Document ID: ${variables.webMediaDocumentId}).`;
+             let message = `Could not delete media (ID: ${variables.webMediaId}).`;
              if (error instanceof AxiosError) {
                  message = error.response?.data?.error?.message || error.message || message;
                  console.error("Delete Media Axios Error:", error.response?.data || error);

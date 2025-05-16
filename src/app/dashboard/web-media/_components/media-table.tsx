@@ -87,25 +87,23 @@ const MediaActions: React.FC<{
     };
 
     const handleDelete = () => {
-        const webMediaDocId = media.webMediaDocumentId || String(media.webMediaId); // Fallback for safety
-        const fileDocId = media.fileDocumentId || (media.fileId ? String(media.fileId) : null); // Fallback for safety
+        const webMediaIdToDelete = media.webMediaId; // Numeric ID for WebMedia entry
+        const fileDocumentIdToDelete = media.fileDocumentId; // String Document ID for the file
 
-        if (!webMediaDocId) {
+        if (webMediaIdToDelete === undefined || webMediaIdToDelete === null) {
             toast({ variant: "destructive", title: "Error", description: "Cannot delete media: WebMedia identifier missing."});
             setIsAlertDialogOpen(false);
             return;
         }
 
         deleteMutation.mutate(
-            { webMediaDocumentId: webMediaDocId, fileDocumentId: fileDocId },
+            { webMediaId: webMediaIdToDelete, fileDocumentId: fileDocumentIdToDelete },
             {
                 onSuccess: () => {
                     setIsAlertDialogOpen(false);
-                    // Toast handled by hook
                 },
                 onError: () => {
                     setIsAlertDialogOpen(false);
-                    // Toast handled by hook
                 }
             }
         );
@@ -136,10 +134,10 @@ const MediaActions: React.FC<{
                      <AlertDialogTrigger asChild>
                         <DropdownMenuItem
                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                             disabled={deleteMutation.isPending && deleteMutation.variables?.webMediaDocumentId === (media.webMediaDocumentId || String(media.webMediaId))}
-                             onSelect={(e) => e.preventDefault()}
+                             disabled={deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId}
+                             onSelect={(e) => e.preventDefault()} // Prevent menu from closing before dialog
                         >
-                             {deleteMutation.isPending && deleteMutation.variables?.webMediaDocumentId === (media.webMediaDocumentId || String(media.webMediaId)) ? (
+                             {deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                              ) : (
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -345,8 +343,7 @@ export default function MediaTable({ data }: MediaTableProps) {
              },
              sorting: [{ id: 'createdAt', desc: true }],
          },
-         // Provide a row ID if default (index-based) is problematic with numeric IDs
-         getRowId: (row) => String(row.webMediaId), // Use webMediaId (number) as string for the row ID
+         getRowId: (row) => String(row.webMediaId), 
     });
 
     return (
@@ -384,7 +381,7 @@ export default function MediaTable({ data }: MediaTableProps) {
                             {table.getRowModel().rows?.length ? (
                                 table.getRowModel().rows.map((row) => (
                                     <TableRow
-                                        key={row.id} // row.id from useReactTable
+                                        key={row.id} 
                                         data-state={row.getIsSelected() && 'selected'}
                                     >
                                         {row.getVisibleCells().map((cell) => (

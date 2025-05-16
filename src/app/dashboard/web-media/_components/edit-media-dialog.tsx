@@ -47,17 +47,15 @@ export default function EditMediaDialog({ isOpen, onOpenChange, media, onSuccess
             alt: alt || null,
         };
 
-        // Use webMediaDocumentId if available, otherwise fall back to webMediaId (number) cast to string for the path
-        // This assumes your API endpoint for update expects a string ID (documentId or numeric ID as string)
-        const idForApi = media.webMediaDocumentId || String(media.webMediaId);
+        const idForApi = media.webMediaId; // Use numeric webMediaId for update
 
-        if (!idForApi) {
-            toast({ variant: "destructive", title: "Error", description: "Media identifier (documentId or ID) is missing."});
+        if (idForApi === undefined || idForApi === null) {
+            toast({ variant: "destructive", title: "Error", description: "WebMedia identifier (ID) is missing."});
             return;
         }
 
         updateMutation.mutate(
-            { documentId: idForApi, payload }, // Pass documentId to the mutation
+            { webMediaId: idForApi, payload }, 
             {
                 onSuccess: () => {
                     onSuccess?.();
