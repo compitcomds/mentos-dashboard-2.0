@@ -34,7 +34,6 @@ export default function EditMediaDialog({ isOpen, onOpenChange, media, onSuccess
     const { toast } = useToast();
     const updateMutation = useUpdateMediaMutation();
 
-    // Update state if the media prop changes (e.g., opening dialog for a different item)
     React.useEffect(() => {
         if (media) {
             setName(media.name || '');
@@ -44,34 +43,27 @@ export default function EditMediaDialog({ isOpen, onOpenChange, media, onSuccess
 
     const handleSubmit = () => {
         const payload: UpdateWebMediaPayload = {
-            name: name || media.fileName || 'Untitled', // Fallback name
+            name: name || media.fileName || 'Untitled', 
             alt: alt || null,
         };
 
+        // media.webMediaId is now a string
         updateMutation.mutate(
-            // Pass the webMediaId from CombinedMediaData
             { id: media.webMediaId, payload },
             {
                 onSuccess: () => {
-                    // Toast is handled by the hook
-                    onSuccess?.(); // Call external success handler (e.g., close dialog)
-                    onOpenChange(false); // Close the dialog on success
+                    onSuccess?.(); 
+                    onOpenChange(false); 
                 },
                 onError: (error) => {
-                    // Error toast is handled by the hook
+                    // Error toast handled by hook
                 },
             }
         );
     };
 
-    // Reset state when dialog closes without saving
      const handleOpenChange = (open: boolean) => {
         onOpenChange(open);
-        if (!open) {
-            // Reset state if needed, or rely on useEffect when reopening
-            // setName(media.name || '');
-            // setAlt(media.alt || '');
-        }
     };
 
     return (
@@ -84,17 +76,15 @@ export default function EditMediaDialog({ isOpen, onOpenChange, media, onSuccess
                     </DialogDescription>
                 </DialogHeader>
 
-                 {/* Optional: Show a small preview using thumbnailUrl */}
-                 {/* Check if mime starts with image AND thumbnailUrl exists */}
                 {media.thumbnailUrl && media.mime?.startsWith('image/') && (
                     <div className="my-4 flex justify-center">
                         <Image
-                            src={media.thumbnailUrl} // Use thumbnailUrl directly
+                            src={media.thumbnailUrl} 
                             alt={media.alt || media.name || "Current media preview"}
                             width={100}
                             height={100}
                             className="rounded-md object-contain border"
-                            unoptimized // Use unoptimized if URLs are absolute/external
+                            unoptimized 
                         />
                     </div>
                  )}
@@ -123,7 +113,6 @@ export default function EditMediaDialog({ isOpen, onOpenChange, media, onSuccess
                             onChange={(e) => setAlt(e.target.value)}
                             className="col-span-3"
                             placeholder="Describe the image (for accessibility)"
-                            // Only enable for images based on mime type
                              disabled={!media.mime?.startsWith('image/')}
                         />
                     </div>

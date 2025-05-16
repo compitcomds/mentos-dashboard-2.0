@@ -100,7 +100,7 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
   };
 
   const handleDelete = () => {
-    if (mediaToDelete) {
+    if (mediaToDelete && mediaToDelete.webMediaId && mediaToDelete.fileId) { // Ensure IDs are strings and present
         deleteMutation.mutate(
             { webMediaId: mediaToDelete.webMediaId, fileId: mediaToDelete.fileId },
             {
@@ -116,6 +116,26 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
                 }
             }
         );
+    } else if (mediaToDelete && mediaToDelete.webMediaId) { // Case where only webMediaId is present (e.g., fileId is null)
+        deleteMutation.mutate(
+            { webMediaId: mediaToDelete.webMediaId, fileId: null },
+            {
+                 onSuccess: () => {
+                    toast({ title: "Success", description: "Media entry deleted (no associated file to delete or fileId was null)." });
+                    setIsAlertOpen(false);
+                    setMediaToDelete(null);
+                },
+                onError: (error: any) => {
+                    toast({ variant: "destructive", title: "Deletion Failed", description: error.message || "Could not delete media entry." });
+                    setIsAlertOpen(false);
+                    setMediaToDelete(null);
+                }
+            }
+        );
+    } else {
+        toast({ variant: "destructive", title: "Error", description: "Cannot delete media: ID missing."});
+        setIsAlertOpen(false);
+        setMediaToDelete(null);
     }
   };
 
@@ -124,7 +144,7 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         {mediaItems.map((media) => (
-          <Card key={media.webMediaId} className="flex flex-col overflow-hidden">
+          <Card key={media.webMediaId} className="flex flex-col overflow-hidden"> {/* webMediaId is now string */}
             <div className="relative aspect-square w-full bg-muted border-b">
               {media.thumbnailUrl && media.mime?.startsWith('image/') ? (
                 <Image
@@ -145,7 +165,7 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
               <CardTitle className="text-base font-semibold truncate" title={media.name}>
                 {media.name}
               </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground truncate" title={media.fileName}>
+              <CardDescription className="text-xs text-muted-foreground truncate" title={media.fileName || undefined}>
                 {media.fileName}
               </CardDescription>
             </CardHeader>
@@ -199,7 +219,6 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
           media={selectedMedia}
           onSuccess={() => {
             setIsEditOpen(false);
-            // Data refetch handled by mutation hook via queryClient.invalidateQueries
           }}
         />
       )}
@@ -242,5 +261,4 @@ export default function MediaCardGrid({ mediaItems }: MediaCardGridProps) {
     </>
   );
 }
-
-    
+        

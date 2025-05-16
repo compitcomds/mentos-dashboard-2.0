@@ -15,10 +15,11 @@ import {
     getSortedRowModel,
     useReactTable,
 } from '@tanstack/react-table';
-import { MoreHorizontal, ArrowUpDown, Image as ImageIcon, Video, FileText, FileQuestion, Copy, Eye, Edit, Trash2, Loader2 } from 'lucide-react'; // Added Loader2
+import { MoreHorizontal, ArrowUpDown, Image as ImageIcon, Video, FileText, FileQuestion, Copy, Eye, Edit, Trash2, Loader2 } from 'lucide-react'; 
 
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+// Checkbox removed as it's not used in the current table column definitions.
+// import { Checkbox } from '@/components/ui/checkbox';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -48,7 +49,6 @@ import PreviewDialog from './preview-dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 
-// Helper function to format bytes into KB/MB/GB
 const formatBytes = (bytes: number | null, decimals = 2): string => {
     if (bytes === null || bytes <= 0) return '0 Bytes';
     const k = 1024;
@@ -59,7 +59,6 @@ const formatBytes = (bytes: number | null, decimals = 2): string => {
     return sizeValue + ' ' + (sizes[i] || 'Bytes');
 };
 
-// Helper to get file type icon
 const getFileTypeIcon = (mime: string | null): React.ReactElement => {
     if (!mime) return <FileQuestion className="h-5 w-5 text-muted-foreground" />;
     if (mime.startsWith('image/')) return <ImageIcon className="h-5 w-5 text-blue-500" />;
@@ -68,7 +67,6 @@ const getFileTypeIcon = (mime: string | null): React.ReactElement => {
     return <FileQuestion className="h-5 w-5 text-muted-foreground" />;
 };
 
-// Component for the Actions dropdown
 const MediaActions: React.FC<{
   media: CombinedMediaData;
   onEdit: (media: CombinedMediaData) => void;
@@ -76,7 +74,7 @@ const MediaActions: React.FC<{
 }> = ({ media, onEdit, onPreview }) => {
     const { toast } = useToast();
     const deleteMutation = useDeleteMediaMutation();
-    const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false); // State for alert dialog
+    const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false); 
 
     const handleCopyUrl = () => {
         if (media.fileUrl) {
@@ -89,28 +87,34 @@ const MediaActions: React.FC<{
     };
 
     const handleDelete = () => {
-        console.log('Deleting media:', media.webMediaId, 'File ID:', media.fileId);
-        if (media.webMediaId === undefined || media.webMediaId === null) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Media ID missing, cannot delete.' });
-            setIsAlertDialogOpen(false); // Close dialog if ID is missing
-            return;
-        }
-
-        deleteMutation.mutate(
-            // Ensure correct IDs are passed
-            { webMediaId: media.webMediaId, fileId: media.fileId },
-            {
-                onSuccess: () => {
-                    // Toast handled by hook
-                    setIsAlertDialogOpen(false); // Close dialog on success
-                },
-                onError: () => {
-                    // Toast handled by hook
-                    // Keep dialog open on error for user feedback or retry?
-                    // setIsAlertDialogOpen(false); // Or close it
+        if (media.webMediaId && media.fileId) { // Ensure IDs are strings and present
+            deleteMutation.mutate(
+                { webMediaId: media.webMediaId, fileId: media.fileId },
+                {
+                    onSuccess: () => {
+                        setIsAlertDialogOpen(false); 
+                    },
+                    onError: () => {
+                        // Toast handled by hook
+                    }
                 }
-            }
-        );
+            );
+        } else if (media.webMediaId) { // Case where only webMediaId is present
+             deleteMutation.mutate(
+                { webMediaId: media.webMediaId, fileId: null },
+                {
+                    onSuccess: () => {
+                        setIsAlertDialogOpen(false);
+                    },
+                    onError: () => {
+                        // Toast handled by hook
+                    }
+                }
+            );
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: 'Cannot delete media: ID missing.'});
+            setIsAlertDialogOpen(false);
+        }
     };
 
 
@@ -138,9 +142,8 @@ const MediaActions: React.FC<{
                      <AlertDialogTrigger asChild>
                         <DropdownMenuItem
                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                            // Disable trigger if mutation is pending for *this specific item*
                              disabled={deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId}
-                             onSelect={(e) => e.preventDefault()} // Prevent closing dropdown
+                             onSelect={(e) => e.preventDefault()} 
                         >
                              {deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -180,7 +183,6 @@ const MediaActions: React.FC<{
 };
 
 
-// Define table columns using CombinedMediaData
 export const columns: (
     onEdit: (media: CombinedMediaData) => void,
     onPreview: (media: CombinedMediaData) => void,
@@ -294,13 +296,11 @@ export const columns: (
          enableHiding: false,
          cell: ({ row }) => {
              const media = row.original;
-             // Pass down necessary props to MediaActions
              return <MediaActions media={media} onEdit={onEdit} onPreview={onPreview} />;
         },
     },
 ];
 
-// Main DataTable component
 interface MediaTableProps {
     data: CombinedMediaData[];
 }
@@ -325,7 +325,6 @@ export default function MediaTable({ data }: MediaTableProps) {
         setIsPreviewOpen(true);
     };
 
-     // Memoize columns
      const tableColumns = React.useMemo(() => columns(handleEdit, handlePreview), []);
 
 
@@ -352,6 +351,8 @@ export default function MediaTable({ data }: MediaTableProps) {
              },
              sorting: [{ id: 'createdAt', desc: true }],
          },
+         // Provide a row ID if default (index-based) is problematic with string IDs
+         getRowId: (row) => row.webMediaId, // Use webMediaId (string) as the row ID
     });
 
     return (
@@ -389,7 +390,7 @@ export default function MediaTable({ data }: MediaTableProps) {
                             {table.getRowModel().rows?.length ? (
                                 table.getRowModel().rows.map((row) => (
                                     <TableRow
-                                        key={row.id}
+                                        key={row.id} // row.id from useReactTable is string
                                         data-state={row.getIsSelected() && 'selected'}
                                     >
                                         {row.getVisibleCells().map((cell) => (
@@ -447,7 +448,6 @@ export default function MediaTable({ data }: MediaTableProps) {
                     media={selectedMedia}
                     onSuccess={() => {
                          setIsEditOpen(false);
-                        // Refetch handled by mutation hook
                     }}
                 />
             )}

@@ -8,88 +8,73 @@ import {
     uploadFile,
     createWebMedia,
     updateWebMedia,
-    deleteMediaAndFile, // Use the combined delete function
+    deleteMediaAndFile, 
 } from '@/lib/services/media';
 import type {
     CombinedMediaData,
     UpdateWebMediaPayload,
     CreateWebMediaPayload,
-    UploadFile,
-    WebMedia, // Import WebMedia type for mutation return
+    // UploadFile, // Media is used directly
+    WebMedia, 
+    Media, // Import Media for direct use
 } from '@/types/media';
-import { AxiosError } from 'axios'; // Import AxiosError for type checking
-import { useCurrentUser } from './user'; // Import the hook to get the current user
+import { AxiosError } from 'axios'; 
+import { useCurrentUser } from './user'; 
 
 
 const MEDIA_QUERY_KEY = (userKey?: string) => ['mediaFiles', userKey || 'all'];
 
-// Hook to fetch all combined media data for the current user
-// Accepts userKey as an argument to allow passing it from the component
 export function useFetchMedia(userKey?: string) {
-    const { isLoading: isLoadingUser } = useCurrentUser(); // Only need loading state here
+    const { isLoading: isLoadingUser } = useCurrentUser(); 
 
     return useQuery<CombinedMediaData[], Error>({
-        queryKey: MEDIA_QUERY_KEY(userKey), // Use the passed userKey for the query key
-        // Pass the userKey to the service function
+        queryKey: MEDIA_QUERY_KEY(userKey), 
         queryFn: () => {
             if (!userKey) {
-                // Optionally return empty array or throw error if key is mandatory
                 console.warn("useFetchMedia: User key not provided. Returning empty array.");
                 return Promise.resolve([]);
-                // Or: throw new Error("User key is required to fetch media.");
             }
             return fetchMediaFiles(userKey);
         },
-        enabled: !!userKey && !isLoadingUser, // Only enable the query when the userKey is available and user is loaded
-        staleTime: 1000 * 60 * 5, // 5 minutes
-         gcTime: 1000 * 60 * 30, // 30 minutes
-         retry: 1, // Retry once
+        enabled: !!userKey && !isLoadingUser, 
+        staleTime: 1000 * 60 * 5, 
+         gcTime: 1000 * 60 * 30, 
+         retry: 1, 
     });
 }
 
-// Hook for uploading a file and creating the corresponding web_media entry
 export function useUploadMediaMutation() {
     const queryClient = useQueryClient();
     const { data: currentUser } = useCurrentUser();
-    const userKey = currentUser?.key;
+    const userKey = currentUser?.tenent_id;
 
-    // This mutation handles both the file upload and the web_media creation
     return useMutation<WebMedia, Error, { file: File; name: string; alt: string | null }>({
         mutationFn: async ({ file, name, alt }) => {
              if (!userKey) {
                 throw new Error('User key is not available. Cannot upload media.');
             }
-            // Step 1: Upload the file
             const formData = new FormData();
-            formData.append('files', file); // Strapi v5 expects the key 'files'
-            // The uploadFile service function now returns UploadFile[]
+            formData.append('files', file); 
+            
             const uploadResponseArray = await uploadFile(formData);
-            console.log("Upload Response Array:", uploadResponseArray); // Debugging log
-            // Check if the array is valid and has at least one element
+            
             if (!uploadResponseArray || uploadResponseArray.length === 0 || !uploadResponseArray[0].id) {
                 throw new Error('File upload response did not contain expected data or failed.');
             }
-            // Get the first uploaded file details from the array
+            
             const uploadedFile = uploadResponseArray[0];
-            console.log("Uploaded File:", uploadedFile); // Debugging log
-             // Step 2: Create the web_media entry linking to the uploaded file ID
+            
              const createPayload: CreateWebMediaPayload = {
-                name: name || uploadedFile.name, // Use provided name or fallback to filename
-                alt: alt || name || uploadedFile.name || null, // Use provided alt or fallback to name
-                key: userKey, // Pass the user's key
-                media: uploadedFile.id, // Link using the uploaded file ID
+                name: name || uploadedFile.name, 
+                alt: alt || name || uploadedFile.name || null, 
+                tenent_id: userKey, 
+                media: uploadedFile.id, // This is now a string ID
             };
-            // createWebMedia now returns the created WebMedia object
+            
             const webMediaResponse = await createWebMedia(createPayload);
-            return webMediaResponse; // Return the created web_media data
+            return webMediaResponse; 
         },
         onSuccess: (data) => {
-            // Toast is now handled in the component for better user experience after delay
-            // toast({
-            //     title: 'Success!',
-            //     description: `Media "${data.name}" uploaded and saved successfully.`,
-            // });
-            // Invalidate the media query for the current user to refetch the list
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
         },
         onError: (error: unknown) => {
@@ -113,23 +98,18 @@ export function useUploadMediaMutation() {
 }
 
 
-// Hook for updating web media metadata
 export function useUpdateMediaMutation() {
     const queryClient = useQueryClient();
      const { data: currentUser } = useCurrentUser();
-     const userKey = currentUser?.key;
+     const userKey = currentUser?.tenent_id;
 
-    // updateWebMedia service function expects Strapi v5 payload and returns WebMedia
-    // We don't need the userKey for update, just the webMedia ID
-    return useMutation<WebMedia, Error, { id: number; payload: UpdateWebMediaPayload }>({
+    return useMutation<WebMedia, Error, { id: string; payload: UpdateWebMediaPayload }>({ // id is now string
         mutationFn: ({ id, payload }) => updateWebMedia(id, payload),
         onSuccess: (data) => {
             toast({
                 title: 'Success!',
-                // Access name directly (Strapi v5)
                 description: `Media "${data.name}" updated successfully.`,
             });
-            // Optimistic update or invalidate query for the current user
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
         },
         onError: (error: unknown, variables) => {
@@ -153,20 +133,16 @@ export function useUpdateMediaMutation() {
 }
 
 
-
-// Hook for deleting a web_media entry and its associated file
 export function useDeleteMediaMutation() {
     const queryClient = useQueryClient();
      const { data: currentUser } = useCurrentUser();
-     const userKey = currentUser?.key;
+     const userKey = currentUser?.tenent_id;
 
-    // deleteMediaAndFile service function returns { webMediaDeleted: boolean; fileDeleted: boolean }
-    // We don't need the userKey for delete, just the IDs
-    return useMutation< { webMediaDeleted: boolean; fileDeleted: boolean }, Error, { webMediaId: number; fileId: number | null } >({
+    return useMutation< { webMediaDeleted: boolean; fileDeleted: boolean }, Error, { webMediaId: string; fileId: string | null } >({ // IDs are now string
         mutationFn: ({ webMediaId, fileId }) => deleteMediaAndFile(webMediaId, fileId),
         onSuccess: (data, variables) => {
             let description = `Media entry (ID: ${variables.webMediaId}) deleted successfully.`;
-            if (variables.fileId !== null) { // Check if fileId was provided
+            if (variables.fileId !== null) { 
                  description += data.fileDeleted ? ` Associated file (ID: ${variables.fileId}) also deleted.` : ` Could not delete associated file (ID: ${variables.fileId}). Check server logs.`;
             } else {
                  description += " No associated file to delete.";
@@ -174,10 +150,8 @@ export function useDeleteMediaMutation() {
             toast({
                 title: 'Deletion Status',
                 description: description,
-                // Use default variant unless there was a file deletion issue
                 variant: (variables.fileId !== null && !data.fileDeleted) ? 'destructive' : 'default',
             });
-            // Invalidate the media query for the current user to refetch the list
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
         },
         onError: (error: unknown, variables) => {

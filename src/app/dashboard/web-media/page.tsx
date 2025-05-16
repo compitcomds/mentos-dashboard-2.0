@@ -18,7 +18,7 @@ type ViewMode = 'table' | 'card';
 
 export default function WebMediaPage() {
     const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser();
-    const userKey = currentUser?.key;
+    const userKey = currentUser?.tenent_id;
     const { data: mediaData, isLoading: isLoadingMedia, isError: isMediaError, error: mediaError, refetch, isFetching } = useFetchMedia(userKey);
     const [viewMode, setViewMode] = React.useState<ViewMode>('table');
 

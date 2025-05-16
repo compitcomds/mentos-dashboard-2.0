@@ -31,7 +31,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
     const headers = await getAuthHeader();
     const params = {
         'filters[tenent_id][$eq]': userTenentId,
-        'populate': 'media,tags,user,category',
+        'populate': '*',
     };
     const url = '/web-medias';
     console.log(`[fetchMediaFiles] Fetching URL: ${url} with params:`, JSON.stringify(params));
@@ -67,29 +67,28 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
 
             const mediaFile = item.media;
 
-            if (!mediaFile || typeof mediaFile !== 'object' || typeof mediaFile.id !== 'number') {
-                console.warn(`[fetchMediaFiles] Item ID ${item.id} has missing or invalid media relation. Skipping.`);
+            if (!mediaFile || typeof mediaFile !== 'object' || typeof mediaFile.id !== 'string') { // Check if mediaFile.id is string
+                console.warn(`[fetchMediaFiles] Item ID ${item.id} has missing or invalid media relation or media.id is not a string. Skipping. Media file:`, mediaFile);
                 return null;
             }
             
-            // Ensure size is treated as bytes (Strapi usually returns size in KB for Media.size)
             const sizeInBytes = typeof mediaFile.size === 'number' ? mediaFile.size * 1024 : null;
 
             return {
-                webMediaId: item.id as number,
+                webMediaId: item.id as string, // Ensure webMediaId is string
                 name: item.name || mediaFile.name || 'Unnamed Media',
                 alt: item.alt || null,
                 tenent_id: item.tenent_id,
                 createdAt: item.createdAt!,
                 updatedAt: item.updatedAt!,
                 publishedAt: item.publishedAt || null,
-                fileId: mediaFile.id,
+                fileId: mediaFile.id, // fileId is string from Media.id
                 fileUrl: constructUrl(mediaFile.url),
                 fileName: mediaFile.name ?? 'N/A',
                 mime: mediaFile.mime ?? null,
-                size: sizeInBytes, // Use sizeInBytes
+                size: sizeInBytes, 
                 thumbnailUrl: constructUrl(mediaFile.formats?.thumbnail?.url) ?? constructUrl(mediaFile.url),
-                category: item.category,
+                category: item.category || null,
                 tags: item.tags,
             };
         }).filter((item): item is CombinedMediaData => item !== null);
@@ -118,7 +117,6 @@ export async function uploadFile(formData: FormData): Promise<UploadFile[]> {
     const headers = await getAuthHeader();
 
     try {
-        // Strapi's /upload endpoint returns an array of the uploaded file objects directly
         const response = await axiosInstance.post<UploadFile[]>('/upload', formData, {
             headers: {
                 ...headers,
@@ -129,7 +127,8 @@ export async function uploadFile(formData: FormData): Promise<UploadFile[]> {
         if (!Array.isArray(response.data) || response.data.length === 0) {
             throw new Error("Upload response was empty or not an array.");
         }
-        return response.data;
+        // Ensure IDs in response are strings if Media.id is string
+        return response.data.map(file => ({ ...file, id: String(file.id) }));
     } catch (error: unknown) {
         let message = 'Unknown upload error';
         if (error instanceof AxiosError) {
@@ -155,14 +154,15 @@ export async function createWebMedia(payload: CreateWebMediaPayload): Promise<We
     try {
         const response = await axiosInstance.post<FindOne<WebMedia>>('/web-medias', { data: payload }, {
             headers,
-            params: { populate: 'media,tags,user,category' }
         });
 
         if (!response.data || !response.data.data) {
             throw new Error("Invalid response structure after creating web media.");
         }
-        console.log(`[Service createWebMedia]: Web media entry created successfully for tenent_id '${payload.tenent_id}':`, response.data.data);
-        return response.data.data;
+        // Ensure ID is string if WebMedia.id is string
+        const createdWebMedia = { ...response.data.data, id: String(response.data.data.id) };
+        console.log(`[Service createWebMedia]: Web media entry created successfully for tenent_id '${payload.tenent_id}':`, createdWebMedia);
+        return createdWebMedia;
     } catch (error: unknown) {
         let message = `Failed to create web media entry for tenent_id '${payload.tenent_id}'.`;
         if (error instanceof AxiosError) {
@@ -179,20 +179,19 @@ export async function createWebMedia(payload: CreateWebMediaPayload): Promise<We
     }
 }
 
-export async function updateWebMedia(id: number, payload: UpdateWebMediaPayload): Promise<WebMedia> {
+export async function updateWebMedia(id: string, payload: UpdateWebMediaPayload): Promise<WebMedia> { // id is now string
     console.log(`[Service updateWebMedia]: Attempting to update web media entry ${id} with payload:`, payload);
     const headers = await getAuthHeader();
     try {
         const response = await axiosInstance.put<FindOne<WebMedia>>(`/web-medias/${id}`, { data: payload }, {
             headers,
-            params: { populate: 'media,tags,user,category' }
         });
-
         if (!response.data || !response.data.data) {
             throw new Error(`Invalid response structure after updating web media ${id}.`);
         }
-        console.log(`[Service updateWebMedia]: Web media entry ${id} updated successfully:`, response.data.data);
-        return response.data.data;
+        const updatedWebMedia = { ...response.data.data, id: String(response.data.data.id) };
+        console.log(`[Service updateWebMedia]: Web media entry ${id} updated successfully:`, updatedWebMedia);
+        return updatedWebMedia;
     } catch (error: unknown) {
         let message = `Failed to update web media entry ${id}`;
         if (error instanceof AxiosError) {
@@ -210,17 +209,17 @@ export async function updateWebMedia(id: number, payload: UpdateWebMediaPayload)
 }
 
 // Deletes the actual file from Strapi's upload plugin
-export async function deleteUploadFile(fileId: number): Promise<Media> {
+export async function deleteUploadFile(fileId: string): Promise<Media> { // fileId is now string
     console.log(`[Service deleteUploadFile]: Attempting to delete file with ID: ${fileId}`);
     const headers = await getAuthHeader();
     try {
-        // Strapi's /upload/files/:id DELETE endpoint returns the deleted file object directly
         const response = await axiosInstance.delete<Media>(`/upload/files/${fileId}`, { headers });
         console.log(`[Service deleteUploadFile]: File ${fileId} deleted successfully from uploads.`);
         if (!response.data || typeof response.data !== 'object') {
             throw new Error("Invalid response structure after deleting file.");
         }
-        return response.data;
+        // Ensure ID is string if Media.id is string
+        return { ...response.data, id: String(response.data.id) };
     } catch (error: unknown) {
         let message = `Failed to delete file ${fileId}`;
         if (error instanceof AxiosError) {
@@ -237,7 +236,7 @@ export async function deleteUploadFile(fileId: number): Promise<Media> {
 }
 
 // Deletes the WebMedia content type entry
-export async function deleteWebMedia(webMediaId: number): Promise<WebMedia> {
+export async function deleteWebMedia(webMediaId: string): Promise<WebMedia> { // webMediaId is now string
     console.log(`[Service deleteWebMedia]: Attempting to delete web media entry with ID: ${webMediaId}`);
     const headers = await getAuthHeader();
     try {
@@ -246,8 +245,9 @@ export async function deleteWebMedia(webMediaId: number): Promise<WebMedia> {
         if (!response || !response.data || !response.data.data) {
             throw new Error(`Invalid response structure after deleting web media ${webMediaId}.`);
         }
+        const deletedWebMedia = { ...response.data.data, id: String(response.data.data.id) };
         console.log(`[Service deleteWebMedia]: Web media entry ${webMediaId} deleted successfully.`);
-        return response.data.data;
+        return deletedWebMedia;
     } catch (error: unknown) {
         let message = `Failed to delete web media entry ${webMediaId}`;
         if (error instanceof AxiosError) {
@@ -264,7 +264,7 @@ export async function deleteWebMedia(webMediaId: number): Promise<WebMedia> {
 }
 
 // Combined function to delete WebMedia entry and then its associated file
-export async function deleteMediaAndFile(webMediaId: number, fileId: number | null): Promise<{ webMediaDeleted: boolean; fileDeleted: boolean }> {
+export async function deleteMediaAndFile(webMediaId: string, fileId: string | null): Promise<{ webMediaDeleted: boolean; fileDeleted: boolean }> { // IDs are now string
     console.log(`[Service deleteMediaAndFile]: Initiating delete for webMediaId: ${webMediaId}, fileId: ${fileId}`);
     let webMediaDeleted = false;
     let fileDeleted = false;
@@ -275,19 +275,15 @@ export async function deleteMediaAndFile(webMediaId: number, fileId: number | nu
         console.log(`[Service deleteMediaAndFile]: Web media entry ${webMediaId} deleted.`);
     } catch (error) {
         console.error(`[Service deleteMediaAndFile]: Error deleting web media entry ${webMediaId}:`, error);
-        // If deleting the WebMedia entry fails, we shouldn't proceed to delete the file.
         throw new Error(`Failed to delete web media entry ${webMediaId}. Associated file (ID: ${fileId}) was not deleted.`);
     }
 
-    // Only attempt to delete the file if the WebMedia entry was successfully deleted and a fileId is provided
     if (webMediaDeleted && fileId !== null) {
         try {
             await deleteUploadFile(fileId);
             fileDeleted = true;
             console.log(`[Service deleteMediaAndFile]: Associated file ${fileId} deleted.`);
         } catch (error) {
-            // Log the error but don't re-throw, as the main WebMedia entry was deleted.
-            // The caller can check the fileDeleted flag.
             console.error(`[Service deleteMediaAndFile]: Error deleting associated file ${fileId} (WebMedia entry ${webMediaId} was already deleted):`, error);
         }
     } else if (webMediaDeleted && fileId === null) {

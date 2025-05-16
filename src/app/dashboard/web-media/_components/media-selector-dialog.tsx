@@ -51,9 +51,8 @@ export default function MediaSelectorDialog({
     returnType = 'url', // Default to returning URL
 }: MediaSelectorDialogProps) {
     const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
-    const userKey = currentUser?.key;
+    const userKey = currentUser?.tenent_id; // Use tenent_id for consistency
 
-    // Pass userKey to useFetchMedia
     const { data: mediaData, isLoading: isLoadingMedia, isError, error, refetch, isFetching } = useFetchMedia(userKey);
     const [selectedMedia, setSelectedMedia] = React.useState<CombinedMediaData | null>(null);
 
@@ -63,24 +62,21 @@ export default function MediaSelectorDialog({
         if (!selectedMedia) return;
 
         if (returnType === 'url') {
-            // Call the URL-based callback
             if (selectedMedia.fileUrl) {
                 (onMediaSelect as (url: string, alt: string | null, mimeType: string | null) => void)(
                     selectedMedia.fileUrl,
-                    selectedMedia.alt || selectedMedia.name, // Fallback alt text
+                    selectedMedia.alt || selectedMedia.name, 
                     selectedMedia.mime
                 );
             } else {
                 console.warn("Selected media has no fileUrl.");
             }
         } else {
-            // Call the ID-based callback (passing the full object)
             (onMediaSelect as (selectedMedia: CombinedMediaData) => void)(selectedMedia);
         }
-        onOpenChange(false); // Close dialog after selection
+        onOpenChange(false); 
     };
 
-    // Reset selection when dialog closes
     const handleOpenChange = (open: boolean) => {
         onOpenChange(open);
         if (!open) {
@@ -88,7 +84,6 @@ export default function MediaSelectorDialog({
         }
     };
 
-     // Log data for debugging
      React.useEffect(() => {
         if (!isLoading && !isError) {
              // console.log("[MediaSelectorDialog] Media Data Received:", mediaData);
@@ -100,7 +95,6 @@ export default function MediaSelectorDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-            {/* Increase max width for better media browsing */}
             <DialogContent className="sm:max-w-4xl max-h-[80vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Select Media</DialogTitle>
@@ -110,8 +104,7 @@ export default function MediaSelectorDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                {/* Scrollable content area */}
-                <ScrollArea className="flex-1 pr-4 -mr-4"> {/* Offset padding for scrollbar */}
+                <ScrollArea className="flex-1 pr-4 -mr-4"> 
                     <div className="py-4">
                         {isLoading && (
                             <div className="flex items-center justify-center h-64">
@@ -119,7 +112,7 @@ export default function MediaSelectorDialog({
                                 <p className="ml-2">Loading media...</p>
                             </div>
                         )}
-                        {isError && !isFetching && ( // Show error only if not currently fetching
+                        {isError && !isFetching && ( 
                             <Alert variant="destructive" className="my-4">
                                 <AlertCircle className="h-4 w-4" />
                                 <AlertTitle>Error Loading Media</AlertTitle>
@@ -141,7 +134,7 @@ export default function MediaSelectorDialog({
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                 {mediaData.map((media) => (
                                     <button
-                                        key={media.webMediaId}
+                                        key={media.webMediaId} // webMediaId is now string
                                         onClick={() => setSelectedMedia(media)}
                                         className={cn(
                                             "relative group border rounded-md overflow-hidden aspect-square focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 flex flex-col items-center justify-center text-center",
@@ -150,19 +143,16 @@ export default function MediaSelectorDialog({
                                         )}
                                         aria-label={`Select ${media.name}`}
                                     >
-                                         {/* Ensure thumbnailUrl exists AND it's an image */}
                                          {media.mime?.startsWith('image/') && media.thumbnailUrl ? (
                                             <Image
                                                 src={media.thumbnailUrl}
                                                 alt={media.alt || media.name || 'Media thumbnail'}
-                                                fill // Use fill for aspect ratio container
-                                                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw" // Adjust sizes
+                                                fill 
+                                                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw" 
                                                 className="object-cover transition-transform group-hover:scale-105"
-                                                unoptimized // Use if URLs are absolute
+                                                unoptimized 
                                                 onError={(e) => {
                                                      console.error(`Error loading image: ${media.thumbnailUrl}`, e);
-                                                     // Optionally, replace with a placeholder on error
-                                                     // e.currentTarget.src = '/placeholder-image.png';
                                                 }}
                                             />
                                         ) : (
@@ -173,13 +163,11 @@ export default function MediaSelectorDialog({
                                                 </span>
                                             </div>
                                         )}
-                                        {/* Selection Indicator */}
                                         {selectedMedia?.webMediaId === media.webMediaId && (
                                             <div className="absolute inset-0 bg-primary/60 flex items-center justify-center">
                                                 <CheckCircle className="w-8 h-8 text-primary-foreground" />
                                             </div>
                                         )}
-                                        {/* Overlay with Name */}
                                         <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-gradient-to-t from-black/70 to-transparent">
                                             <p className="text-xs text-white truncate font-medium">{media.name}</p>
                                         </div>
@@ -199,7 +187,7 @@ export default function MediaSelectorDialog({
                     <Button
                         type="button"
                         onClick={handleSelect}
-                        disabled={!selectedMedia} // Disable if nothing selected
+                        disabled={!selectedMedia} 
                     >
                         Select Media
                     </Button>
@@ -208,4 +196,3 @@ export default function MediaSelectorDialog({
         </Dialog>
     );
 }
-

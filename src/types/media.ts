@@ -1,5 +1,7 @@
+
 // src/types/media.ts
 import type { OtherTag } from './common';
+import type { User } from './auth'; // Assuming User type is in auth.ts
 
 // Based on user-provided 'MediaFormat'
 export interface MediaFormat {
@@ -10,95 +12,90 @@ export interface MediaFormat {
   width: number;
   height: number;
   size: number; // Assuming bytes, as formatBytes utility expects bytes
-  path: string | null; // path can be null for some providers like S3
+  path: string | null; 
   url: string;
 }
 
 // Based on user-provided 'Media', replaces old 'UploadFile'
 export interface Media {
-  id: number;
+  id: string; // Changed from number to string
+  documentId?: string; // Optional separate documentId field if needed
   name: string;
-  alternativeText: string | null; // Changed from alternativeText: string
-  caption: string | null; // Changed from caption: string
-  width: number | null; // Changed from width: number
-  height: number | null; // Changed from height: number
+  alternativeText: string | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
   formats: {
-    thumbnail?: MediaFormat; // Made formats optional
+    thumbnail?: MediaFormat;
     small?: MediaFormat;
     medium?: MediaFormat;
     large?: MediaFormat;
-  } | null; // formats can be null
+  } | null;
   hash: string;
   ext: string;
   mime: string;
   size: number; // Assuming bytes
   url: string;
-  previewUrl: string | null; // Changed from previewUrl: string
+  previewUrl: string | null;
   provider: string;
-  createdAt: Date | string; // Changed to allow string
-  updatedAt: Date | string; // Changed to allow string
-  // Fields not in user's Media but were in old UploadFile or might be useful:
-  // documentId?: string;
-  // publishedAt?: string | null;
-  // locale?: string | null;
-  // provider_metadata: any | null;
-  // folderPath?: string;
-  // sizeInBytes?: number; // If 'size' is not in bytes, this could be useful
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 // Based on user-provided 'WebMedia'
 export interface WebMedia {
-  id?: number; // Optional for creation/payloads
-  documentId?: string;
+  id?: string; // Changed from number to string
+  documentId?: string; // Optional separate documentId field if needed
   createdAt?: Date | string;
   updatedAt?: Date | string;
-  publishedAt?: Date | string;
+  publishedAt?: Date | string | null; // publishedAt can be null
   locale?: string | null;
   name: string;
-  alt?: string | null; // alt is optional
-  tenent_id: string; // Changed from key
-  tags?: OtherTag[] | null; // New field
+  alt?: string | null;
+  tenent_id: string;
+  tags?: OtherTag[] | null;
   media: Media | null; // Relation to the Media type, can be null
-  user?: any | null; // Using `any` for User if full User type from auth.ts isn't always populated
-  category?: string; // New field
+  user?: User | null; // Changed from any to User
+  category?: string | null; // category can be null
 }
 
 // Combined type often useful for display components like the table
 export interface CombinedMediaData {
-  webMediaId: number; // from WebMedia.id
-  name: string; // from WebMedia.name
-  alt: string | null; // from WebMedia.alt
-  tenent_id: string; // from WebMedia.tenent_id (changed from key)
-  createdAt: Date | string; // from WebMedia.createdAt
-  updatedAt: Date | string; // from WebMedia.updatedAt
-  publishedAt: Date | string | null; // from WebMedia.publishedAt
+  webMediaId: string; // Changed from number to string (now represents WebMedia.id)
+  name: string; 
+  alt: string | null; 
+  tenent_id: string; 
+  createdAt: Date | string; 
+  updatedAt: Date | string; 
+  publishedAt: Date | string | null;
 
   // --- File related data from Media (WebMedia.media) ---
-  fileId: number | null; // from Media.id (can be null if media is not populated)
-  fileUrl: string | null; // from Media.url
-  fileName: string | null; // from Media.name (original file name)
-  mime: string | null; // from Media.mime
-  size: number | null; // from Media.size (assuming bytes)
-  thumbnailUrl: string | null; // Constructed from Media.formats.thumbnail.url or Media.url
-  category?: string | null; // from WebMedia.category
-  tags?: OtherTag[] | null; // from WebMedia.tags
+  fileId: string | null; // Changed from number to string (now represents Media.id)
+  fileUrl: string | null; 
+  fileName: string | null; 
+  mime: string | null; 
+  size: number | null; 
+  thumbnailUrl: string | null; 
+  category?: string | null; 
+  tags?: OtherTag[] | null; 
 }
 
 // Type for updating web media metadata
 export interface UpdateWebMediaPayload {
-  name?: string; // Name is optional for update
+  name?: string; 
   alt?: string | null;
-  // category and tags could be added if updatable
+  category?: string | null;
+  tags?: number[]; // Assuming tags are updated by their numeric IDs if they have one
 }
 
 // Type for creating a web media entry after upload
 export interface CreateWebMediaPayload {
     name: string;
     alt: string | null;
-    tenent_id: string; // Changed from key
-    media: number; // The ID of the uploaded file (Media.id)
-    category?: string; // Optional
-    tags?: number[]; // Array of OtherTag IDs, if creating relations by ID
+    tenent_id: string; 
+    media: string; // The ID of the uploaded file (Media.id), now string
+    category?: string | null; 
+    tags?: number[]; 
 }
 
 // Re-export UploadFile as Media for broader compatibility if needed,
