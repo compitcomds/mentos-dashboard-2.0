@@ -30,7 +30,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-  // DialogTrigger, // Not used directly for opening, using state
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -44,7 +43,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-// import { Label } from '@/components/ui/label'; // FormLabel used instead
 import {
   Form,
   FormControl,
@@ -126,16 +124,13 @@ export default function CategoriesPage() {
       return;
     }
 
-    if (selectedCategory) {
-      // For update, pass 'values' directly, which doesn't include tenent_id.
-      // The updateCategory service function uses userKey for authorization context.
+    if (selectedCategory && selectedCategory.id) {
       updateMutation.mutate({ id: selectedCategory.id, category: values }, {
         onSuccess: () => {
           handleCloseForm();
         },
       });
     } else {
-      // For create, construct the payload with tenent_id.
       const createPayload: CreateCategoryPayload = { ...values, tenent_id: userKey };
       createMutation.mutate(createPayload, {
         onSuccess: () => {
@@ -151,9 +146,8 @@ export default function CategoriesPage() {
   };
 
   const confirmDelete = () => {
-    if (selectedCategory && userKey) {
-      // Pass userKey to deleteMutation for authorization context if needed by the service
-      deleteMutation.mutate({ id: selectedCategory.id, userKey: userKey }, {
+    if (selectedCategory && selectedCategory.documentId && userKey) {
+      deleteMutation.mutate({ documentId: selectedCategory.documentId, userKey: userKey }, {
         onSuccess: () => {
           setIsAlertOpen(false);
           setSelectedCategory(null);
@@ -162,6 +156,10 @@ export default function CategoriesPage() {
             setIsAlertOpen(false);
         }
       });
+    } else {
+        toast({ variant: 'destructive', title: 'Error', description: 'Category documentId not found or user key missing for deletion.' });
+        setIsAlertOpen(false);
+        setSelectedCategory(null);
     }
   };
 
@@ -218,9 +216,9 @@ export default function CategoriesPage() {
                 </TableHeader>
                 <TableBody>
                   {categories.map((category) => (
-                    <TableRow key={category.id}>
+                    <TableRow key={category.id || category.documentId}>
                       <TableCell className="font-medium">{category.name}</TableCell>
-                      <TableCell>{category.slug}</TableCell>
+                      <TableCell>{category.slug || '-'}</TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground truncate max-w-xs">
                         {category.description || '-'}
                       </TableCell>
@@ -233,7 +231,7 @@ export default function CategoriesPage() {
                                 size="icon"
                                 variant="ghost"
                                 className="h-8 w-8"
-                                disabled={mutationPending}
+                                disabled={mutationPending || !category.id} // Disable if no numeric id for update
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -247,7 +245,7 @@ export default function CategoriesPage() {
                                 size="icon"
                                 variant="ghost"
                                 className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                disabled={mutationPending}
+                                disabled={mutationPending || !category.documentId} // Disable if no documentId for delete
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -352,7 +350,7 @@ export default function CategoriesPage() {
             <AlertDialogCancel disabled={mutationPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              disabled={mutationPending}
+              disabled={mutationPending || !selectedCategory?.documentId}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

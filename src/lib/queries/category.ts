@@ -76,6 +76,8 @@ export const useGetCategory = (id: string | number | null, userTenentId?: string
     queryKey: CATEGORY_DETAIL_QUERY_KEY(categoryId ?? undefined, keyToUse),
     queryFn: () => {
       if (!categoryId || !keyToUse) return null;
+      // If documentId is the primary identifier for fetching details, ensure it's used here
+      // For now, assuming getCategoryService can handle stringified numeric ID or documentId
       return getCategoryService(categoryId, keyToUse); 
     },
     enabled: !!categoryId && !!keyToUse && !isLoadingUser, 
@@ -118,25 +120,29 @@ export const useDeleteCategory = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
-  return useMutation<Category | void, Error, {id: number, userKey?: string}>({ 
-    mutationFn: ({id, userKey}) => {
+  return useMutation<Category | void, Error, { documentId: string; userKey?: string }>({ 
+    mutationFn: ({ documentId, userKey }) => { // Expect documentId (string)
       const tenentIdForAuth = userKey || currentUser?.tenent_id; 
       if (!tenentIdForAuth) {
         throw new Error("User tenent_id not available. Cannot delete category.");
       }
-      return deleteCategoryService(id, tenentIdForAuth);
+      if (!documentId) {
+        throw new Error("Document ID is required for deleting a category.");
+      }
+      return deleteCategoryService(documentId, tenentIdForAuth);
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Category deleted successfully." });
       const tenentIdForInvalidation = variables.userKey || currentUser?.tenent_id;
       queryClient.invalidateQueries({ queryKey: CATEGORIES_QUERY_KEY(tenentIdForInvalidation) });
-      queryClient.removeQueries({ queryKey: CATEGORY_DETAIL_QUERY_KEY(variables.id, tenentIdForInvalidation) });
+      // Remove detail query using documentId as the identifier
+      queryClient.removeQueries({ queryKey: CATEGORY_DETAIL_QUERY_KEY(variables.documentId, tenentIdForInvalidation) });
     },
     onError: (error: any, variables) => {
       const strapiError = error.response?.data?.error;
-      const message = strapiError?.message || error.message || `Failed to delete category ${variables.id}.`;
+      const message = strapiError?.message || error.message || `Failed to delete category ${variables.documentId}.`;
       const details = strapiError?.details;
-      console.error(`Delete Category Strapi Error (ID: ${variables.id}):`, strapiError || error.response?.data || error);
+      console.error(`Delete Category Strapi Error (documentId: ${variables.documentId}):`, strapiError || error.response?.data || error);
       toast({ 
         variant: "destructive", 
         title: "Error Deleting Category", 
@@ -145,3 +151,5 @@ export const useDeleteCategory = () => {
     }
   });
 };
+
+    
