@@ -112,17 +112,15 @@ export const createCategory = async (category: CreateCategoryPayload): Promise<C
   }
 };
 
-// Update a category by id, ensuring it's for the correct userTenentId
+// Update a category by id, relying on Strapi policies for authorization
 export const updateCategory = async (id: number, categoryUpdatePayload: Partial<CreateCategoryPayload>, userTenentId: string): Promise<Category> => {
-  if (!userTenentId) {
-    throw new Error('User tenent_id is required to authorize category update.');
+  if (!userTenentId) { // Still useful for logging or if parts of payload depend on it
+    throw new Error('User tenent_id is required for context, even if not used for pre-check.');
   }
   
-  // Ensure tenent_id is not part of the actual update data payload sent to Strapi
   const { tenent_id, ...updateData } = categoryUpdatePayload;
   if (tenent_id && tenent_id !== userTenentId) {
-    console.warn(`[Service updateCategory]: Attempted to change tenent_id during update for category ${id}. This is not allowed. The original tenent_id will be preserved if the update proceeds based on authorization for ${userTenentId}.`);
-    // Do not include tenent_id in updateData if it was in categoryUpdatePayload
+    console.warn(`[Service updateCategory]: Attempted to change tenent_id during update for category ${id}. This is usually not allowed. The payload sent to Strapi will not include tenent_id.`);
   }
 
   const url = `/categories/${id}`;
@@ -130,12 +128,7 @@ export const updateCategory = async (id: number, categoryUpdatePayload: Partial<
 
   try {
     const headers = await getAuthHeader();
-    // First, verify ownership by fetching the category and checking its tenent_id
-    const existingCategory = await getCategory(String(id), userTenentId);
-    if (!existingCategory) {
-        throw new Error(`Category with ID ${id} not found or user ${userTenentId} is not authorized to update it.`);
-    }
-
+    // Removed pre-flight getCategory check. Relies on Strapi policies for the PUT operation.
     const response = await axiosInstance.put<FindOne<Category>>(url, { data: updateData }, { headers, params: { populate: '*' } });
     if (!response.data || !response.data.data) {
       throw new Error('Unexpected API response structure after update.');
@@ -149,35 +142,33 @@ export const updateCategory = async (id: number, categoryUpdatePayload: Partial<
   }
 };
 
-// Delete a category by id, ensuring it's for the correct userTenentId
+// Delete a category by id, relying on Strapi policies for authorization
 export const deleteCategory = async (id: number, userTenentId: string): Promise<Category | void> => {
-  if (!userTenentId) {
-    throw new Error('User tenent_id is required to authorize category deletion.');
+  if (!userTenentId) { // Still useful for logging or if query invalidation needs it
+    throw new Error('User tenent_id is required for context, even if not used for pre-check.');
   }
   const url = `/categories/${id}`;
   console.log(`[deleteCategory] Deleting category ${id} for user with tenent_id ${userTenentId}`);
   try {
     const headers = await getAuthHeader();
-    // First, verify ownership
-    const existingCategory = await getCategory(String(id), userTenentId);
-    if (!existingCategory) {
-        throw new Error(`Category with ID ${id} not found or user ${userTenentId} is not authorized to delete it.`);
-    }
+    // Removed pre-flight getCategory check. Relies on Strapi policies for the DELETE operation.
     const response = await axiosInstance.delete<FindOne<Category>>(url, { headers });
      if (response.status === 200 && response.data && response.data.data) {
         console.log(`[deleteCategory] Successfully deleted category ${id} for tenent_id ${userTenentId}.`);
         return response.data.data;
-    } else if (response.status === 204) { // Strapi might return 204 No Content on successful delete
+    } else if (response.status === 204) { 
         console.log(`[deleteCategory] Successfully deleted category ${id} (no content returned) for tenent_id ${userTenentId}.`);
-        return; // Return void for 204
+        return; 
     }
     console.warn(`[deleteCategory] Unexpected status ${response.status} for category ${id}.`);
-    return response.data?.data; // Return data if present, even with unexpected status
+    return response.data?.data; 
   } catch (error: unknown) {
     const message = error instanceof AxiosError ? error.response?.data?.error?.message || error.message : (error as Error).message;
     if (error instanceof AxiosError && error.response?.status === 404) {
-      console.warn(`[deleteCategory] Category ${id} not found (404) for tenent_id ${userTenentId}.`);
-      return; // Return void for 404
+      console.warn(`[deleteCategory] Category ${id} not found (404) during delete attempt for tenent_id ${userTenentId}.`);
+      // For delete, a 404 might mean "already deleted" or "never existed".
+      // Depending on desired behavior, you might return void or re-throw.
+      // Here, we let it throw to be consistent with other errors.
     }
     console.error(`[deleteCategory] Failed for ID ${id}, user tenent_id ${userTenentId}:`, message, error instanceof AxiosError ? error.response?.data : '');
     throw new Error(message || `Failed to delete category ${id}.`);
