@@ -124,8 +124,8 @@ export default function CategoriesPage() {
       return;
     }
 
-    if (selectedCategory && selectedCategory.id) {
-      updateMutation.mutate({ id: selectedCategory.id, category: values }, {
+    if (selectedCategory && selectedCategory.documentId) {
+      updateMutation.mutate({ documentId: selectedCategory.documentId, category: values }, {
         onSuccess: () => {
           handleCloseForm();
         },
@@ -231,7 +231,7 @@ export default function CategoriesPage() {
                                 size="icon"
                                 variant="ghost"
                                 className="h-8 w-8"
-                                disabled={mutationPending || !category.id} // Disable if no numeric id for update
+                                disabled={mutationPending || !category.documentId} // Disable if no documentId for update
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -245,7 +245,7 @@ export default function CategoriesPage() {
                                 size="icon"
                                 variant="ghost"
                                 className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                disabled={mutationPending || !category.documentId} // Disable if no documentId for delete
+                                disabled={mutationPending || !category.documentId}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -408,5 +408,3 @@ function CategoryPageSkeleton() {
     </div>
   );
 }
-
-    

@@ -22,7 +22,7 @@ export const getCategories = async (userTenentId: string): Promise<Category[]> =
   }
   const params = {
     'filters[tenent_id][$eq]': userTenentId,
-    'populate': '*', 
+    'populate': '*',
   };
   const url = '/blog-sets';
   console.log(`[getCategories] Fetching URL: ${url} with params:`, params);
@@ -64,7 +64,7 @@ export const getCategory = async (id: string, userTenentId: string): Promise<Cat
     return null;
   }
   const params = {
-    'populate': '*', 
+    'populate': '*',
   };
   const url = `/blog-sets/${id}`; // Assuming 'id' here can be the numeric ID or documentId if Strapi handles it
   console.log(`[getCategory] Fetching URL: ${url} for userTenentId ${userTenentId} with params:`, params);
@@ -75,7 +75,7 @@ export const getCategory = async (id: string, userTenentId: string): Promise<Cat
       console.warn(`[getCategory] Category ${id} not found or no data returned for tenent_id ${userTenentId}.`);
       return null;
     }
-    
+
     if (response.data.data.tenent_id !== userTenentId) {
       console.warn(`[getCategory] tenent_id mismatch for category ${id}. Expected ${userTenentId}, got ${response.data.data.tenent_id}. Access denied.`);
       return null;
@@ -152,31 +152,36 @@ export const createCategory = async (category: CreateCategoryPayload): Promise<C
   }
 };
 
-export const updateCategory = async (id: number, categoryUpdatePayload: Partial<CreateCategoryPayload>, userTenentId: string): Promise<Category> => {
+export const updateCategory = async (documentId: string, categoryUpdatePayload: Partial<CreateCategoryPayload>, userTenentId: string): Promise<Category> => {
   if (!userTenentId) {
     throw new Error('User tenent_id is required for authorization context to update category.');
   }
-  const { tenent_id, ...updateData } = categoryUpdatePayload; 
+  if (!documentId) {
+    throw new Error('Document ID is required to update a category.');
+  }
+  const { tenent_id, ...updateData } = categoryUpdatePayload;
   if (tenent_id && tenent_id !== userTenentId) {
-    console.warn(`[Service updateCategory]: Attempted to change tenent_id during update for category ${id}. This is usually not allowed and will be ignored by the service.`);
+    console.warn(`[Service updateCategory]: Attempted to change tenent_id during update for category with documentId ${documentId}. This is usually not allowed and will be ignored by the service.`);
   }
 
-  const url = `/blog-sets/${id}`;
-  console.log(`[updateCategory] Updating category ${id} for user with tenent_id ${userTenentId}. Payload:`, { data: updateData });
+  const url = `/blog-sets/${documentId}`;
+  console.log(`[updateCategory] Updating category with documentId ${documentId} for user with tenent_id ${userTenentId}. Payload:`, { data: updateData });
 
   try {
     const headers = await getAuthHeader();
+    // No pre-flight GET, rely on Strapi policies for PUT authorization
     const response = await axiosInstance.put<FindOne<Category>>(url, { data: updateData }, { headers, params: { populate: '*' } });
     if (!response.data || !response.data.data) {
       throw new Error('Unexpected API response structure after update.');
     }
     if (response.data.data.tenent_id !== userTenentId) {
-      console.error(`[updateCategory] CRITICAL: tenent_id mismatch after update for category ${id}. Expected ${userTenentId}, got ${response.data.data.tenent_id}. This might indicate a policy bypass.`);
+      console.error(`[updateCategory] CRITICAL: tenent_id mismatch after update for category ${documentId}. Expected ${userTenentId}, got ${response.data.data.tenent_id}. This might indicate a policy bypass.`);
+      // Potentially throw an error here if strict tenent_id matching is critical even after successful PUT
     }
-    console.log(`[updateCategory] Updated Category ${id} for tenent_id ${userTenentId}:`, response.data.data);
+    console.log(`[updateCategory] Updated Category with documentId ${documentId} for tenent_id ${userTenentId}:`, response.data.data);
     return response.data.data;
   } catch (error: unknown) {
-    let detailedMessage = `Failed to update category ${id}.`;
+    let detailedMessage = `Failed to update category ${documentId}.`;
     let loggableErrorData: any = error;
 
     if (error instanceof AxiosError) {
@@ -205,11 +210,15 @@ export const updateCategory = async (id: number, categoryUpdatePayload: Partial<
 
       if (status === 500 && (!strapiError || (strapiError && !strapiError.message))) {
         detailedMessage += " This appears to be an Internal Server Error from the API. Please check Strapi server logs for more details.";
+      } else if (status === 403) {
+        detailedMessage = `Forbidden: You do not have permission to update category ${documentId}.`;
+      } else if (status === 404) {
+        detailedMessage = `Category with documentId ${documentId} not found.`;
       }
     } else if (error instanceof Error) {
       detailedMessage = error.message;
     }
-    console.error(`[updateCategory] Failed for ID ${id}, user tenent_id ${userTenentId}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
+    console.error(`[updateCategory] Failed for documentId ${documentId}, user tenent_id ${userTenentId}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
     throw new Error(detailedMessage);
   }
 };
@@ -225,18 +234,18 @@ export const deleteCategory = async (documentId: string, userTenentId: string): 
   console.log(`[deleteCategory] Deleting category with documentId ${documentId} for user with tenent_id ${userTenentId}`);
   try {
     const headers = await getAuthHeader();
-    const response = await axiosInstance.delete<FindOne<Category>>(url, { headers }); 
+    // No pre-flight GET, rely on Strapi policies for DELETE authorization
+    const response = await axiosInstance.delete<FindOne<Category>>(url, { headers });
 
     if (response.status === 200 && response.data?.data) {
       console.log(`[deleteCategory] Successfully deleted category ${documentId} for tenent_id ${userTenentId}.`);
       return response.data.data;
     } else if (response.status === 204) {
       console.log(`[deleteCategory] Successfully deleted category ${documentId} (no content returned) for tenent_id ${userTenentId}.`);
-      return; 
+      return;
     }
     console.warn(`[deleteCategory] Unexpected response status ${response.status} after deleting category ${documentId}. Data:`, response.data);
-    // Potentially throw an error or return data if present, depending on strictness
-    return response.data?.data; 
+    return response.data?.data;
   } catch (error: unknown) {
     let message = `Failed to delete category ${documentId}.`;
     let loggableErrorData: any = error;
@@ -279,5 +288,3 @@ export const deleteCategory = async (documentId: string, userTenentId: string): 
     throw new Error(message);
   }
 };
-
-    
