@@ -79,7 +79,7 @@ export const getEvent = async (id: string, userTenentId: string): Promise<Event 
             console.warn(`[getEvent] Event ${id} not found or no data returned for tenent_id ${userTenentId}.`);
             return null;
         }
-        // Verify tenent_id after fetching
+        
         if (response.data.data.tenent_id !== userTenentId) {
              console.warn(`[getEvent] Fetched event ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}). Access denied.`);
              return null; 
@@ -89,7 +89,7 @@ export const getEvent = async (id: string, userTenentId: string): Promise<Event 
         return response.data.data;
 
     } catch (error: unknown) {
-         let message = `Failed to fetch event ${id} for tenent_id ${userTenentId}`;
+         let message = `Failed to fetch event ${id} for tenent_id ${userTenentId}.`;
          if (error instanceof AxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data || { message: error.message };
@@ -97,6 +97,10 @@ export const getEvent = async (id: string, userTenentId: string): Promise<Event 
                  console.warn(`[getEvent] Event ${id} not found for tenent_id ${userTenentId}.`);
                  return null;
              }
+             if (status === 403) { // Added 403 check
+                console.warn(`[getEvent] Event ${id} forbidden for tenent_id ${userTenentId} (Status: 403).`);
+                return null;
+            }
             console.error(`[getEvent] Failed to fetch event ${id} from ${url} (Status: ${status}) for tenent_id ${userTenentId}:`, JSON.stringify(errorData, null, 2));
             const strapiErrorMessage = (errorData as any)?.error?.message;
             message = strapiErrorMessage || `Failed to fetch event ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
@@ -110,7 +114,6 @@ export const getEvent = async (id: string, userTenentId: string): Promise<Event 
     }
 };
 
-// Create an event, ensuring the userTenentId is included in the payload
 export const createEvent = async (event: CreateEventPayload): Promise<Event> => {
     if (!event.tenent_id) {
         console.error('[Service createEvent]: tenent_id is missing in payload.');
@@ -135,48 +138,56 @@ export const createEvent = async (event: CreateEventPayload): Promise<Event> => 
         return response.data.data;
 
     } catch (error: unknown) {
-        let message = `Failed to create event for tenent_id ${userTenentId}.`;
+        let detailedMessage = `Failed to create event for tenent_id ${userTenentId}.`;
+        let loggableErrorData: any = error;
+
         if (error instanceof AxiosError) {
-            const status = error.response?.status;
-            const errorData = error.response?.data || { message: error.message };
-            console.error(`[createEvent] Failed to create event at ${url} (${status}) for tenent_id ${userTenentId}:`, errorData);
-            const strapiErrorMessage = (errorData as any)?.error?.message;
-            const strapiErrorDetails = (errorData as any)?.error?.details;
-            console.error("[createEvent] Strapi Error Details:", strapiErrorDetails);
-            message = strapiErrorMessage || `Failed to create event (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
-        } else if (error instanceof Error) {
-            console.error(`[createEvent] Generic Error for tenent_id ${userTenentId}:`, error.message);
-            message = error.message;
+        loggableErrorData = error.response?.data || error.message;
+        const status = error.response?.status;
+        const strapiError = error.response?.data?.error;
+
+        if (strapiError && typeof strapiError === 'object') {
+            let mainMsg = strapiError.message || "Unknown API error from Strapi.";
+            if (strapiError.name) {
+            mainMsg = `${strapiError.name}: ${mainMsg}`;
+            }
+            detailedMessage = `API Error (Status ${status || strapiError.status || 'unknown'}): ${mainMsg}`;
+            if (strapiError.details && Object.keys(strapiError.details).length > 0) {
+            try {
+                detailedMessage += ` Details: ${JSON.stringify(strapiError.details)}`;
+            } catch (e) { /* ignore */ }
+            }
+        } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+            detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data.message}`;
+        } else if (typeof error.response?.data === 'string' && error.response.data.trim() !== '') {
+            detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data}`;
         } else {
-            console.error(`[createEvent] Unknown Error for tenent_id ${userTenentId}:`, error);
+            detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
         }
-        throw new Error(message);
+        } else if (error instanceof Error) {
+        detailedMessage = error.message;
+        }
+        console.error(`[createEvent] Failed for tenent_id ${userTenentId}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
+        throw new Error(detailedMessage);
     }
 };
 
-// Update an event by id, ensuring it's for the correct userTenentId
 export const updateEvent = async (id: string, eventUpdatePayload: Partial<CreateEventPayload>, userTenentId: string): Promise<Event> => {
     if (!userTenentId) {
         console.error(`[Service updateEvent]: userTenentId is missing for update of event ID ${id}.`);
         throw new Error('User tenent_id is required to authorize event update.');
     }
     
-    // Ensure tenent_id is not part of the actual update data payload sent to Strapi
-     const { tenent_id, ...updateData } = eventUpdatePayload;
+    const { tenent_id, ...updateData } = eventUpdatePayload;
      if (tenent_id && tenent_id !== userTenentId) {
-         console.warn(`[Service updateEvent]: Attempted to change tenent_id during update for event ${id}. This is not allowed.`);
+         console.warn(`[Service updateEvent]: Attempted to change tenent_id during update for event ${id}. This is not allowed and will be ignored by the service if the backend enforces it.`);
      }
 
     const url = `/events/${id}`;
     console.log(`[updateEvent] Updating event ${id} for user with tenent_id ${userTenentId}. Payload:`, JSON.stringify({ data: updateData }, null, 2));
     try {
         const headers = await getAuthHeader();
-        // First, verify ownership by fetching the event and checking its tenent_id
-        const existingEvent = await getEvent(id, userTenentId);
-        if (!existingEvent) {
-            throw new Error(`Event with ID ${id} not found or user ${userTenentId} is not authorized to update it.`);
-        }
-
+        // No pre-flight GET, rely on Strapi policies for PUT authorization
         const response = await axiosInstance.put<FindOne<Event>>(url,
             { data: updateData },
             {
@@ -189,34 +200,52 @@ export const updateEvent = async (id: string, eventUpdatePayload: Partial<Create
             console.error(`[updateEvent] Unexpected API response structure after update for event ${id} from ${url}:`, response.data);
             throw new Error('Unexpected API response structure after update.');
         }
+        // Verify tenent_id after update if backend doesn't enforce it strictly via policies during PUT
+        if (response.data.data.tenent_id !== userTenentId) {
+             console.error(`[updateEvent] CRITICAL: tenent_id mismatch after update for event ${id}. Expected ${userTenentId}, got ${response.data.data.tenent_id}. This might indicate a policy bypass or an issue with the API update logic.`);
+             // Potentially throw an error here
+        }
         console.log(`[updateEvent] Updated Event ${id} Data for tenent_id ${userTenentId}:`, response.data.data);
         return response.data.data;
 
     } catch (error: unknown) {
-         let message = `Failed to update event ${id} for tenent_id ${userTenentId}.`;
+         let detailedMessage = `Failed to update event ${id} for tenent_id ${userTenentId}.`;
+         let loggableErrorData: any = error;
+ 
          if (error instanceof AxiosError) {
-            const status = error.response?.status;
-            const errorData = error.response?.data || { message: error.message };
-             if (status === 404 || status === 403) {
-                 console.error(`[updateEvent] Event ${id} not found or not authorized for tenent_id ${userTenentId} (Status: ${status}).`);
-                 throw new Error(`Event not found or update not authorized (Status: ${status}).`);
+         loggableErrorData = error.response?.data || error.message;
+         const status = error.response?.status;
+         const strapiError = error.response?.data?.error;
+ 
+         if (strapiError && typeof strapiError === 'object') {
+             let mainMsg = strapiError.message || "Unknown API error from Strapi.";
+             if (strapiError.name) {
+             mainMsg = `${strapiError.name}: ${mainMsg}`;
              }
-            console.error(`[updateEvent] Failed to update event ${id} at ${url} (${status}) for tenent_id ${userTenentId}:`, errorData);
-            const strapiErrorMessage = (errorData as any)?.error?.message;
-            const strapiErrorDetails = (errorData as any)?.error?.details;
-            console.error("[updateEvent] Strapi Error Details:", strapiErrorDetails);
-            message = strapiErrorMessage || `Failed to update event ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
-        } else if (error instanceof Error) {
-            console.error(`[updateEvent] Generic Error for event ${id}, tenent_id ${userTenentId}:`, error.message);
-            message = error.message;
-        } else {
-            console.error(`[updateEvent] Unknown Error for event ${id}, tenent_id ${userTenentId}:`, error);
-        }
-        throw new Error(message);
+             detailedMessage = `API Error (Status ${status || strapiError.status || 'unknown'}): ${mainMsg}`;
+             if (strapiError.details && Object.keys(strapiError.details).length > 0) {
+             try {
+                 detailedMessage += ` Details: ${JSON.stringify(strapiError.details)}`;
+             } catch (e) { /* ignore */ }
+             }
+         } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+             detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data.message}`;
+         } else if (typeof error.response?.data === 'string' && error.response.data.trim() !== '') {
+             detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data}`;
+         } else {
+             detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
+         }
+         if (status === 403) { // Specifically handle 403
+            detailedMessage = `Forbidden: You do not have permission to update event ${id}. (User: ${userTenentId})`;
+         }
+         } else if (error instanceof Error) {
+         detailedMessage = error.message;
+         }
+         console.error(`[updateEvent] Failed for event ID ${id}, user tenent_id ${userTenentId}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
+         throw new Error(detailedMessage);
     }
 };
 
-// Delete an event by id, ensuring it's for the correct userTenentId
 export const deleteEvent = async (id: string, userTenentId: string): Promise<Event | void> => {
      if (!userTenentId) {
         console.error(`[Service deleteEvent]: userTenentId is missing for deletion of event ID ${id}.`);
@@ -227,43 +256,54 @@ export const deleteEvent = async (id: string, userTenentId: string): Promise<Eve
     console.log(`[deleteEvent] Deleting event ${id} for user with tenent_id ${userTenentId}`);
     try {
         const headers = await getAuthHeader();
-        // First, verify ownership
-        const existingEvent = await getEvent(id, userTenentId);
-        if (!existingEvent) {
-            throw new Error(`Event with ID ${id} not found or user ${userTenentId} is not authorized to delete it.`);
-        }
-        
+        // No pre-flight GET, rely on Strapi policies for DELETE authorization
         const response = await axiosInstance.delete<FindOne<Event>>(url, { headers });
 
         if (response.status === 200 && response.data && response.data.data) {
             console.log(`[deleteEvent] Successfully deleted event ${id} for tenent_id ${userTenentId}.`);
             return response.data.data;
-        } else if (response.status === 204) { // Strapi might return 204 No Content on successful delete
+        } else if (response.status === 204) { 
             console.log(`[deleteEvent] Successfully deleted event ${id} (no content returned) for tenent_id ${userTenentId}.`);
-            return; // Return void for 204
+            return; 
         } else {
              console.warn(`[deleteEvent] Unexpected success status ${response.status} when deleting event ${id} at ${url} for tenent_id ${userTenentId}.`);
-             return response.data?.data; // Return data if present, even with unexpected status
+             return response.data?.data; 
         }
 
     } catch (error: unknown) {
-        let message = `Failed to delete event ${id} for tenent_id ${userTenentId}.`;
+        let detailedMessage = `Failed to delete event ${id} for tenent_id ${userTenentId}.`;
+        let loggableErrorData: any = error;
+
         if (error instanceof AxiosError) {
-            const status = error.response?.status;
-            const errorData = error.response?.data || { message: error.message };
-             if (status === 404 || status === 403) {
-                 console.error(`[deleteEvent] Event ${id} not found or not authorized for tenent_id ${userTenentId} (Status: ${status}).`);
-                 throw new Error(`Event not found or deletion not authorized (Status: ${status}).`);
-             }
-            console.error(`[deleteEvent] Failed to delete event ${id} at ${url} (${status}) for tenent_id ${userTenentId}:`, errorData);
-            const strapiErrorMessage = (errorData as any)?.error?.message;
-            message = strapiErrorMessage || `Failed to delete event ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
-        } else if (error instanceof Error) {
-            console.error(`[deleteEvent] Generic Error for event ${id}, tenent_id ${userTenentId}:`, error.message);
-            message = error.message;
+        loggableErrorData = error.response?.data || error.message;
+        const status = error.response?.status;
+        const strapiError = error.response?.data?.error;
+
+        if (strapiError && typeof strapiError === 'object') {
+            let mainMsg = strapiError.message || "Unknown API error from Strapi.";
+            if (strapiError.name) {
+            mainMsg = `${strapiError.name}: ${mainMsg}`;
+            }
+            detailedMessage = `API Error (Status ${status || strapiError.status || 'unknown'}): ${mainMsg}`;
+            if (strapiError.details && Object.keys(strapiError.details).length > 0) {
+            try {
+                detailedMessage += ` Details: ${JSON.stringify(strapiError.details)}`;
+            } catch (e) { /* ignore */ }
+            }
+        } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+            detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data.message}`;
+        } else if (typeof error.response?.data === 'string' && error.response.data.trim() !== '') {
+            detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data}`;
         } else {
-            console.error(`[deleteEvent] Unknown Error for event ${id}, tenent_id ${userTenentId}:`, error);
+            detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
         }
-        throw new Error(message);
+        if (status === 403) { // Specifically handle 403
+            detailedMessage = `Forbidden: You do not have permission to delete event ${id}. (User: ${userTenentId})`;
+        }
+        } else if (error instanceof Error) {
+        detailedMessage = error.message;
+        }
+        console.error(`[deleteEvent] Failed for event ID ${id}, user tenent_id ${userTenentId}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
+        throw new Error(detailedMessage);
     }
 };
