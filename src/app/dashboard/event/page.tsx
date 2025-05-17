@@ -39,7 +39,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useGetEvents, useDeleteEvent } from "@/lib/queries/event";
 import { useCurrentUser } from '@/lib/queries/user';
-import EventCardGrid from './_components/event-card-grid'; // Import new component
+import EventCardGrid from './_components/event-card-grid'; 
+import type { Event } from '@/types/event'; // Import Event type
 
 type ViewMode = 'table' | 'card';
 
@@ -55,22 +56,30 @@ export default function EventPage() {
    const error = isUserError ? new Error("Failed to load user data.") : eventsError;
 
     React.useEffect(() => {
-        console.log("[EventPage] Current User:", currentUser);
-        console.log("[EventPage] User Key (tenent_id):", userKey);
-        console.log("[EventPage] Events Data:", events);
-        console.log("[EventPage] Is Loading User:", isLoadingUser);
-        console.log("[EventPage] Is Loading Events:", isLoadingEvents);
-        console.log("[EventPage] Is Combined Loading:", isLoading);
-        console.log("[EventPage] Is Events Error:", isEventsError);
-        console.log("[EventPage] Events Error Object:", eventsError);
-        console.log("[EventPage] Is Combined Error:", isError);
-        console.log("[EventPage] Combined Error Object:", error);
-        console.log("[EventPage] Is Fetching (useGetEvents):", isFetching);
+        // console.log("[EventPage] Current User:", currentUser);
+        // console.log("[EventPage] User Key (tenent_id):", userKey);
+        // console.log("[EventPage] Events Data:", events);
+        // console.log("[EventPage] Is Loading User:", isLoadingUser);
+        // console.log("[EventPage] Is Loading Events:", isLoadingEvents);
+        // console.log("[EventPage] Is Combined Loading:", isLoading);
+        // console.log("[EventPage] Is Events Error:", isEventsError);
+        // console.log("[EventPage] Events Error Object:", eventsError);
+        // console.log("[EventPage] Is Combined Error:", isError);
+        // console.log("[EventPage] Combined Error Object:", error);
+        // console.log("[EventPage] Is Fetching (useGetEvents):", isFetching);
     }, [currentUser, userKey, events, isLoadingUser, isLoadingEvents, isLoading, isEventsError, eventsError, isError, error, isFetching]);
 
 
-   const handleDelete = (id: string) => {
-       deleteMutation.mutate(id);
+   const handleDelete = (eventToDelete: Event) => { // Accept full event object
+       if (!eventToDelete.documentId) {
+            console.error("Cannot delete event: documentId is missing.", eventToDelete);
+            toast({ variant: "destructive", title: "Error", description: "Cannot delete event: missing identifier."});
+            return;
+       }
+       deleteMutation.mutate({ 
+           documentId: eventToDelete.documentId, 
+           numericId: eventToDelete.id ? String(eventToDelete.id) : undefined 
+       });
    };
 
    return (
@@ -165,7 +174,7 @@ export default function EventPage() {
                         const eventDateTime = event.event_date_time ? new Date(event.event_date_time as string) : null;
                         return (
                         <TableRow key={event.id}>
-                            <TableCell className="font-medium">{event.documentId}{event.title || 'N/A'}</TableCell>
+                            <TableCell className="font-medium">{event.title || 'N/A'}</TableCell>
                             <TableCell className="hidden md:table-cell text-muted-foreground">{event.category || 'N/A'}</TableCell>
                             <TableCell className="hidden sm:table-cell">
                             {eventDateTime ? (
@@ -234,7 +243,7 @@ export default function EventPage() {
                                         size="icon"
                                         variant="ghost"
                                         className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        disabled={deleteMutation.isPending && deleteMutation.variables === String(event.id)}
+                                        disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === event.documentId}
                                         >
                                         <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -252,11 +261,11 @@ export default function EventPage() {
                                     <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
-                                        onClick={() => handleDelete(String(event.id))}
-                                        disabled={deleteMutation.isPending && deleteMutation.variables === String(event.id)}
+                                        onClick={() => handleDelete(event)}
+                                        disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === event.documentId}
                                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                     >
-                                        {deleteMutation.isPending && deleteMutation.variables === String(event.id) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        {deleteMutation.isPending && deleteMutation.variables?.documentId === event.documentId && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         Delete
                                     </AlertDialogAction>
                                     </AlertDialogFooter>
@@ -352,5 +361,3 @@ function EventPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
       </div>
     );
 }
-
-    

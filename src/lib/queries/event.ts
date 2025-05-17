@@ -3,17 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createEvent as createEventService,
   deleteEvent as deleteEventService,
-  getEvent as getEventService, // Stays as getEventService(id: string, ...)
-  getEvents as getEventsService,
+  getEvent as getEventService,
   updateEvent as updateEventService,
+  getEvents as getEventsService, // Added getEventsService import
 } from "@/lib/services/event";
 import type { CreateEventPayload, Event } from "@/types/event";
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from './user';
 
-// EVENTS_QUERY_KEY still uses numeric ID for the list if needed, or general key if not id-specific for list
 const EVENTS_QUERY_KEY = (userTenentId?: string) => ['events', userTenentId || 'all'];
-// EVENT_DETAIL_QUERY_KEY uses numeric id, as it's fetched by numeric id from URL params for the form
 const EVENT_DETAIL_QUERY_KEY = (id?: string, userTenentId?: string) => ['event', id || 'new', userTenentId || 'all'];
 
 export const useCreateEvent = () => {
@@ -34,7 +32,6 @@ export const useCreateEvent = () => {
     onSuccess: (data) => {
       toast({ title: "Success", description: "Event created successfully." });
       queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(data.tenent_id || currentUser?.tenent_id) });
-      // Potentially invalidate the new event's detail query if an ID is available
       if (data.id) {
         queryClient.invalidateQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(String(data.id), data.tenent_id || currentUser?.tenent_id) });
       }
@@ -77,7 +74,6 @@ export const useGetEvents = () => {
   });
 };
 
-// getEvent query still uses numeric id (string format) from URL
 export const useGetEvent = (id: string | null) => {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
@@ -86,14 +82,13 @@ export const useGetEvent = (id: string | null) => {
     queryKey: EVENT_DETAIL_QUERY_KEY(id ?? undefined, userTenentId),
     queryFn: () => {
       if (!id || !userTenentId) return null;
-      return getEventService(id, userTenentId); // Fetches by numeric id
+      return getEventService(id, userTenentId);
     },
     enabled: !!id && !!userTenentId && !isLoadingUser,
     staleTime: 1000 * 60 * 5,
   });
 };
 
-// useUpdateEvent now expects documentId (string)
 export const useUpdateEvent = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
@@ -103,15 +98,13 @@ export const useUpdateEvent = () => {
       if (!currentUser?.tenent_id) {
         throw new Error('User tenent_id is not available. Cannot update event.');
       }
-      // tenent_id is already excluded from payload in service
       return updateEventService(documentId, event, currentUser.tenent_id);
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Event updated successfully." });
       const tenentIdForInvalidation = data.tenent_id || currentUser?.tenent_id;
       queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(tenentIdForInvalidation) });
-      // Invalidate detail query using the numeric id (data.id) if available.
-      // variables.documentId is string, EVENT_DETAIL_QUERY_KEY uses numeric string id.
+      // If the detail query key uses numeric ID, and 'data.id' is available
       if (data.id) {
         queryClient.invalidateQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(String(data.id), tenentIdForInvalidation) });
       }
@@ -135,32 +128,32 @@ export const useUpdateEvent = () => {
   });
 };
 
-// useDeleteEvent now takes numericId, fetches event to get documentId, then calls deleteEventService with documentId
 export const useDeleteEvent = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   
-  return useMutation<Event | void, Error, string>({ // Accepts numericId (string) from UI
-    mutationFn: async (numericId: string) => {
+  return useMutation<Event | void, Error, { documentId: string; numericId?: string }>({ 
+    mutationFn: async ({ documentId }) => { // Directly use documentId
       if (!currentUser?.tenent_id) {
         throw new Error('User tenent_id is not available. Cannot delete event.');
       }
-      // Fetch the event by its numeric ID to get the documentId
-      const eventToDelete = await getEventService(numericId, currentUser.tenent_id);
-      if (!eventToDelete || !eventToDelete.documentId) {
-        throw new Error(`Event with ID ${numericId} not found or documentId is missing.`);
+      if (!documentId) {
+        throw new Error('Document ID is required for deleting an event.');
       }
-      return deleteEventService(eventToDelete.documentId, currentUser.tenent_id);
+      return deleteEventService(documentId, currentUser.tenent_id);
     },
-    onSuccess: (data, numericId) => { // numericId is the original variable passed to mutate
+    onSuccess: (data, variables) => { 
       toast({ title: "Success", description: "Event deleted successfully." });
       const tenentIdForInvalidation = (data as Event)?.tenent_id || currentUser?.tenent_id;
       queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(tenentIdForInvalidation) });
-      queryClient.removeQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(numericId, tenentIdForInvalidation) });
+      // Invalidate detail query using numericId if it was provided
+      if (variables.numericId) {
+        queryClient.removeQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(variables.numericId, tenentIdForInvalidation) });
+      }
     },
-    onError: (error: any, numericId) => {
+    onError: (error: any, variables) => {
       const strapiError = error.response?.data?.error;
-      let message = error.message || `An unknown error occurred while deleting event with ID ${numericId}.`;
+      let message = error.message || `An unknown error occurred while deleting event with documentId ${variables.documentId}.`;
       if (strapiError && typeof strapiError === 'object') {
           message = `${strapiError.name || 'API Error'}: ${strapiError.message || 'Unknown Strapi error.'}`;
           if (strapiError.details && Object.keys(strapiError.details).length > 0) {
