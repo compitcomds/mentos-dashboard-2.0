@@ -63,14 +63,14 @@ export const getQueryForm = async (id: string, userTenentId: string): Promise<Qu
     if (!id) return null;
     if (!userTenentId) {
         console.error(`[Service getQueryForm]: userTenentId is missing for query form ID ${id}.`);
-        throw new Error('User tenent_id is required to fetch a specific query form.');
+        throw new Error('User tenent_id is required to verify fetched query form.');
     }
     const params = {
       // No specific population needed unless relations are added to QueryForm type and required
     };
 
     const url = `/query-forms/${id}`;
-    console.log(`[getQueryForm] Fetching URL: ${url} with params:`, params);
+    console.log(`[getQueryForm] Fetching URL: ${url} (no tenent_id filter in query) with params:`, params);
 
     try {
         const headers = await getAuthHeader();
@@ -91,27 +91,32 @@ export const getQueryForm = async (id: string, userTenentId: string): Promise<Qu
         return response.data.data;
 
     } catch (error: unknown) {
-         let message = `Failed to fetch query form ${id} for tenent_id ${userTenentId}.`;
+         let message = `Failed to fetch query form ${id}.`;
          if (error instanceof AxiosError) {
             const status = error.response?.status;
             const errorDataMessage = error.response?.data?.error?.message || error.response?.data?.message || error.message;
             if (status === 404) {
-                 console.warn(`[getQueryForm] Query form ${id} not found for tenent_id ${userTenentId}.`);
+                 console.warn(`[getQueryForm] Query form ${id} not found.`);
                  return null;
             }
-            console.error(`[getQueryForm] Failed to fetch query form ${id} from ${url} (Status: ${status}) for tenent_id ${userTenentId}:`, error.response?.data);
+             if (status === 403) {
+                 console.warn(`[getQueryForm] Access to query form ${id} forbidden.`);
+                 return null;
+            }
+            console.error(`[getQueryForm] Failed to fetch query form ${id} from ${url} (Status: ${status}):`, error.response?.data);
             message = `Failed to fetch query form ${id} (${status}) - ${errorDataMessage || 'Unknown API error'}`;
         } else if (error instanceof Error) {
-            console.error(`[getQueryForm] Generic Error for query form ${id}, tenent_id ${userTenentId}:`, error.message);
+            console.error(`[getQueryForm] Generic Error for query form ${id}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[getQueryForm] Unknown Error for query form ${id}, tenent_id ${userTenentId}:`, error);
+            console.error(`[getQueryForm] Unknown Error for query form ${id}:`, error);
         }
         throw new Error(message);
     }
 };
+
 // Note: Create, Update, Delete for Query Forms are not implemented.
-// If they were, they would follow a similar pattern:
+// If they were, they would follow a similar pattern as other content types:
 // - Create: Include tenent_id in payload.
-// - Update/Delete: Authorize using user's tenent_id (e.g., pre-fetch and check),
-//   and ensure tenent_id is not in the update payload's data object.
+// - Update/Delete: Do not send tenent_id in API request, rely on backend policies. Service function uses userTenentId for context/logging.
+//   - Update: Exclude tenent_id from the data object in PUT payload.

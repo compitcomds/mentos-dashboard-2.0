@@ -109,7 +109,6 @@ export const useDeleteEvent = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   
-
   return useMutation<Event | void, Error, string>({
     mutationFn: (id: string) => {
       if (!currentUser?.tenent_id) {

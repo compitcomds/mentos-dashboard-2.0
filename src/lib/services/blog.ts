@@ -25,14 +25,13 @@ export const getBlogs = async (userTenentId: string): Promise<Blog[]> => {
     }
      const params = {
         'filters[tenent_id][$eq]': userTenentId,
-        'populate':'*', // Keep populate params
+        'populate':'*', 
     };
     const url = '/blogs';
     console.log(`[getBlogs] Fetching URL: ${url} with params:`, params);
 
     try {
         const headers = await getAuthHeader();
-        // Expect Strapi v5 collection response
         const response = await axiosInstance.get<FindMany<Blog>>(url, { params, headers });
         
         if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
@@ -41,7 +40,7 @@ export const getBlogs = async (userTenentId: string): Promise<Blog[]> => {
                 console.warn(`[getBlogs] API returned null or undefined for tenent_id ${userTenentId}. Returning empty array.`);
                 return [];
            }
-           return []; // Return empty array if API returns valid empty array or unexpected structure
+           return []; 
         }
         console.log(`[getBlogs] Fetched ${response.data.data.length} Blogs for tenent_id ${userTenentId}.`);
         return response.data.data;
@@ -63,21 +62,18 @@ export const getBlogs = async (userTenentId: string): Promise<Blog[]> => {
     }
 };
 
-// Get a specific blog by id, ensuring it matches the userTenentId
+// Get a specific blog by id, ensuring it matches the userTenentId after fetch
 export const getBlog = async (id: string, userTenentId: string): Promise<Blog | null> => {
     if (!id) return null;
     if (!userTenentId) {
         console.error(`[Service getBlog]: userTenentId is missing for blog ID ${id}.`);
-        throw new Error('User tenent_id is required to fetch a specific blog.');
+        throw new Error('User tenent_id is required to verify fetched blog.');
     }
     const params = {
-        // Strapi v5 doesn't typically filter by user key on single GET by ID if policies handle access
-        // However, if your backend /blogs/:id requires tenent_id for filtering, add it:
-        // 'filters[tenent_id][$eq]': userTenentId,
-        'populate':'*', // Keep populate params
+        'populate':'*', 
     };
     const url = `/blogs/${id}`;
-    console.log(`[getBlog] Fetching URL: ${url} with params:`, params);
+    console.log(`[getBlog] Fetching URL: ${url} (no tenent_id filter in query) with params:`, params);
 
     try {
         const headers = await getAuthHeader();
@@ -85,39 +81,39 @@ export const getBlog = async (id: string, userTenentId: string): Promise<Blog | 
 
         if (!response.data || !response.data.data || typeof response.data.data !== 'object' || response.data.data === null) {
             console.error(`[getBlog] Unexpected API response structure for blog ${id} from ${url}. Expected 'data' object, received:`, response.data);
-            return null; // Return null for unexpected structure, could also throw
+            return null; 
         }
 
-        // Important: Verify the tenent_id matches
+        // Important: Verify the tenent_id matches after fetching
         if (response.data.data.tenent_id !== userTenentId) {
              console.warn(`[getBlog] Fetched blog ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}). Access denied or wrong item.`);
-             return null; // Or throw an authorization error
+             return null; 
         }
 
         console.log(`[getBlog] Fetched Blog ${id} Data for tenent_id ${userTenentId}:`, response.data.data);
         return response.data.data;
 
     } catch (error: unknown) {
-         let message = `Failed to fetch blog ${id} for tenent_id ${userTenentId}`;
+         let message = `Failed to fetch blog ${id}.`;
          if (error instanceof AxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data || { message: error.message };
              if (status === 404) {
-                 console.warn(`[getBlog] Blog ${id} not found for tenent_id ${userTenentId}.`);
+                 console.warn(`[getBlog] Blog ${id} not found.`);
                  return null;
              }
              if (status === 403) {
-                console.warn(`[getBlog] Blog ${id} forbidden for tenent_id ${userTenentId}.`);
+                console.warn(`[getBlog] Access to blog ${id} forbidden.`);
                 return null;
             }
-            console.error(`[getBlog] Failed to fetch blog ${id} from ${url} (Status: ${status}) for tenent_id ${userTenentId}:`, JSON.stringify(errorData, null, 2));
+            console.error(`[getBlog] Failed to fetch blog ${id} from ${url} (Status: ${status}):`, JSON.stringify(errorData, null, 2));
             const strapiErrorMessage = (errorData as any)?.error?.message;
             message = strapiErrorMessage || `Failed to fetch blog ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
         } else if (error instanceof Error) {
-            console.error(`[getBlog] Generic Error for blog ${id}, tenent_id ${userTenentId}:`, error.message);
+            console.error(`[getBlog] Generic Error for blog ${id}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[getBlog] Unknown Error for blog ${id}, tenent_id ${userTenentId}:`, error);
+            console.error(`[getBlog] Unknown Error for blog ${id}:`, error);
         }
         throw new Error(message);
     }
@@ -125,17 +121,17 @@ export const getBlog = async (id: string, userTenentId: string): Promise<Blog | 
 
 // Create a blog, ensuring the userTenentId is included in the payload
 export const createBlog = async (blog: CreateBlogPayload): Promise<Blog> => {
-    if (!blog.tenent_id) { // Expect tenent_id directly in payload
+    if (!blog.tenent_id) { 
         console.error('[Service createBlog]: tenent_id is missing in payload.');
         throw new Error('User tenent_id is required in the payload to create a blog.');
     }
     const userTenentId = blog.tenent_id;
     const url = '/blogs';
-    const params = { populate: '*' }; // Populate to get full response
+    const params = { populate: '*' }; 
     console.log(`[createBlog] Creating blog at ${url} with tenent_id ${userTenentId} and payload:`, JSON.stringify({ data: blog }, null, 2));
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.post<FindOne<Blog>>(url, // Expect FindOne<Blog>
+        const response = await axiosInstance.post<FindOne<Blog>>(url, 
             { data: blog },
             { headers, params }
         );
@@ -167,29 +163,23 @@ export const createBlog = async (blog: CreateBlogPayload): Promise<Blog> => {
     }
 };
 
-// Update a blog by id, ensuring it's for the correct userTenentId
-export const updateBlog = async (id: string, blog: Partial<CreateBlogPayload>, userTenentId: string): Promise<Blog> => {
-    if (!userTenentId) {
-        console.error(`[Service updateBlog]: userTenentId is missing for update of blog ID ${id}.`);
-        throw new Error('User tenent_id is required to update a blog.');
-    }
-     // Ensure the payload doesn't accidentally try to change the tenent_id
-     const { tenent_id, ...updateData } = blog;
-     if (tenent_id && tenent_id !== userTenentId) {
-         console.warn(`[Service updateBlog]: Attempted to change tenent_id during update for blog ${id}. Tenent_id change ignored.`);
+// Update a blog by id. tenent_id is NOT sent in payload. Auth relies on JWT and backend policies.
+export const updateBlog = async (id: string, blog: Partial<CreateBlogPayload>, userTenentIdAuthContext: string): Promise<Blog> => {
+    // userTenentIdAuthContext is for query invalidation or logging, not for filtering the PUT request
+     const { tenent_id, ...updateData } = blog; // Ensure tenent_id is not in the update payload data
+     if (tenent_id) {
+         console.warn(`[Service updateBlog]: tenent_id was present in update payload for blog ${id} but is being excluded. tenent_id should not be updated.`);
      }
 
     const url = `/blogs/${id}`;
-    console.log(`[updateBlog] Updating blog ${id} at ${url} (userTenentId: ${userTenentId}) with payload:`, JSON.stringify({ data: updateData }, null, 2));
+    console.log(`[updateBlog] Updating blog ${id} at ${url} (Auth context tenent_id: ${userTenentIdAuthContext}) with payload:`, JSON.stringify({ data: updateData }, null, 2));
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.put<FindOne<Blog>>(url, // Expect FindOne<Blog>
+        const response = await axiosInstance.put<FindOne<Blog>>(url, 
             { data: updateData },
             {
                 headers,
-                params: {
-                    populate: '*',
-                }
+                params: { populate: '*' }
             }
         );
 
@@ -197,85 +187,79 @@ export const updateBlog = async (id: string, blog: Partial<CreateBlogPayload>, u
             console.error(`[updateBlog] Unexpected API response structure after update for blog ${id} from ${url}:`, response.data);
             throw new Error('Unexpected API response structure after update.');
         }
-        // Verify the tenent_id in the response matches the original userTenentId
-        if (response.data.data.tenent_id !== userTenentId) {
-            console.error(`[updateBlog] Tenent_id mismatch after update for blog ${id}. Expected ${userTenentId}, got ${response.data.data.tenent_id}.`);
-            throw new Error('Blog update resulted in tenent_id mismatch. This indicates a potential authorization bypass or an issue with the API update logic.');
-        }
-        console.log(`[updateBlog] Updated Blog ${id} Data for tenent_id ${userTenentId}:`, response.data.data);
+        
+        console.log(`[updateBlog] Updated Blog ${id} Data (Auth context tenent_id ${userTenentIdAuthContext}):`, response.data.data);
         return response.data.data;
 
     } catch (error: unknown) {
-         let message = `Failed to update blog ${id} for tenent_id ${userTenentId}.`;
+         let message = `Failed to update blog ${id}.`;
          if (error instanceof AxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data || { message: error.message };
-             if (status === 404 || status === 403) {
-                 console.error(`[updateBlog] Blog ${id} not found or not authorized for tenent_id ${userTenentId} (Status: ${status}).`);
-                 throw new Error(`Blog not found or update not authorized (Status: ${status}).`);
+             if (status === 404) {
+                 console.error(`[updateBlog] Blog ${id} not found (Status: ${status}).`);
+                 throw new Error(`Blog not found (Status: ${status}).`);
              }
-            console.error(`[updateBlog] Failed to update blog ${id} at ${url} (${status}) for tenent_id ${userTenentId}:`, errorData);
+             if (status === 403) {
+                console.error(`[updateBlog] Update forbidden for blog ${id} (Status: ${status}).`);
+                throw new Error(`Update forbidden (Status: ${status}).`);
+            }
+            console.error(`[updateBlog] Failed to update blog ${id} at ${url} (${status}):`, errorData);
             const strapiErrorMessage = (errorData as any)?.error?.message;
             const strapiErrorDetails = (errorData as any)?.error?.details;
             console.error("[updateBlog] Strapi Error Details:", strapiErrorDetails);
             message = strapiErrorMessage || `Failed to update blog ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
         } else if (error instanceof Error) {
-            console.error(`[updateBlog] Generic Error for blog ${id}, tenent_id ${userTenentId}:`, error.message);
+            console.error(`[updateBlog] Generic Error for blog ${id}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[updateBlog] Unknown Error for blog ${id}, tenent_id ${userTenentId}:`, error);
+            console.error(`[updateBlog] Unknown Error for blog ${id}:`, error);
         }
         throw new Error(message);
     }
 };
 
-// Delete a blog by id, ensuring it's for the correct userTenentId
-export const deleteBlog = async (id: string, userTenentId: string): Promise<Blog | void> => {
-     if (!userTenentId) {
-        console.error(`[Service deleteBlog]: userTenentId is missing for deletion of blog ID ${id}.`);
-        throw new Error('User tenent_id is required to delete a blog.');
-    }
+// Delete a blog by id. Auth relies on JWT and backend policies.
+export const deleteBlog = async (id: string, userTenentIdAuthContext: string): Promise<Blog | void> => {
+    // userTenentIdAuthContext is for query invalidation or logging
     const url = `/blogs/${id}`;
-    // For delete, Strapi v5 might need a way to confirm ownership if not handled by policies alone.
-    // This could be by attempting to fetch it first (less ideal) or by adding tenent_id to the query if your backend supports it for DELETE.
-    // For now, we assume policies handle ownership based on the JWT.
-    console.log(`[deleteBlog] Deleting blog ${id} at ${url} (userTenentId: ${userTenentId})`);
+    console.log(`[deleteBlog] Deleting blog ${id} at ${url} (Auth context tenent_id: ${userTenentIdAuthContext})`);
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.delete<FindOne<Blog>>(url, { // Expect FindOne<Blog>
+        const response = await axiosInstance.delete<FindOne<Blog>>(url, { 
             headers,
-            // params: { 'filters[tenent_id][$eq]': userTenentId } // Adding filter here might not work for DELETE standard REST.
-                                                               // Backend policies are the primary guard.
         });
 
         if (response.status === 200 || response.status === 204) {
-            console.log(`[deleteBlog] Successfully deleted blog ${id} for tenent_id ${userTenentId}.`);
-            return response.data?.data; // response.data.data will contain the deleted item
+            console.log(`[deleteBlog] Successfully deleted blog ${id}.`);
+            return response.data?.data; 
         } else {
-             console.warn(`[deleteBlog] Unexpected success status ${response.status} when deleting blog ${id} at ${url} for tenent_id ${userTenentId}.`);
+             console.warn(`[deleteBlog] Unexpected success status ${response.status} when deleting blog ${id} at ${url}.`);
              return response.data?.data;
         }
 
     } catch (error: unknown) {
-        let message = `Failed to delete blog ${id} for tenent_id ${userTenentId}.`;
+        let message = `Failed to delete blog ${id}.`;
         if (error instanceof AxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data || { message: error.message };
-             if (status === 404 || status === 403) {
-                 console.error(`[deleteBlog] Blog ${id} not found or not authorized for tenent_id ${userTenentId} (Status: ${status}).`);
-                 throw new Error(`Blog not found or deletion not authorized (Status: ${status}).`);
+             if (status === 404) {
+                 console.error(`[deleteBlog] Blog ${id} not found (Status: ${status}).`);
+                 throw new Error(`Blog not found (Status: ${status}).`);
              }
-            console.error(`[deleteBlog] Failed to delete blog ${id} at ${url} (${status}) for tenent_id ${userTenentId}:`, errorData);
+             if (status === 403) {
+                console.error(`[deleteBlog] Delete forbidden for blog ${id} (Status: ${status}).`);
+                throw new Error(`Delete forbidden (Status: ${status}).`);
+            }
+            console.error(`[deleteBlog] Failed to delete blog ${id} at ${url} (${status}):`, errorData);
             const strapiErrorMessage = (errorData as any)?.error?.message;
             message = strapiErrorMessage || `Failed to delete blog ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
         } else if (error instanceof Error) {
-            console.error(`[deleteBlog] Generic Error for blog ${id}, tenent_id ${userTenentId}:`, error.message);
+            console.error(`[deleteBlog] Generic Error for blog ${id}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[deleteBlog] Unknown Error for blog ${id}, tenent_id ${userTenentId}:`, error);
+            console.error(`[deleteBlog] Unknown Error for blog ${id}:`, error);
         }
         throw new Error(message);
     }
 };
-
-    
