@@ -42,6 +42,7 @@ import type {
   GetTagValuesFunction,
   SeoBlogPayload,
   OpenGraphPayload,
+  Categorie as BlogSet, // Use the new Categorie type renamed to BlogSet
 } from "@/types/blog";
 import type { OtherTag } from "@/types/common";
 import type { Media } from "@/types/media";
@@ -67,7 +68,7 @@ import {
 } from "@/components/ui/form";
 import { useCurrentUser } from "@/lib/queries/user";
 import { useGetCategories } from '@/lib/queries/category';
-import type { Categorie as Category } from '@/types/category';
+import type { Categorie as Category } from '@/types/category'; // Still use Categorie for category dropdown type
 import { format } from "date-fns";
 import type { CombinedMediaData } from '@/types/media';
 
@@ -97,8 +98,8 @@ const getTagValues: GetTagValuesFunction = (tagField) => {
 const formatStructuredData = (data: any): string | null => {
   if (typeof data === "string") {
     try {
-       JSON.parse(data); 
-       return data; 
+       JSON.parse(data);
+       return data;
     } catch {
        return data || '{ "@context": "https://schema.org", "@type": "Article" }';
     }
@@ -119,7 +120,7 @@ const defaultFormValues: BlogFormValues = {
     content: "<p></p>",
     image: null,
     categories: null,
-    authors: null, 
+    authors: null,
     tags: "",
     view: 0,
     Blog_status: "draft",
@@ -140,7 +141,7 @@ const defaultFormValues: BlogFormValues = {
         canonicalURL: null,
         structuredData: '{ "@context": "https://schema.org", "@type": "Article" }',
     },
-    tenent_id: '', 
+    tenent_id: '',
 };
 
 
@@ -157,7 +158,6 @@ export default function BlogFormPage() {
 
 
   const [isLoading, setIsLoading] = useState(true);
-  const [authorsList, setAuthorsList] = useState<Array<{id: string; name: string}>>([]); 
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
@@ -211,8 +211,6 @@ export default function BlogFormPage() {
   useEffect(() => {
     if (isLoadingUser) return;
 
-    setAuthorsList([{ id: "John Doe", name: "John Doe" }, { id: "Jane Smith", name: "Jane Smith" }]);
-
     let initialValues = { ...defaultFormValues };
 
     if (userTenentId) {
@@ -242,7 +240,7 @@ export default function BlogFormPage() {
             content: blogData.content || "<p></p>",
             image: getMediaId(blogData.image as Media | null),
             categories: blogData.categories?.id ?? null, // Updated for oneToOne relation
-            authors: blogData.author || null,
+            authors: blogData.author || null, // Use 'author' from API response
             tags: fetchedTags.join(", "),
             view: blogData.view ?? 0,
             Blog_status: blogData.Blog_status || "draft",
@@ -326,23 +324,23 @@ export default function BlogFormPage() {
 
   const handleMediaSelect = useCallback(
     (selectedMedia: CombinedMediaData) => {
-      if (!currentMediaTarget || !selectedMedia || !selectedMedia.webMediaId) {
+      if (!currentMediaTarget || !selectedMedia || !selectedMedia.fileId) { // Use fileId (number)
         toast({ variant: "destructive", title: "Error", description: "Media target or selected media ID missing." });
         setIsMediaSelectorOpen(false);
         return;
       }
 
-      const fileId = selectedMedia.fileId; 
+      const fileIdToSet = selectedMedia.fileId; // fileId is numeric
       const previewUrl = selectedMedia.thumbnailUrl || selectedMedia.fileUrl;
 
       if (selectedMedia.mime?.startsWith("image/")) {
         const targetFieldName = currentMediaTarget;
         const previewTarget = targetFieldName === "image" ? "featured" : targetFieldName === "seo_blog.metaImage" ? "meta" : "og";
 
-        setValue(targetFieldName, fileId, { shouldValidate: true }); 
+        setValue(targetFieldName, fileIdToSet, { shouldValidate: true });
         setImagePreviews((prev) => ({ ...prev, [previewTarget]: previewUrl }));
 
-        toast({ title: "Image Selected", description: `Set ${targetFieldName} to image ID: ${fileId}` });
+        toast({ title: "Image Selected", description: `Set ${targetFieldName} to image ID: ${fileIdToSet}` });
       } else {
         toast({ variant: "destructive", title: "Invalid File Type", description: "Please select an image file for this field." });
       }
@@ -381,16 +379,20 @@ export default function BlogFormPage() {
       ? data.tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tagVal) => ({ tag_value: tagVal }))
       : [];
 
+    // Destructure 'authors' from data and use it for the 'author' field.
+    // The rest of 'data' (which excludes 'authors') is spread.
+    const { authors, ...restOfData } = data;
+
     const payload: CreateBlogPayload = {
-      ...data,
-      tags: tagsPayload, 
-      tenent_id: userTenentId, 
-      categories: data.categories, // Ensure single ID is passed for oneToOne
+      ...restOfData, // Spread the rest of the form data
+      tags: tagsPayload,
+      tenent_id: userTenentId,
+      categories: data.categories,
       seo_blog: data.seo_blog ? {
           ...data.seo_blog,
           openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}) ,
       } : undefined,
-      author: data.authors, 
+      author: authors, // Map the form field 'authors' to the API field 'author'
     };
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
@@ -427,7 +429,7 @@ export default function BlogFormPage() {
       </div>
     );
   }
-   if (!userTenentId && !isLoadingUser) { 
+   if (!userTenentId && !isLoadingUser) {
        return (
            <div className="flex flex-col space-y-6 items-center justify-center h-full">
                 <h1 className="text-2xl font-bold tracking-tight text-destructive">
@@ -1222,7 +1224,7 @@ export default function BlogFormPage() {
         isOpen={isMediaSelectorOpen}
         onOpenChange={setIsMediaSelectorOpen}
         onMediaSelect={handleMediaSelect}
-        returnType="id" 
+        returnType="id"
       />
     </div>
   );
@@ -1323,3 +1325,6 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
+
+
+    
