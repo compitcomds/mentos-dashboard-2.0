@@ -50,9 +50,9 @@ export default function BlogCardGrid({
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {blogPosts.map((post) => {
         const imageUrl = getImageUrl(post);
-        const authorName = post.author || 'N/A'; // Use post.author (string)
-        const categoryName = Array.isArray(post.categories) && post.categories.length > 0 && post.categories[0]?.name ? post.categories[0].name : 'N/A';
-        const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null; // Cast to string for Date constructor
+        const authorName = post.author || 'N/A';
+        const categoryName = post.categories?.name ?? 'N/A'; // Updated for oneToOne relation
+        const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null;
 
         return (
           <Card key={post.id} className="flex flex-col">

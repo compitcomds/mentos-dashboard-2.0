@@ -1,3 +1,4 @@
+
 import type { Media } from './media';
 import type { Categorie } from './category';
 import type { User } from './auth';
@@ -20,10 +21,10 @@ export interface SharedSeo {
   metaDescription: string;
   metaImage?: Media | null; // API returns populated Media object
   openGraph?: SharedOpenGraph | null;
-  keywords?: string | null; // Changed from string to string | null
-  metaRobots?: string | null; // Changed
-  metaViewport?: string | null; // Changed
-  canonicalURL?: string | null; // Changed
+  keywords?: string | null;
+  metaRobots?: string | null;
+  metaViewport?: string | null;
+  canonicalURL?: string | null;
   structuredData?: Record<string, any> | string | null; // API returns object, form uses string
 }
 
@@ -67,8 +68,6 @@ export const seoBlogSchema = z.object({
     metaRobots: z.string().nullable().optional().default('index, follow'),
     metaViewport: z.string().nullable().optional().default('width=device-width, initial-scale=1.0'),
     canonicalURL: z.string().url({ message: "Invalid Canonical URL" }).nullable().optional(),
-    // structuredData remains a string for Zod, as the form uses a textarea.
-    // The API might expect/return an object, handled by parsing/stringifying.
     structuredData: z.string().nullable().optional().default('{ "@context": "https://schema.org", "@type": "Article" }')
         .refine((val) => {
             if (!val) return true;
@@ -100,8 +99,8 @@ export const blogFormSchema = z.object({
         }, { message: "Maximum of 15 tags allowed." }),
     view: z.number().int().nonnegative().optional().default(0),
     Blog_status: z.enum(["draft", "published", "archived"]).optional().default("draft"),
-    seo_blog: seoBlogSchema.optional(), // Use the SeoBlog Zod schema
-    key: z.string().optional(), // This will be tenent_id, populated by system
+    seo_blog: seoBlogSchema.optional(),
+    tenent_id: z.string().optional(), // Changed from key, populated by system
 });
 export type BlogFormValues = z.infer<typeof blogFormSchema>;
 
@@ -115,14 +114,14 @@ export type CreateBlogPayload = {
     slug: string;
     content?: string | null;
     image?: number | null; // Media ID
-    categories?: number | number[] | null; // Strapi might take single ID or array of IDs for relations
+    categories?: number | null; // Single Category ID for oneToOne relation
     author?: string | null; // Author name as string
     tags?: OtherTag[]; // Array of { tag_value: string }
     view?: number;
     Blog_status?: "draft" | "published" | "archived";
     seo_blog?: SeoBlogPayload | null; // Payload uses Zod-derived type
-    tenent_id: string; // Changed from key
-    sub_category?: string | null; // Added from new Blog type
+    tenent_id: string;
+    sub_category?: string | null;
     related_blogs?: number[] | null; // Array of Blog IDs for relations
     user?: number | null; // User ID for relation
 };
@@ -134,23 +133,23 @@ export type Blog = {
   documentId?: string;
   createdAt?: Date | string;
   updatedAt?: Date | string;
-  publishedAt?: Date | string;
+  publishedAt?: Date | string | null;
   locale?: string | null;
   title?: string;
-  tags?: OtherTag[] | null; // Updated to use OtherTag
+  tags?: OtherTag[] | null;
   view?: number;
   content?: string;
   excerpt?: string;
   slug: string;
   Blog_status?: "draft" | "published" | "archived";
-  author?: string; // Author name as string
-  image?: Media | null; // Populated media object
-  tenent_id: string; // Changed from key
+  author?: string;
+  image?: Media | null;
+  tenent_id: string;
   sub_category?: string;
-  seo_blog?: SharedSeo | null; // API response uses SharedSeo
-  categories?: Categorie[] | null; // Populated category objects
-  related_blogs?: Blog[] | null; // Populated related blogs
-  user?: User | null; // Populated user object
+  seo_blog?: SharedSeo | null;
+  categories?: Categorie | null; // Changed to single Categorie for oneToOne relation
+  related_blogs?: Blog[] | null;
+  user?: User | null;
 };
 
 

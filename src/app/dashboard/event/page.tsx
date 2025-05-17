@@ -41,6 +41,7 @@ import { useGetEvents, useDeleteEvent } from "@/lib/queries/event";
 import { useCurrentUser } from '@/lib/queries/user';
 import EventCardGrid from './_components/event-card-grid'; 
 import type { Event } from '@/types/event'; // Import Event type
+import { toast } from '@/hooks/use-toast';
 
 type ViewMode = 'table' | 'card';
 
@@ -218,7 +219,7 @@ export default function EventPage() {
                                 <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                                    <Link href={`/events/${event.id}`} target="_blank">
+                                    <Link href={`/events/${event.documentId}`} target="_blank">
                                         <Eye className="h-4 w-4" />
                                     </Link>
                                     </Button>
@@ -228,7 +229,7 @@ export default function EventPage() {
                                 <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                                    <Link href={`/dashboard/event/${event.id}`}>
+                                    <Link href={`/dashboard/event/${event.documentId}`}>
                                         <Pencil className="h-4 w-4" />
                                     </Link>
                                     </Button>

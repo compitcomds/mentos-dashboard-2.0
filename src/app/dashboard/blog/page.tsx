@@ -28,7 +28,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger, // Added AlertDialogTrigger
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -39,13 +39,13 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import Image from 'next/image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Blog } from "@/types/blog";
-import type { Media } from "@/types/media"; // Import Media type
+import type { Media } from "@/types/media";
 import { useCurrentUser } from "@/lib/queries/user";
 import BlogCardGrid from './_components/blog-card-grid';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useGetCategories } from '@/lib/queries/category';
-import type { Categorie as Category } from '@/types/category'; // Use new Categorie type
+import type { Categorie as Category } from '@/types/category';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || '';
 
@@ -53,7 +53,7 @@ type ViewMode = 'table' | 'card';
 
 export default function BlogPage() {
    const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser();
-   const userTenentId = currentUser?.tenent_id; // Use tenent_id
+   const userTenentId = currentUser?.tenent_id;
    const { data: blogPosts, isLoading: isLoadingBlogs, isError: isBlogsError, error: blogsError, refetch, isFetching } = useGetBlogs();
    const { data: categories, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories(userTenentId);
    const deleteMutation = useDeleteBlog();
@@ -72,7 +72,7 @@ export default function BlogPage() {
   };
 
   const getImageUrl = (post: Blog): string | null => {
-      const mediaFile = post.image as Media | null; // Cast to Media
+      const mediaFile = post.image as Media | null;
       const relativeUrl = mediaFile?.url;
       if (!relativeUrl) return null;
       const cleanBaseUrl = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
@@ -86,7 +86,7 @@ export default function BlogPage() {
     return blogPosts.filter(post => {
       const matchesSearchTerm = post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 (post.slug && post.slug.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesCategory = !selectedCategoryId || (post.categories && post.categories.some(cat => String(cat.id) === selectedCategoryId));
+      const matchesCategory = !selectedCategoryId || (post.categories && String(post.categories.id) === selectedCategoryId); // Updated for oneToOne
       return matchesSearchTerm && matchesCategory;
     });
   }, [blogPosts, searchTerm, selectedCategoryId]);
@@ -232,8 +232,9 @@ export default function BlogPage() {
                     <TableBody>
                         {filteredBlogPosts.map((post) => {
                             const imageUrl = getImageUrl(post);
-                            const authorName = post.author || 'N/A'; // Use post.author (string)
-                             const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null; // Cast for Date constructor
+                            const authorName = post.author || 'N/A';
+                            const categoryName = post.categories?.name ?? 'N/A'; // Updated for oneToOne relation
+                            const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null;
 
                             return (
                              <TableRow key={post.id}>
@@ -261,7 +262,7 @@ export default function BlogPage() {
                                     </Badge>
                                </TableCell>
                                 <TableCell className="hidden lg:table-cell text-muted-foreground">{authorName}</TableCell>
-                                <TableCell className="hidden lg:table-cell text-muted-foreground">{post.categories?.[0]?.name || 'N/A'}</TableCell>
+                                <TableCell className="hidden lg:table-cell text-muted-foreground">{categoryName}</TableCell>
                                <TableCell className="hidden sm:table-cell text-muted-foreground">
                                  {createdAtDate ? (
                                    <Tooltip>
@@ -281,7 +282,7 @@ export default function BlogPage() {
                                    <Tooltip>
                                         <TooltipTrigger asChild>
                                              <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                                                 <Link href={`/blog/${post.slug}`} target="_blank"> {/* Adjust public link if needed */}
+                                                 <Link href={`/blog/${post.slug}`} target="_blank">
                                                      <Eye className="h-4 w-4" />
                                                  </Link>
                                              </Button>
@@ -439,4 +440,3 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
     </div>
   );
 }
-

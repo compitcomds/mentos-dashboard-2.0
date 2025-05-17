@@ -37,30 +37,25 @@ import type {
   Blog,
   BlogFormValues,
   CreateBlogPayload,
-  // CombinedMediaData, // Not used directly here, MediaSelectorDialog handles its own types
   GetMediaUrlFunction,
   GetMediaIdFunction,
   GetTagValuesFunction,
   SeoBlogPayload,
   OpenGraphPayload,
-  // UploadFile, // Replaced by Media
-  // TagComponent, // Replaced by OtherTag
 } from "@/types/blog";
-import type { OtherTag } from "@/types/common"; // Import OtherTag
-import type { Media } from "@/types/media"; // Import Media
+import type { OtherTag } from "@/types/common";
+import type { Media } from "@/types/media";
 import {
   Loader2,
   X,
   Image as ImageIcon,
-  // PlusCircle, // Not used
-  // Search, // Not used
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
 import NextImage from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { blogFormSchema, seoBlogSchema, openGraphSchema } from "@/types/blog"; // Import individual schemas
+import { blogFormSchema, seoBlogSchema, openGraphSchema } from "@/types/blog";
 import {
   Form,
   FormControl,
@@ -72,7 +67,7 @@ import {
 } from "@/components/ui/form";
 import { useCurrentUser } from "@/lib/queries/user";
 import { useGetCategories } from '@/lib/queries/category';
-import type { Categorie as Category } from '@/types/category'; // Use new Categorie type
+import type { Categorie as Category } from '@/types/category';
 import { format } from "date-fns";
 import type { CombinedMediaData } from '@/types/media';
 
@@ -96,17 +91,15 @@ const getMediaId: GetMediaIdFunction = (mediaField) => {
 
 const getTagValues: GetTagValuesFunction = (tagField) => {
   if (!tagField || !Array.isArray(tagField)) return [];
-  // Use tag_value instead of value
   return tagField.map((t) => t.tag_value).filter(Boolean) as string[];
 };
 
 const formatStructuredData = (data: any): string | null => {
   if (typeof data === "string") {
     try {
-       JSON.parse(data); // Check if it's a valid JSON string
-       return data; // Return as is if valid JSON string
+       JSON.parse(data); 
+       return data; 
     } catch {
-       // If not a JSON string, treat as plain string or return default if empty
        return data || '{ "@context": "https://schema.org", "@type": "Article" }';
     }
   } else if (typeof data === "object" && data !== null) {
@@ -119,7 +112,6 @@ const formatStructuredData = (data: any): string | null => {
   return '{ "@context": "https://schema.org", "@type": "Article" }';
 };
 
-// Define the default values for the form based on the schema defaults
 const defaultFormValues: BlogFormValues = {
     title: "",
     excerpt: "",
@@ -127,7 +119,7 @@ const defaultFormValues: BlogFormValues = {
     content: "<p></p>",
     image: null,
     categories: null,
-    authors: null, // Now a string field in form schema
+    authors: null, 
     tags: "",
     view: 0,
     Blog_status: "draft",
@@ -148,7 +140,7 @@ const defaultFormValues: BlogFormValues = {
         canonicalURL: null,
         structuredData: '{ "@context": "https://schema.org", "@type": "Article" }',
     },
-    tenent_id: '', // Changed from key, will be set from user data
+    tenent_id: '', 
 };
 
 
@@ -165,7 +157,7 @@ export default function BlogFormPage() {
 
 
   const [isLoading, setIsLoading] = useState(true);
-  const [authorsList, setAuthorsList] = useState<Array<{id: string; name: string}>>([]); // For UI display if needed
+  const [authorsList, setAuthorsList] = useState<Array<{id: string; name: string}>>([]); 
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
@@ -219,20 +211,18 @@ export default function BlogFormPage() {
   useEffect(() => {
     if (isLoadingUser) return;
 
-    // Mock authors (replace with actual data fetching if needed)
     setAuthorsList([{ id: "John Doe", name: "John Doe" }, { id: "Jane Smith", name: "Jane Smith" }]);
-
 
     let initialValues = { ...defaultFormValues };
 
     if (userTenentId) {
-         initialValues.tenent_id = userTenentId; // Form schema uses 'tenent_id'
+         initialValues.tenent_id = userTenentId;
     } else if (!isEditing) {
          console.error("User tenent_id is missing. Cannot create a new blog post.");
     }
 
 
-    if (isEditing && blogData && fetchedCategories) {
+    if (isEditing && blogData && (fetchedCategories || !isCategoriesError)) { // Ensure categories are loaded or not in error state
         setIsLoading(true);
         if (blogData.tenent_id !== userTenentId) {
             toast({ variant: "destructive", title: "Authorization Error", description: "You are not authorized to edit this blog post." });
@@ -251,7 +241,7 @@ export default function BlogFormPage() {
             slug: blogData.slug || "",
             content: blogData.content || "<p></p>",
             image: getMediaId(blogData.image as Media | null),
-            categories: blogData.categories && blogData.categories.length > 0 ? blogData.categories[0].id : null,
+            categories: blogData.categories?.id ?? null, // Updated for oneToOne relation
             authors: blogData.author || null,
             tags: fetchedTags.join(", "),
             view: blogData.view ?? 0,
@@ -273,7 +263,7 @@ export default function BlogFormPage() {
                 canonicalURL: blogData.seo_blog.canonicalURL || null,
                 structuredData: formatStructuredData(blogData.seo_blog.structuredData),
             } : defaultFormValues.seo_blog,
-            tenent_id: blogData.tenent_id || userTenentId || '', // Ensure tenent_id is populated
+            tenent_id: blogData.tenent_id || userTenentId || '',
         };
 
         setImagePreviews({
@@ -290,7 +280,7 @@ export default function BlogFormPage() {
     reset(initialValues);
     setIsLoading(false);
 
-  }, [isEditing, blogData, fetchedCategories, reset, isLoadingUser, userTenentId, router, toast]);
+  }, [isEditing, blogData, fetchedCategories, reset, isLoadingUser, userTenentId, router, toast, isCategoriesError]);
 
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -395,13 +385,13 @@ export default function BlogFormPage() {
       ...data,
       tags: tagsPayload, 
       tenent_id: userTenentId, 
+      categories: data.categories, // Ensure single ID is passed for oneToOne
       seo_blog: data.seo_blog ? {
           ...data.seo_blog,
           openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}) ,
       } : undefined,
       author: data.authors, 
     };
-    // delete (payload as any).key; // 'key' is not in BlogFormValues, it's tenent_id
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
@@ -651,7 +641,7 @@ export default function BlogFormPage() {
                     <FormLabel htmlFor="content">Content</FormLabel>
                     <FormControl>
                       <TipTapEditor
-                        key={blogId || "new"}
+                        key={`blog-editor-${blogId || "new"}`}
                         content={field.value || "<p></p>"}
                         onContentChange={field.onChange}
                         className="flex-1 min-h-full border border-input rounded-md"
@@ -1333,5 +1323,3 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
-
-    
