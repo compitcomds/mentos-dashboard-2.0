@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createEvent as createEventService,
   deleteEvent as deleteEventService,
-  getEvent as getEventService,
+  getEvent as getEventService, // Stays as getEventService(id: string, ...)
   getEvents as getEventsService,
   updateEvent as updateEventService,
 } from "@/lib/services/event";
@@ -11,17 +11,17 @@ import type { CreateEventPayload, Event } from "@/types/event";
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from './user';
 
+// EVENTS_QUERY_KEY still uses numeric ID for the list if needed, or general key if not id-specific for list
 const EVENTS_QUERY_KEY = (userTenentId?: string) => ['events', userTenentId || 'all'];
+// EVENT_DETAIL_QUERY_KEY uses numeric id, as it's fetched by numeric id from URL params for the form
 const EVENT_DETAIL_QUERY_KEY = (id?: string, userTenentId?: string) => ['event', id || 'new', userTenentId || 'all'];
 
 export const useCreateEvent = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   
-
   return useMutation<Event, Error, CreateEventPayload>({
     mutationFn: (event: CreateEventPayload) => {
-      // The tenent_id should already be in event payload from the form/component
       if (!event.tenent_id) {
         if (!currentUser?.tenent_id) {
           throw new Error('User tenent_id is not available. Cannot create event.');
@@ -34,12 +34,26 @@ export const useCreateEvent = () => {
     onSuccess: (data) => {
       toast({ title: "Success", description: "Event created successfully." });
       queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(data.tenent_id || currentUser?.tenent_id) });
+      // Potentially invalidate the new event's detail query if an ID is available
+      if (data.id) {
+        queryClient.invalidateQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(String(data.id), data.tenent_id || currentUser?.tenent_id) });
+      }
     },
     onError: (error: any) => {
-      const message = error.response?.data?.error?.message
-                   || error.message
-                   || "An unknown error occurred while creating the event.";
-      toast({ variant: "destructive", title: "Error Creating Event", description: message });
+        const strapiError = error.response?.data?.error;
+        let message = error.message || "An unknown error occurred while creating the event.";
+        if (strapiError && typeof strapiError === 'object') {
+            message = `${strapiError.name || 'API Error'}: ${strapiError.message || 'Unknown Strapi error.'}`;
+            if (strapiError.details && Object.keys(strapiError.details).length > 0) {
+                message += ` Details: ${JSON.stringify(strapiError.details)}`;
+            }
+        } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+            message = `API Error (Status ${error.response.status || 'unknown'}): ${error.response.data.message}`;
+        } else if (typeof error.response?.data === 'string' && error.response.data.trim() !== '') {
+            message = `API Error (Status ${error.response.status || 'unknown'}): ${error.response.data}`;
+        }
+        toast({ variant: "destructive", title: "Error Creating Event", description: message });
+        console.error("Create Event Error Details:", strapiError || error.response?.data || error);
     }
   });
 };
@@ -63,6 +77,7 @@ export const useGetEvents = () => {
   });
 };
 
+// getEvent query still uses numeric id (string format) from URL
 export const useGetEvent = (id: string | null) => {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
@@ -71,63 +86,93 @@ export const useGetEvent = (id: string | null) => {
     queryKey: EVENT_DETAIL_QUERY_KEY(id ?? undefined, userTenentId),
     queryFn: () => {
       if (!id || !userTenentId) return null;
-      return getEventService(id, userTenentId);
+      return getEventService(id, userTenentId); // Fetches by numeric id
     },
     enabled: !!id && !!userTenentId && !isLoadingUser,
     staleTime: 1000 * 60 * 5,
   });
 };
 
+// useUpdateEvent now expects documentId (string)
 export const useUpdateEvent = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   
-
-  return useMutation<Event, Error, { id: string; event: Partial<CreateEventPayload> }>({
-    mutationFn: ({ id, event }: { id: string; event: Partial<CreateEventPayload> }) => {
+  return useMutation<Event, Error, { documentId: string; event: Partial<CreateEventPayload> }>({
+    mutationFn: ({ documentId, event }: { documentId: string; event: Partial<CreateEventPayload> }) => {
       if (!currentUser?.tenent_id) {
         throw new Error('User tenent_id is not available. Cannot update event.');
       }
-      const { tenent_id, ...updatePayload } = event; // Exclude tenent_id from update payload data
-      return updateEventService(id, updatePayload, currentUser.tenent_id);
+      // tenent_id is already excluded from payload in service
+      return updateEventService(documentId, event, currentUser.tenent_id);
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Event updated successfully." });
-      queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(data.tenent_id || currentUser?.tenent_id) });
-      queryClient.invalidateQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(variables.id, data.tenent_id || currentUser?.tenent_id) });
+      const tenentIdForInvalidation = data.tenent_id || currentUser?.tenent_id;
+      queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(tenentIdForInvalidation) });
+      // Invalidate detail query using the numeric id (data.id) if available.
+      // variables.documentId is string, EVENT_DETAIL_QUERY_KEY uses numeric string id.
+      if (data.id) {
+        queryClient.invalidateQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(String(data.id), tenentIdForInvalidation) });
+      }
     },
     onError: (error: any, variables) => {
-      const message = error.response?.data?.error?.message
-                   || error.message
-                   || `An unknown error occurred while updating event ${variables.id}.`;
-      toast({ variant: "destructive", title: "Error Updating Event", description: message });
+        const strapiError = error.response?.data?.error;
+        let message = error.message || `An unknown error occurred while updating event with documentId ${variables.documentId}.`;
+        if (strapiError && typeof strapiError === 'object') {
+            message = `${strapiError.name || 'API Error'}: ${strapiError.message || 'Unknown Strapi error.'}`;
+            if (strapiError.details && Object.keys(strapiError.details).length > 0) {
+                message += ` Details: ${JSON.stringify(strapiError.details)}`;
+            }
+        } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+            message = `API Error (Status ${error.response.status || 'unknown'}): ${error.response.data.message}`;
+        } else if (typeof error.response?.data === 'string' && error.response.data.trim() !== '') {
+            message = `API Error (Status ${error.response.status || 'unknown'}): ${error.response.data}`;
+        }
+        toast({ variant: "destructive", title: "Error Updating Event", description: message });
+        console.error("Update Event Error Details:", strapiError || error.response?.data || error);
     }
   });
 };
 
+// useDeleteEvent now takes numericId, fetches event to get documentId, then calls deleteEventService with documentId
 export const useDeleteEvent = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   
-  return useMutation<Event | void, Error, string>({
-    mutationFn: (id: string) => {
+  return useMutation<Event | void, Error, string>({ // Accepts numericId (string) from UI
+    mutationFn: async (numericId: string) => {
       if (!currentUser?.tenent_id) {
         throw new Error('User tenent_id is not available. Cannot delete event.');
       }
-      return deleteEventService(id, currentUser.tenent_id);
+      // Fetch the event by its numeric ID to get the documentId
+      const eventToDelete = await getEventService(numericId, currentUser.tenent_id);
+      if (!eventToDelete || !eventToDelete.documentId) {
+        throw new Error(`Event with ID ${numericId} not found or documentId is missing.`);
+      }
+      return deleteEventService(eventToDelete.documentId, currentUser.tenent_id);
     },
-    onSuccess: (data, id) => {
+    onSuccess: (data, numericId) => { // numericId is the original variable passed to mutate
       toast({ title: "Success", description: "Event deleted successfully." });
-      // If data (deleted event) is returned, use its tenent_id, otherwise fallback to current user's
       const tenentIdForInvalidation = (data as Event)?.tenent_id || currentUser?.tenent_id;
       queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(tenentIdForInvalidation) });
-      queryClient.removeQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(id, tenentIdForInvalidation) });
+      queryClient.removeQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(numericId, tenentIdForInvalidation) });
     },
-    onError: (error: any, id) => {
-      const message = error.response?.data?.error?.message
-                   || error.message
-                   || `An unknown error occurred while deleting event ${id}.`;
+    onError: (error: any, numericId) => {
+      const strapiError = error.response?.data?.error;
+      let message = error.message || `An unknown error occurred while deleting event with ID ${numericId}.`;
+      if (strapiError && typeof strapiError === 'object') {
+          message = `${strapiError.name || 'API Error'}: ${strapiError.message || 'Unknown Strapi error.'}`;
+          if (strapiError.details && Object.keys(strapiError.details).length > 0) {
+              message += ` Details: ${JSON.stringify(strapiError.details)}`;
+          }
+      } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+          message = `API Error (Status ${error.response.status || 'unknown'}): ${error.response.data.message}`;
+      } else if (typeof error.response?.data === 'string' && error.response.data.trim() !== '') {
+          message = `API Error (Status ${error.response.status || 'unknown'}): ${error.response.data}`;
+      }
       toast({ variant: "destructive", title: "Error Deleting Event", description: message });
+      console.error("Delete Event Error Details:", strapiError || error.response?.data || error);
     }
   });
 };

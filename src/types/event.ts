@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 import type { Media } from './media'; // Import the updated Media type
 import type { User } from './auth';
@@ -8,15 +9,15 @@ import type { OtherTag } from './common'; // Import OtherTag
 // Schema for the Event form validation
 export const eventFormSchema = z.object({
   title: z.string().min(1, { message: "Event Title is required." }),
-  description: z.string().optional().default('<p></p>'), 
+  description: z.string().optional().default('<p></p>'),
   event_date_time: z.date({ required_error: "Event Date & Time is required." }),
   category: z.string().min(1, { message: "Category is required." }),
   location: z.string().min(1, { message: "Location is required." }),
   location_url: z.string().url({ message: "Invalid Location URL (optional)" }).nullable().optional(),
   organizer_name: z.string().min(1, { message: "Organizer Name is required." }),
   poster: z.number().nullable().optional(), // Media ID for Poster
-  tags: z.string().optional().default(''), 
-  speakers: z.string().optional().default(''), 
+  tags: z.string().optional().default(''),
+  speakers: z.string().optional().default(''),
   registration_link: z.string().url({ message: "Invalid Registration Link" }).nullable().optional(),
   event_status: z.enum(["Draft", "Published"]).default("Draft"),
   publish_date: z.date().nullable().optional(),
@@ -32,45 +33,45 @@ export type EventFormValues = z.infer<typeof eventFormSchema>;
 // Type for the main event creation/update payload
 export type CreateEventPayload = {
     title: string;
-    description?: string | null; 
+    description?: string | null;
     event_date_time: string; // Send as ISO string
-    category?: string; 
-    location?: string; 
+    category?: string;
+    location?: string;
     location_url?: string | null;
-    organizer_name?: string; 
+    organizer_name?: string;
     poster?: number | null; // Media ID
-    tags?: OtherTag[]; 
-    speakers?: OtherTag[]; 
+    tags?: OtherTag[];
+    speakers?: OtherTag[];
     registration_link?: string | null;
     event_status?: "Draft" | "Published";
     publish_date?: string | null; // Send as ISO string
-    tenent_id: string; 
+    tenent_id: string;
     user?: number | null; // User ID for relation
 };
 
 // Represents the actual Event data structure as received from the API
-export type Event = {
-  id?: number;
-  documentId?: string;
+export interface Event {
+  id?: number; // Numeric ID, primarily for URL routing and some get operations
+  documentId?: string; // String documentId, used for specific API operations like update/delete
   createdAt?: Date | string;
   updatedAt?: Date | string;
-  publishedAt?: Date | string;
+  publishedAt?: Date | string | null; // draftAndPublish: true means this can be null
   locale?: string | null;
-  category?: string | null;
-  title?: string | null;
-  event_date_time?: Date | string | null;
-  location?: string | null;
-  location_url?: string | null;
-  description?: string | null;
-  poster?: Media | null;
-  tags?: OtherTag[] | null;
-  speakers?: OtherTag[] | null;
-  registration_link?: string | null;
-  publish_date?: Date | string | null;
-  tenent_id: string; 
-  organizer_name?: string | null;
-  event_status?: "Draft" | "Published" | null;
-  user?: User | null;
+  category?: string | null; // from schema (type: "string")
+  title?: string | null; // from schema (type: "string")
+  event_date_time?: Date | string | null; // from schema (type: "datetime")
+  location?: string | null; // from schema (type: "string")
+  location_url?: string | null; // from schema (type: "string")
+  description?: string | null; // from schema (type: "text")
+  poster?: Media | null; // from schema (type: "media")
+  tags?: OtherTag[] | null; // from schema (type: "component", component: "other.tags")
+  speakers?: OtherTag[] | null; // from schema (type: "component", component: "other.tags")
+  registration_link?: string | null; // from schema (type: "string")
+  publish_date?: Date | string | null; // from schema (type: "datetime")
+  tenent_id: string; // from schema (type: "string"), marked as mandatory for our logic
+  organizer_name?: string | null; // from schema (type: "string")
+  event_status?: "Draft" | "Published" | null; // from schema (type: "enumeration")
+  user?: User | null; // from schema (type: "relation")
 };
 
 

@@ -54,7 +54,7 @@ import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-sel
 import NextImage from "next/image";
 import { eventFormSchema } from "@/types/event";
 import type { CombinedMediaData, Media } from "@/types/media";
-import TagInputField from "../_components/tag-input-field"; // Import the new component
+import TagInputField from "../_components/tag-input-field";
 
 const getTagValues: GetTagValuesFunction = (tagField) => {
   if (!tagField || !Array.isArray(tagField)) return [];
@@ -97,8 +97,8 @@ const mockCategories = ["Conference", "Workshop", "Webinar", "Meetup", "Party"];
 
 export default function EventFormPage() {
   const params = useParams();
-  const eventId = params?.id as string | undefined;
-  const isEditing = eventId && eventId !== "new";
+  const eventNumericId = params?.id as string | undefined; // This is the numeric ID from URL
+  const isEditing = eventNumericId && eventNumericId !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
@@ -109,7 +109,7 @@ export default function EventFormPage() {
   const [posterPreview, setPosterPreview] = useState<string | null>(null);
   const [submissionPayloadJson, setSubmissionPayloadJson] = useState<string | null>(null);
 
-  const { data: eventData, isLoading: isLoadingEvent, isError: isErrorEvent, error: errorEvent } = useGetEvent(isEditing ? eventId : null);
+  const { data: eventData, isLoading: isLoadingEvent, isError: isErrorEvent, error: errorEvent } = useGetEvent(isEditing ? eventNumericId : null);
 
   const createMutation = useCreateEvent();
   const updateMutation = useUpdateEvent();
@@ -122,7 +122,7 @@ export default function EventFormPage() {
   const { control, handleSubmit, reset, setValue } = form;
 
   useEffect(() => {
-    console.log("[EventForm] useEffect triggered. isEditing:", isEditing, "isLoadingUser:", isLoadingUser, "isLoadingEvent:", isLoadingEvent);
+    console.log("[EventForm] useEffect triggered. isEditing:", isEditing, "isLoadingUser:", isLoadingUser, "isLoadingEvent:", isLoadingEvent, "eventNumericId:", eventNumericId);
     
     if (isLoadingUser) {
       console.log("[EventForm] useEffect: User is loading, setting componentIsLoading=true and returning.");
@@ -206,11 +206,11 @@ export default function EventFormPage() {
           registration_link: eventData.registration_link || null,
           event_status: eventData.event_status || "Draft",
           publish_date: parsedPublishDate,
-          tenent_id: eventData.tenent_id,
+          tenent_id: eventData.tenent_id, // This should be present and match userTenentId
         };
         console.log("[EventForm] useEffect: Populated initialValues for editing:", newInitialValues);
-      } else if (!isLoadingEvent) { 
-        console.warn("[EventForm] useEffect: Editing mode, eventData is falsy, isLoadingEvent is false. Event might not exist or access denied.", "isErrorEvent:", isErrorEvent, "errorEvent:", errorEvent);
+      } else if (!isLoadingEvent && !isErrorEvent) { // eventData is null/undefined but not loading AND no error
+        console.warn("[EventForm] useEffect: Editing mode, eventData is null/undefined, not loading, and no error. Event might not exist or access denied (404/403).");
         toast({ variant: "destructive", title: "Event Not Found", description: "The requested event could not be loaded." });
         setComponentIsLoading(false);
         router.push('/dashboard/event');
@@ -218,7 +218,7 @@ export default function EventFormPage() {
       }
     } else { 
       console.log("[EventForm] useEffect: New event mode. Using defaults and userTenentId.");
-      newInitialValues.tenent_id = userTenentId!;
+      newInitialValues.tenent_id = userTenentId!; // Should be safe if !isEditing
     }
     
     console.log("[EventForm] useEffect: Applying states. newPosterPreview:", newPosterPreview);
@@ -228,7 +228,7 @@ export default function EventFormPage() {
     reset(newInitialValues);
     setComponentIsLoading(false);
   
-  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast]);
+  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast, eventNumericId]);
   
 
   const openMediaSelector = () => setIsMediaSelectorOpen(true);
@@ -275,21 +275,24 @@ export default function EventFormPage() {
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
-    const mutationLoading = isEditing ? updateMutation : createMutation;
     const options = {
       onSuccess: () => {
         toast({ title: "Success", description: `Event ${isEditing ? "updated" : "created"}.` });
         router.push("/dashboard/event");
       },
       onError: (err: any) => {
+        // Toast for error is handled by the mutation hook
         setSubmissionPayloadJson(`Error: ${err.message}\n\n${JSON.stringify(err.response?.data || err, null, 2)}`);
       },
     };
 
-    if (isEditing && eventId) {
-      updateMutation.mutate({ id: eventId, event: payload }, options);
-    } else {
+    if (isEditing && eventData?.documentId) { // Use eventData.documentId for update
+      updateMutation.mutate({ documentId: eventData.documentId, event: payload }, options);
+    } else if (!isEditing) {
       createMutation.mutate(payload, options);
+    } else {
+        toast({ variant: "destructive", title: "Error", description: "Cannot update event: Event documentId is missing." });
+        console.error("Update error: eventData or eventData.documentId is missing.", eventData);
     }
   };
 
@@ -364,7 +367,7 @@ export default function EventFormPage() {
                       <FormLabel htmlFor="content">Description</FormLabel>
                       <FormControl>
                          <TipTapEditor
-                              key={`event-editor-${eventId || "new"}`}
+                              key={`event-editor-${eventNumericId || "new"}`}
                               content={field.value || "<p></p>"}
                               onContentChange={field.onChange}
                               className="flex-1 min-h-full border border-input rounded-md"

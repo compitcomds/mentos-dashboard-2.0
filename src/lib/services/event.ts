@@ -59,6 +59,7 @@ export const getEvents = async (userTenentId: string): Promise<Event[]> => {
     }
 };
 
+// getEvent continues to use the numeric ID, as it's tied to URL parameters for the form page.
 export const getEvent = async (id: string, userTenentId: string): Promise<Event | null> => {
     if (!id) return null;
     if (!userTenentId) {
@@ -68,8 +69,8 @@ export const getEvent = async (id: string, userTenentId: string): Promise<Event 
     const params = {
         'populate':'*',
     };
-    const url = `/events/${id}`;
-    console.log(`[getEvent] Fetching URL: ${url} (no tenent_id filter in query) with params:`, params);
+    const url = `/events/${id}`; // Using numeric ID here
+    console.log(`[getEvent] Fetching URL: ${url} (using numeric ID) with params:`, params);
 
     try {
         const headers = await getAuthHeader();
@@ -80,7 +81,6 @@ export const getEvent = async (id: string, userTenentId: string): Promise<Event 
             return null;
         }
         
-        // Verify the tenent_id matches after fetching
         if (response.data.data.tenent_id !== userTenentId) {
              console.warn(`[getEvent] Fetched event ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}). Access denied.`);
              return null; 
@@ -173,15 +173,15 @@ export const createEvent = async (event: CreateEventPayload): Promise<Event> => 
     }
 };
 
-export const updateEvent = async (id: string, eventUpdatePayload: Partial<CreateEventPayload>, userTenentIdAuthContext: string): Promise<Event> => {
-    // userTenentIdAuthContext is for query invalidation or logging, not for filtering the PUT request
+// updateEvent now uses documentId (string) for the API path
+export const updateEvent = async (documentId: string, eventUpdatePayload: Partial<CreateEventPayload>, userTenentIdAuthContext: string): Promise<Event> => {
     const { tenent_id, ...updateData } = eventUpdatePayload; // Ensure tenent_id is not in the update payload data
     if (tenent_id) {
-        console.warn(`[Service updateEvent]: tenent_id was present in update payload for event ${id} but is being excluded. tenent_id should not be updated.`);
+        console.warn(`[Service updateEvent]: tenent_id was present in update payload for event documentId ${documentId} but is being excluded.`);
     }
 
-    const url = `/events/${id}`;
-    console.log(`[updateEvent] Updating event ${id} for user (Auth context tenent_id ${userTenentIdAuthContext}). Payload:`, JSON.stringify({ data: updateData }, null, 2));
+    const url = `/events/${documentId}`; // Using documentId (string) here
+    console.log(`[updateEvent] Updating event documentId ${documentId} for user (Auth context tenent_id ${userTenentIdAuthContext}). Payload:`, JSON.stringify({ data: updateData }, null, 2));
     try {
         const headers = await getAuthHeader();
         const response = await axiosInstance.put<FindOne<Event>>(url,
@@ -193,15 +193,15 @@ export const updateEvent = async (id: string, eventUpdatePayload: Partial<Create
         );
 
         if (!response.data || !response.data.data) {
-            console.error(`[updateEvent] Unexpected API response structure after update for event ${id} from ${url}:`, response.data);
+            console.error(`[updateEvent] Unexpected API response structure after update for event documentId ${documentId} from ${url}:`, response.data);
             throw new Error('Unexpected API response structure after update.');
         }
         
-        console.log(`[updateEvent] Updated Event ${id} Data (Auth context tenent_id ${userTenentIdAuthContext}):`, response.data.data);
+        console.log(`[updateEvent] Updated Event documentId ${documentId} Data (Auth context tenent_id ${userTenentIdAuthContext}):`, response.data.data);
         return response.data.data;
 
     } catch (error: unknown) {
-         let detailedMessage = `Failed to update event ${id}.`;
+         let detailedMessage = `Failed to update event documentId ${documentId}.`;
          let loggableErrorData: any = error;
  
          if (error instanceof AxiosError) {
@@ -228,39 +228,39 @@ export const updateEvent = async (id: string, eventUpdatePayload: Partial<Create
                 detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
             }
             if (status === 403) { 
-                detailedMessage = `Forbidden: You do not have permission to update event ${id}. (User: ${userTenentIdAuthContext})`;
+                detailedMessage = `Forbidden: You do not have permission to update event documentId ${documentId}. (User: ${userTenentIdAuthContext})`;
             } else if (status === 404) {
-                detailedMessage = `Event with ID ${id} not found.`;
+                detailedMessage = `Event with documentId ${documentId} not found.`;
             }
          } else if (error instanceof Error) {
             detailedMessage = error.message;
          }
-         console.error(`[updateEvent] Failed for event ID ${id}, user tenent_id ${userTenentIdAuthContext}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
+         console.error(`[updateEvent] Failed for event documentId ${documentId}, user tenent_id ${userTenentIdAuthContext}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
          throw new Error(detailedMessage);
     }
 };
 
-export const deleteEvent = async (id: string, userTenentIdAuthContext: string): Promise<Event | void> => {
-    // userTenentIdAuthContext is for query invalidation or logging
-    const url = `/events/${id}`;
-    console.log(`[deleteEvent] Deleting event ${id} (Auth context tenent_id: ${userTenentIdAuthContext})`);
+// deleteEvent now uses documentId (string) for the API path
+export const deleteEvent = async (documentId: string, userTenentIdAuthContext: string): Promise<Event | void> => {
+    const url = `/events/${documentId}`; // Using documentId (string) here
+    console.log(`[deleteEvent] Deleting event documentId ${documentId} (Auth context tenent_id: ${userTenentIdAuthContext})`);
     try {
         const headers = await getAuthHeader();
         const response = await axiosInstance.delete<FindOne<Event>>(url, { headers });
 
         if (response.status === 200 && response.data && response.data.data) {
-            console.log(`[deleteEvent] Successfully deleted event ${id}.`);
+            console.log(`[deleteEvent] Successfully deleted event documentId ${documentId}.`);
             return response.data.data;
         } else if (response.status === 204) { 
-            console.log(`[deleteEvent] Successfully deleted event ${id} (no content returned).`);
+            console.log(`[deleteEvent] Successfully deleted event documentId ${documentId} (no content returned).`);
             return; 
         } else {
-             console.warn(`[deleteEvent] Unexpected success status ${response.status} when deleting event ${id} at ${url}.`);
+             console.warn(`[deleteEvent] Unexpected success status ${response.status} when deleting event documentId ${documentId} at ${url}.`);
              return response.data?.data; 
         }
 
     } catch (error: unknown) {
-        let detailedMessage = `Failed to delete event ${id}.`;
+        let detailedMessage = `Failed to delete event documentId ${documentId}.`;
         let loggableErrorData: any = error;
 
         if (error instanceof AxiosError) {
@@ -287,14 +287,14 @@ export const deleteEvent = async (id: string, userTenentIdAuthContext: string): 
                 detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
             }
             if (status === 403) { 
-                detailedMessage = `Forbidden: You do not have permission to delete event ${id}. (User: ${userTenentIdAuthContext})`;
+                detailedMessage = `Forbidden: You do not have permission to delete event documentId ${documentId}. (User: ${userTenentIdAuthContext})`;
             } else if (status === 404) {
-                detailedMessage = `Event with ID ${id} not found.`;
+                detailedMessage = `Event with documentId ${documentId} not found.`;
             }
         } else if (error instanceof Error) {
             detailedMessage = error.message;
         }
-        console.error(`[deleteEvent] Failed for event ID ${id}, user tenent_id ${userTenentIdAuthContext}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
+        console.error(`[deleteEvent] Failed for event documentId ${documentId}, user tenent_id ${userTenentIdAuthContext}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
         throw new Error(detailedMessage);
     }
 };

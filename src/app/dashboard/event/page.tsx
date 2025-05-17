@@ -165,7 +165,7 @@ export default function EventPage() {
                         const eventDateTime = event.event_date_time ? new Date(event.event_date_time as string) : null;
                         return (
                         <TableRow key={event.id}>
-                            <TableCell className="font-medium">{event.title || 'N/A'}</TableCell>
+                            <TableCell className="font-medium">{event.documentId}{event.title || 'N/A'}</TableCell>
                             <TableCell className="hidden md:table-cell text-muted-foreground">{event.category || 'N/A'}</TableCell>
                             <TableCell className="hidden sm:table-cell">
                             {eventDateTime ? (
