@@ -104,7 +104,7 @@ export default function EventFormPage() {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
 
-  const [componentIsLoading, setComponentIsLoading] = useState(true); // Renamed isLoading to avoid conflict
+  const [componentIsLoading, setComponentIsLoading] = useState(true);
   const [tagsUI, setTagsUI] = useState<string[]>([]);
   const [speakersUI, setSpeakersUI] = useState<string[]>([]);
   const [tagInputTags, setTagInputTags] = useState("");
@@ -127,8 +127,10 @@ export default function EventFormPage() {
   const { control, handleSubmit, reset, setValue } = form;
 
   useEffect(() => {
+    console.log("[EventForm] useEffect triggered. isEditing:", isEditing, "isLoadingUser:", isLoadingUser, "isLoadingEvent:", isLoadingEvent);
+    
     if (isLoadingUser) {
-      console.log("[EventForm] useEffect: User is loading, returning.");
+      console.log("[EventForm] useEffect: User is loading, setting componentIsLoading=true and returning.");
       setComponentIsLoading(true);
       return;
     }
@@ -136,8 +138,8 @@ export default function EventFormPage() {
     if (!userTenentId && !isEditing) {
       console.error("[EventForm] useEffect: User tenent_id is missing for new event. Cannot proceed.");
       toast({ variant: "destructive", title: "User Error", description: "Cannot create a new event without user tenant ID." });
-      setComponentIsLoading(false); // Stop loading as we can't proceed
-      router.push('/dashboard/event'); // Redirect or show error state
+      setComponentIsLoading(false); 
+      router.push('/dashboard/event'); 
       return;
     }
   
@@ -147,10 +149,11 @@ export default function EventFormPage() {
     let newPosterPreview: string | null = null;
   
     if (isEditing) {
+      console.log("[EventForm] useEffect: Editing mode. isLoadingEvent:", isLoadingEvent, "isErrorEvent:", isErrorEvent);
       if (isLoadingEvent) {
         console.log("[EventForm] useEffect: Editing mode, eventData is loading. Waiting...");
         setComponentIsLoading(true);
-        return; // Wait for eventData to load
+        return; 
       }
       if (isErrorEvent) {
         console.error("[EventForm] useEffect: Error loading event data.", errorEvent);
@@ -160,7 +163,8 @@ export default function EventFormPage() {
         return;
       }
   
-      if (eventData) {
+      console.log("[EventForm] useEffect: Checking conditions for existing event...", "isEditing:", isEditing, "eventData:", eventData, "isLoadingEvent:", isLoadingEvent);
+      if (eventData) { // eventData is loaded and available
         console.log("[EventForm] useEffect: Editing mode, eventData present:", eventData);
         if (eventData.tenent_id !== userTenentId) {
           console.error("[EventForm] useEffect: Authorization Error - User tenent_id does not match event tenent_id.");
@@ -191,24 +195,27 @@ export default function EventFormPage() {
           registration_link: eventData.registration_link || null,
           event_status: eventData.event_status || "Draft",
           publish_date: eventData.publish_date ? parseISO(eventData.publish_date as string) : null,
-          tenent_id: eventData.tenent_id, // Use event's tenent_id
+          tenent_id: eventData.tenent_id,
         };
-      } else if (!isLoadingEvent) { // eventData is null/undefined but not loading (e.g., not found)
-        console.warn("[EventForm] useEffect: Editing mode, but eventData is null/undefined and not loading. Event might not exist.");
+        console.log("[EventForm] useEffect: Populated initialValues for editing:", newInitialValues);
+      } else if (!isLoadingEvent) { 
+        console.warn("[EventForm] useEffect: Editing mode, eventData is falsy, isLoadingEvent is false. Event might not exist or access denied.", "isErrorEvent:", isErrorEvent, "errorEvent:", errorEvent);
         toast({ variant: "destructive", title: "Event Not Found", description: "The requested event could not be loaded." });
         setComponentIsLoading(false);
         router.push('/dashboard/event');
         return;
       }
-    } else { // Creating new event
+    } else { 
       console.log("[EventForm] useEffect: New event mode. Using defaults and userTenentId.");
-      newInitialValues.tenent_id = userTenentId!; // userTenentId must be present here due to earlier check
+      newInitialValues.tenent_id = userTenentId!;
     }
     
-    console.log("[EventForm] useEffect: Resetting form with initialValues:", newInitialValues);
+    console.log("[EventForm] useEffect: Applying states. newTagsUI:", newTagsUI, "newSpeakersUI:", newSpeakersUI, "newPosterPreview:", newPosterPreview);
     setTagsUI(newTagsUI);
     setSpeakersUI(newSpeakersUI);
     setPosterPreview(newPosterPreview);
+    
+    console.log("[EventForm] useEffect: Resetting form with final initialValues:", newInitialValues);
     reset(newInitialValues);
     setComponentIsLoading(false);
   
@@ -263,14 +270,14 @@ export default function EventFormPage() {
 
   const handleMediaSelect = useCallback(
     (selectedMediaItem: CombinedMediaData) => {
-      if (selectedMediaItem && selectedMediaItem.fileId) {
+      if (selectedMediaItem && typeof selectedMediaItem.fileId === 'number') { // Ensure fileId is a number
         const fileId = selectedMediaItem.fileId;
         const previewUrl = selectedMediaItem.thumbnailUrl || selectedMediaItem.fileUrl;
         setValue("poster", fileId, { shouldValidate: true });
         setPosterPreview(previewUrl);
         toast({ title: "Poster Image Selected", description: `Set poster to image ID: ${fileId}` });
       } else {
-        toast({ variant: "destructive", title: "Error", description: "Media selection failed or file ID missing." });
+        toast({ variant: "destructive", title: "Error", description: "Media selection failed or file ID missing/invalid." });
       }
       setIsMediaSelectorOpen(false);
     }, [setValue, toast]
@@ -300,7 +307,6 @@ export default function EventFormPage() {
       speakers: transformTagsToPayload(data.speakers),
       description: data.description,
     };
-    delete (payload as any).key;
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
@@ -312,7 +318,6 @@ export default function EventFormPage() {
       },
       onError: (err: any) => {
         setSubmissionPayloadJson(`Error: ${err.message}\n\n${JSON.stringify(err.response?.data || err, null, 2)}`);
-        // onError toast is handled by the mutation hook
       },
     };
 
@@ -328,7 +333,7 @@ export default function EventFormPage() {
 
   if (isPageLoading) return <EventFormSkeleton isEditing={!!isEditing} />;
 
-  if (isEditing && isErrorEvent && !isLoadingEvent) { // Show error only if not loading
+  if (isEditing && isErrorEvent && !isLoadingEvent) { 
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold text-destructive mb-4">Error Loading Event</h1>
@@ -366,14 +371,14 @@ export default function EventFormPage() {
       <FormField
           control={control}
           name={rhfFieldName}
-          render={({ field }) => ( // field is used for the hidden input
+          render={() => ( 
               <FormItem>
                   <FormLabel htmlFor={`${rhfFieldName}-input`}>{label}</FormLabel>
                   <FormControl>
                       <div>
                           <div className="flex flex-wrap items-center gap-2 p-2 border border-input rounded-md min-h-[40px]">
                               {tagsUIState.map(tag => (
-                                  <Badge key={tag} variant="secondary" className="flex items-center gap-1">
+                                  <Badge key={`${rhfFieldName}-${tag}`} variant="secondary" className="flex items-center gap-1">
                                       {tag}
                                       <button
                                           type="button"
@@ -391,20 +396,14 @@ export default function EventFormPage() {
                                   value={tagInputState}
                                   onChange={(e) => handleTagInputChange(e, setTagInputState)}
                                   onKeyDown={(e) => handleTagKeyDown(e, tagsUIState, setTagsUIState, tagInputState, setTagInputState, rhfFieldName)}
-                                  placeholder={tagsUIState.length === 0 ? "Add tags (comma/Enter)..." : ""}
+                                  placeholder={tagsUIState.length === 0 ? "Add (comma/Enter)..." : ""}
                                   className="flex-1 bg-transparent outline-none text-sm min-w-[150px]"
                                   disabled={mutationLoading}
                               />
                           </div>
-                           {/* This hidden input ensures RHF tracks the comma-separated string value */}
-                           <input
-                             type="hidden"
-                             {...field} // Spread field props from RHF's render prop
-                             value={tagsUIState.join(", ")} // Value is the joined string from local UI state
-                           />
                       </div>
                   </FormControl>
-                  <FormDescription>Optional. Add relevant tags.</FormDescription>
+                  <FormDescription>Optional. Add relevant {label.toLowerCase()}.</FormDescription>
                   <FormMessage />
               </FormItem>
           )}
@@ -457,7 +456,7 @@ export default function EventFormPage() {
                       <FormLabel htmlFor="content">Description</FormLabel>
                       <FormControl>
                          <TipTapEditor
-                              key={eventId || "new-event"} // Add key to force re-mount if eventId changes
+                              key={`event-editor-${eventId || "new"}`}
                               content={field.value || "<p></p>"}
                               onContentChange={field.onChange}
                               className="flex-1 min-h-full border border-input rounded-md"
@@ -592,7 +591,7 @@ export default function EventFormPage() {
                <FormField
                   control={control}
                   name="poster"
-                  render={({ field }) => (
+                  render={({ field }) => ( 
                     <FormItem>
                       <FormLabel>Event Poster/Banner</FormLabel>
                       <FormControl>
@@ -768,7 +767,7 @@ export default function EventFormPage() {
         isOpen={isMediaSelectorOpen}
         onOpenChange={setIsMediaSelectorOpen}
         onMediaSelect={handleMediaSelect}
-        returnType="id"
+        returnType="id" 
       />
     </div>
   );
@@ -852,3 +851,5 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
+
+    
