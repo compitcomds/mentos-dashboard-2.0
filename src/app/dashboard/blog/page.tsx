@@ -45,7 +45,7 @@ import BlogCardGrid from './_components/blog-card-grid';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useGetCategories } from '@/lib/queries/category';
-import type { Categorie as Category } from '@/types/category';
+import type { Categorie } from '@/types/category'; // Corrected type import
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || '';
 
@@ -67,8 +67,16 @@ export default function BlogPage() {
    const isError = isUserError || isBlogsError || isCategoriesError;
    const error = isUserError ? new Error("Failed to load user data.") : isBlogsError ? blogsError : isCategoriesError ? new Error("Failed to load categories.") : new Error("An unknown error occurred.");
 
-  const handleDelete = (id: string) => {
-      deleteMutation.mutate(id);
+  const handleDelete = (post: Blog) => { // Expect full Blog object
+      if (!post.documentId) {
+        console.error("Cannot delete blog: documentId is missing.", post);
+        toast({ variant: "destructive", title: "Error", description: "Cannot delete blog: missing identifier."});
+        return;
+      }
+      deleteMutation.mutate({ 
+        documentId: post.documentId, 
+        numericId: post.id ? String(post.id) : undefined 
+      });
   };
 
   const getImageUrl = (post: Blog): string | null => {
@@ -86,7 +94,7 @@ export default function BlogPage() {
     return blogPosts.filter(post => {
       const matchesSearchTerm = post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 (post.slug && post.slug.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesCategory = !selectedCategoryId || (post.categories && String(post.categories.id) === selectedCategoryId); // Updated for oneToOne
+      const matchesCategory = !selectedCategoryId || (post.categories && String(post.categories.id) === selectedCategoryId); 
       return matchesSearchTerm && matchesCategory;
     });
   }, [blogPosts, searchTerm, selectedCategoryId]);
@@ -168,7 +176,7 @@ export default function BlogPage() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Categories</SelectItem>
-                            {categories && categories.map((category: Category) => (
+                            {categories && categories.map((category: Categorie) => (
                                 <SelectItem key={category.id} value={String(category.id)}>
                                     {category.name}
                                 </SelectItem>
@@ -233,7 +241,7 @@ export default function BlogPage() {
                         {filteredBlogPosts.map((post) => {
                             const imageUrl = getImageUrl(post);
                             const authorName = post.author || 'N/A';
-                            const categoryName = post.categories?.name ?? 'N/A'; // Updated for oneToOne relation
+                            const categoryName = post.categories?.name ?? 'N/A'; 
                             const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null;
 
                             return (
@@ -307,7 +315,7 @@ export default function BlogPage() {
                                              size="icon"
                                              variant="ghost"
                                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                             disabled={deleteMutation.isPending && deleteMutation.variables === String(post.id)}
+                                             disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === post.documentId}
                                          >
                                              <Trash2 className="h-4 w-4" />
                                          </Button>
@@ -326,11 +334,11 @@ export default function BlogPage() {
                                      <AlertDialogFooter>
                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
                                          <AlertDialogAction
-                                         onClick={() => handleDelete(String(post.id))}
-                                         disabled={deleteMutation.isPending && deleteMutation.variables === String(post.id)}
+                                         onClick={() => handleDelete(post)}
+                                         disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === post.documentId}
                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                          >
-                                          {deleteMutation.isPending && deleteMutation.variables === String(post.id) ? (
+                                          {deleteMutation.isPending && deleteMutation.variables?.documentId === post.documentId ? (
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                           ) : null}
                                          Delete
@@ -351,7 +359,7 @@ export default function BlogPage() {
             <BlogCardGrid
                 blogPosts={filteredBlogPosts}
                 getImageUrl={getImageUrl}
-                onDelete={handleDelete}
+                onDelete={handleDelete} // Pass handleDelete directly
                 deleteMutation={deleteMutation}
              />
            )
@@ -440,3 +448,4 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
     </div>
   );
 }
+

@@ -42,8 +42,8 @@ import type {
   GetTagValuesFunction,
   SeoBlogPayload,
   OpenGraphPayload,
-  Categorie as BlogSet, // Use the new Categorie type renamed to BlogSet
 } from "@/types/blog";
+import type { Categorie } from '@/types/category'; // Corrected type import
 import type { OtherTag } from "@/types/common";
 import type { Media } from "@/types/media";
 import {
@@ -68,7 +68,6 @@ import {
 } from "@/components/ui/form";
 import { useCurrentUser } from "@/lib/queries/user";
 import { useGetCategories } from '@/lib/queries/category';
-import type { Categorie as Category } from '@/types/category'; // Still use Categorie for category dropdown type
 import { format } from "date-fns";
 import type { CombinedMediaData } from '@/types/media';
 
@@ -147,8 +146,8 @@ const defaultFormValues: BlogFormValues = {
 
 export default function BlogFormPage() {
   const params = useParams();
-  const blogId = params?.id as string | undefined;
-  const isEditing = blogId && blogId !== "new";
+  const blogNumericId = params?.id as string | undefined; // This is the numeric ID from URL
+  const isEditing = blogNumericId && blogNumericId !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
@@ -178,11 +177,11 @@ export default function BlogFormPage() {
   >(null);
 
   const {
-    data: blogData,
+    data: blogData, // This is the data fetched by numeric ID
     isLoading: isLoadingBlog,
     isError: isErrorBlog,
     error: errorBlog,
-  } = useGetBlog(isEditing ? blogId : null);
+  } = useGetBlog(isEditing ? blogNumericId : null);
 
   const createMutation = useCreateBlog();
   const updateMutation = useUpdateBlog();
@@ -220,7 +219,7 @@ export default function BlogFormPage() {
     }
 
 
-    if (isEditing && blogData && (fetchedCategories || !isCategoriesError)) { // Ensure categories are loaded or not in error state
+    if (isEditing && blogData && (fetchedCategories || !isCategoriesError)) { 
         setIsLoading(true);
         if (blogData.tenent_id !== userTenentId) {
             toast({ variant: "destructive", title: "Authorization Error", description: "You are not authorized to edit this blog post." });
@@ -239,8 +238,8 @@ export default function BlogFormPage() {
             slug: blogData.slug || "",
             content: blogData.content || "<p></p>",
             image: getMediaId(blogData.image as Media | null),
-            categories: blogData.categories?.id ?? null, // Updated for oneToOne relation
-            authors: blogData.author || null, // Use 'author' from API response
+            categories: blogData.categories?.id ?? null, 
+            authors: blogData.author || null, 
             tags: fetchedTags.join(", "),
             view: blogData.view ?? 0,
             Blog_status: blogData.Blog_status || "draft",
@@ -324,13 +323,13 @@ export default function BlogFormPage() {
 
   const handleMediaSelect = useCallback(
     (selectedMedia: CombinedMediaData) => {
-      if (!currentMediaTarget || !selectedMedia || !selectedMedia.fileId) { // Use fileId (number)
-        toast({ variant: "destructive", title: "Error", description: "Media target or selected media ID missing." });
+      if (!currentMediaTarget || !selectedMedia || typeof selectedMedia.fileId !== 'number') { 
+        toast({ variant: "destructive", title: "Error", description: "Media target or selected media ID missing or invalid." });
         setIsMediaSelectorOpen(false);
         return;
       }
 
-      const fileIdToSet = selectedMedia.fileId; // fileId is numeric
+      const fileIdToSet = selectedMedia.fileId; 
       const previewUrl = selectedMedia.thumbnailUrl || selectedMedia.fileUrl;
 
       if (selectedMedia.mime?.startsWith("image/")) {
@@ -379,26 +378,28 @@ export default function BlogFormPage() {
       ? data.tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tagVal) => ({ tag_value: tagVal }))
       : [];
 
-    // Destructure 'authors' from data and use it for the 'author' field.
-    // The rest of 'data' (which excludes 'authors') is spread.
     const { authors, ...restOfData } = data;
 
     const payload: CreateBlogPayload = {
-      ...restOfData, // Spread the rest of the form data
+      ...restOfData,
       tags: tagsPayload,
       tenent_id: userTenentId,
-      categories: data.categories,
+      categories: data.categories, 
       seo_blog: data.seo_blog ? {
           ...data.seo_blog,
           openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}) ,
       } : undefined,
-      author: authors, // Map the form field 'authors' to the API field 'author'
+      author: authors, 
     };
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
-    if (isEditing && blogId) {
-      updateMutation.mutate({ id: blogId, blog: payload }, mutationOptions);
+    if (isEditing && blogData?.documentId) { // Use blogData.documentId (string)
+      updateMutation.mutate({ 
+        documentId: blogData.documentId, 
+        blog: payload,
+        numericId: blogNumericId // Pass numericId for query invalidation
+      }, mutationOptions);
     } else {
       createMutation.mutate(payload, mutationOptions);
     }
@@ -643,7 +644,7 @@ export default function BlogFormPage() {
                     <FormLabel htmlFor="content">Content</FormLabel>
                     <FormControl>
                       <TipTapEditor
-                        key={`blog-editor-${blogId || "new"}`}
+                        key={`blog-editor-${blogNumericId || "new"}`}
                         content={field.value || "<p></p>"}
                         onContentChange={field.onChange}
                         className="flex-1 min-h-full border border-input rounded-md"
@@ -762,7 +763,7 @@ export default function BlogFormPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {fetchedCategories && fetchedCategories.map((category: Category) => (
+                            {fetchedCategories && fetchedCategories.map((category: Categorie) => (
                               <SelectItem
                                 key={category.id}
                                 value={category.id!.toString()}

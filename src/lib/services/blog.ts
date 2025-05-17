@@ -25,7 +25,7 @@ export const getBlogs = async (userTenentId: string): Promise<Blog[]> => {
     }
      const params = {
         'filters[tenent_id][$eq]': userTenentId,
-        'populate':'*', 
+        'populate':'*',
     };
     const url = '/blogs';
     console.log(`[getBlogs] Fetching URL: ${url} with params:`, params);
@@ -62,7 +62,7 @@ export const getBlogs = async (userTenentId: string): Promise<Blog[]> => {
     }
 };
 
-// Get a specific blog by id, ensuring it matches the userTenentId after fetch
+// Get a specific blog by its numeric id, ensuring it matches the userTenentId after fetch
 export const getBlog = async (id: string, userTenentId: string): Promise<Blog | null> => {
     if (!id) return null;
     if (!userTenentId) {
@@ -72,8 +72,8 @@ export const getBlog = async (id: string, userTenentId: string): Promise<Blog | 
     const params = {
         'populate':'*', 
     };
-    const url = `/blogs/${id}`;
-    console.log(`[getBlog] Fetching URL: ${url} (no tenent_id filter in query) with params:`, params);
+    const url = `/blogs/${id}`; // Use numeric ID for this GET request
+    console.log(`[getBlog] Fetching URL: ${url} (using numeric ID) with params:`, params);
 
     try {
         const headers = await getAuthHeader();
@@ -84,7 +84,6 @@ export const getBlog = async (id: string, userTenentId: string): Promise<Blog | 
             return null; 
         }
 
-        // Important: Verify the tenent_id matches after fetching
         if (response.data.data.tenent_id !== userTenentId) {
              console.warn(`[getBlog] Fetched blog ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}). Access denied or wrong item.`);
              return null; 
@@ -163,16 +162,15 @@ export const createBlog = async (blog: CreateBlogPayload): Promise<Blog> => {
     }
 };
 
-// Update a blog by id. tenent_id is NOT sent in payload. Auth relies on JWT and backend policies.
-export const updateBlog = async (id: string, blog: Partial<CreateBlogPayload>, userTenentIdAuthContext: string): Promise<Blog> => {
-    // userTenentIdAuthContext is for query invalidation or logging, not for filtering the PUT request
-     const { tenent_id, ...updateData } = blog; // Ensure tenent_id is not in the update payload data
-     if (tenent_id) {
-         console.warn(`[Service updateBlog]: tenent_id was present in update payload for blog ${id} but is being excluded. tenent_id should not be updated.`);
-     }
+// Update a blog by its documentId.
+export const updateBlog = async (documentId: string, blog: Partial<CreateBlogPayload>, userTenentIdAuthContext: string): Promise<Blog> => {
+    const { tenent_id, ...updateData } = blog; 
+    if (tenent_id) {
+        console.warn(`[Service updateBlog]: tenent_id was present in update payload for blog documentId ${documentId} but is being excluded. tenent_id should not be updated.`);
+    }
 
-    const url = `/blogs/${id}`;
-    console.log(`[updateBlog] Updating blog ${id} at ${url} (Auth context tenent_id: ${userTenentIdAuthContext}) with payload:`, JSON.stringify({ data: updateData }, null, 2));
+    const url = `/blogs/${documentId}`; // Use documentId for the PUT request path
+    console.log(`[updateBlog] Updating blog documentId ${documentId} at ${url} (Auth context tenent_id: ${userTenentIdAuthContext}) with payload:`, JSON.stringify({ data: updateData }, null, 2));
     try {
         const headers = await getAuthHeader();
         const response = await axiosInstance.put<FindOne<Blog>>(url, 
@@ -184,46 +182,45 @@ export const updateBlog = async (id: string, blog: Partial<CreateBlogPayload>, u
         );
 
         if (!response.data || !response.data.data) {
-            console.error(`[updateBlog] Unexpected API response structure after update for blog ${id} from ${url}:`, response.data);
+            console.error(`[updateBlog] Unexpected API response structure after update for blog documentId ${documentId} from ${url}:`, response.data);
             throw new Error('Unexpected API response structure after update.');
         }
         
-        console.log(`[updateBlog] Updated Blog ${id} Data (Auth context tenent_id ${userTenentIdAuthContext}):`, response.data.data);
+        console.log(`[updateBlog] Updated Blog documentId ${documentId} Data (Auth context tenent_id ${userTenentIdAuthContext}):`, response.data.data);
         return response.data.data;
 
     } catch (error: unknown) {
-         let message = `Failed to update blog ${id}.`;
+         let message = `Failed to update blog documentId ${documentId}.`;
          if (error instanceof AxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data || { message: error.message };
              if (status === 404) {
-                 console.error(`[updateBlog] Blog ${id} not found (Status: ${status}).`);
+                 console.error(`[updateBlog] Blog documentId ${documentId} not found (Status: ${status}).`);
                  throw new Error(`Blog not found (Status: ${status}).`);
              }
              if (status === 403) {
-                console.error(`[updateBlog] Update forbidden for blog ${id} (Status: ${status}).`);
+                console.error(`[updateBlog] Update forbidden for blog documentId ${documentId} (Status: ${status}).`);
                 throw new Error(`Update forbidden (Status: ${status}).`);
             }
-            console.error(`[updateBlog] Failed to update blog ${id} at ${url} (${status}):`, errorData);
+            console.error(`[updateBlog] Failed to update blog documentId ${documentId} at ${url} (${status}):`, errorData);
             const strapiErrorMessage = (errorData as any)?.error?.message;
             const strapiErrorDetails = (errorData as any)?.error?.details;
             console.error("[updateBlog] Strapi Error Details:", strapiErrorDetails);
-            message = strapiErrorMessage || `Failed to update blog ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
+            message = strapiErrorMessage || `Failed to update blog documentId ${documentId} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
         } else if (error instanceof Error) {
-            console.error(`[updateBlog] Generic Error for blog ${id}:`, error.message);
+            console.error(`[updateBlog] Generic Error for blog documentId ${documentId}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[updateBlog] Unknown Error for blog ${id}:`, error);
+            console.error(`[updateBlog] Unknown Error for blog documentId ${documentId}:`, error);
         }
         throw new Error(message);
     }
 };
 
-// Delete a blog by id. Auth relies on JWT and backend policies.
-export const deleteBlog = async (id: string, userTenentIdAuthContext: string): Promise<Blog | void> => {
-    // userTenentIdAuthContext is for query invalidation or logging
-    const url = `/blogs/${id}`;
-    console.log(`[deleteBlog] Deleting blog ${id} at ${url} (Auth context tenent_id: ${userTenentIdAuthContext})`);
+// Delete a blog by its documentId.
+export const deleteBlog = async (documentId: string, userTenentIdAuthContext: string): Promise<Blog | void> => {
+    const url = `/blogs/${documentId}`; // Use documentId for the DELETE request path
+    console.log(`[deleteBlog] Deleting blog documentId ${documentId} at ${url} (Auth context tenent_id: ${userTenentIdAuthContext})`);
     try {
         const headers = await getAuthHeader();
         const response = await axiosInstance.delete<FindOne<Blog>>(url, { 
@@ -231,35 +228,37 @@ export const deleteBlog = async (id: string, userTenentIdAuthContext: string): P
         });
 
         if (response.status === 200 || response.status === 204) {
-            console.log(`[deleteBlog] Successfully deleted blog ${id}.`);
+            console.log(`[deleteBlog] Successfully deleted blog documentId ${documentId}.`);
             return response.data?.data; 
         } else {
-             console.warn(`[deleteBlog] Unexpected success status ${response.status} when deleting blog ${id} at ${url}.`);
+             console.warn(`[deleteBlog] Unexpected success status ${response.status} when deleting blog documentId ${documentId} at ${url}.`);
              return response.data?.data;
         }
 
     } catch (error: unknown) {
-        let message = `Failed to delete blog ${id}.`;
+        let message = `Failed to delete blog documentId ${documentId}.`;
         if (error instanceof AxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data || { message: error.message };
              if (status === 404) {
-                 console.error(`[deleteBlog] Blog ${id} not found (Status: ${status}).`);
+                 console.error(`[deleteBlog] Blog documentId ${documentId} not found (Status: ${status}).`);
                  throw new Error(`Blog not found (Status: ${status}).`);
              }
              if (status === 403) {
-                console.error(`[deleteBlog] Delete forbidden for blog ${id} (Status: ${status}).`);
+                console.error(`[deleteBlog] Delete forbidden for blog documentId ${documentId} (Status: ${status}).`);
                 throw new Error(`Delete forbidden (Status: ${status}).`);
             }
-            console.error(`[deleteBlog] Failed to delete blog ${id} at ${url} (${status}):`, errorData);
+            console.error(`[deleteBlog] Failed to delete blog documentId ${documentId} at ${url} (${status}):`, errorData);
             const strapiErrorMessage = (errorData as any)?.error?.message;
-            message = strapiErrorMessage || `Failed to delete blog ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
+            message = strapiErrorMessage || `Failed to delete blog documentId ${documentId} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
         } else if (error instanceof Error) {
-            console.error(`[deleteBlog] Generic Error for blog ${id}:`, error.message);
+            console.error(`[deleteBlog] Generic Error for blog documentId ${documentId}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[deleteBlog] Unknown Error for blog ${id}:`, error);
+            console.error(`[deleteBlog] Unknown Error for blog documentId ${documentId}:`, error);
         }
         throw new Error(message);
     }
 };
+
+    
