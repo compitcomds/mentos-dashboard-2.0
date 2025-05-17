@@ -7,7 +7,7 @@ import {
   getCategories as getCategoriesService,
   updateCategory as updateCategoryService,
 } from "@/lib/services/category";
-import type { CreateCategoryPayload, Category } from "@/types/category";
+import type { CreateCategoryPayload, Categorie } from "@/types/category"; // Changed Category to Categorie
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from "./user";
 
@@ -18,7 +18,7 @@ export const useCreateCategory = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
-  return useMutation<Category, Error, CreateCategoryPayload>({
+  return useMutation<Categorie, Error, CreateCategoryPayload>({ // Changed Category to Categorie
     mutationFn: (categoryData: CreateCategoryPayload) => {
       if (!categoryData.tenent_id) {
         if (!currentUser?.tenent_id) {
@@ -51,7 +51,7 @@ export const useGetCategories = (userTenentId?: string) => {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const keyToUse = userTenentId || currentUser?.tenent_id;
 
-  return useQuery<Category[], Error>({
+  return useQuery<Categorie[], Error>({ // Changed Category to Categorie
     queryKey: CATEGORIES_QUERY_KEY(keyToUse),
     queryFn: () => {
         if (!keyToUse) {
@@ -70,7 +70,7 @@ export const useGetCategory = (identifier: string | null, userTenentId?: string)
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const keyToUse = userTenentId || currentUser?.tenent_id;
 
-  return useQuery<Category | null, Error>({
+  return useQuery<Categorie | null, Error>({ // Changed Category to Categorie
     queryKey: CATEGORY_DETAIL_QUERY_KEY(identifier ?? undefined, keyToUse),
     queryFn: () => {
       if (!identifier || !keyToUse) return null;
@@ -85,13 +85,13 @@ export const useUpdateCategory = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
-  return useMutation<Category, Error, { documentId: string; category: Partial<CreateCategoryPayload> }>({
+  return useMutation<Categorie, Error, { documentId: string; category: Partial<CreateCategoryPayload> }>({ // Changed Category to Categorie
     mutationFn: ({ documentId, category }) => {
       if (!currentUser?.tenent_id) {
         throw new Error("User tenent_id not available. Cannot update category.");
       }
-      const { tenent_id, ...updatePayload } = category;
-      return updateCategoryService(documentId, updatePayload, currentUser.tenent_id);
+      // const { tenent_id, ...updatePayload } = category; // tenent_id is already correctly excluded by logic in categories/page.tsx
+      return updateCategoryService(documentId, category, currentUser.tenent_id);
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Category updated successfully." });
@@ -117,7 +117,7 @@ export const useDeleteCategory = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
-  return useMutation<Category | void, Error, { documentId: string; userKey?: string }>({
+  return useMutation<Categorie | void, Error, { documentId: string; userKey?: string }>({ // Changed Category to Categorie
     mutationFn: ({ documentId, userKey }) => {
       const tenentIdForAuth = userKey || currentUser?.tenent_id;
       if (!tenentIdForAuth) {
@@ -147,3 +147,4 @@ export const useDeleteCategory = () => {
     }
   });
 };
+

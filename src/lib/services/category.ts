@@ -1,7 +1,7 @@
 
 'use server';
 
-import type { Category, CreateCategoryPayload } from "@/types/category";
+import type { Categorie, CreateCategoryPayload } from "@/types/category";
 import type { FindMany, FindOne } from "@/types/strapi_response";
 import axiosInstance from "@/lib/axios";
 import { getAccessToken } from "@/lib/actions/auth";
