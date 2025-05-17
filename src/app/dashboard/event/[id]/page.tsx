@@ -44,17 +44,17 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon as CalendarIconLucide, Loader2, X, Image as ImageIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isValid } from "date-fns";
 import { useCreateEvent, useGetEvent, useUpdateEvent } from "@/lib/queries/event";
 import { useCurrentUser } from "@/lib/queries/user";
 import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
 import NextImage from "next/image";
 import { eventFormSchema } from "@/types/event";
 import type { CombinedMediaData, Media } from "@/types/media";
+import TagInputField from "../_components/tag-input-field"; // Import the new component
 
 const getTagValues: GetTagValuesFunction = (tagField) => {
   if (!tagField || !Array.isArray(tagField)) return [];
@@ -105,11 +105,6 @@ export default function EventFormPage() {
   const userTenentId = currentUser?.tenent_id;
 
   const [componentIsLoading, setComponentIsLoading] = useState(true);
-  const [tagsUI, setTagsUI] = useState<string[]>([]);
-  const [speakersUI, setSpeakersUI] = useState<string[]>([]);
-  const [tagInputTags, setTagInputTags] = useState("");
-  const [tagInputSpeakers, setTagInputSpeakers] = useState("");
-
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
   const [posterPreview, setPosterPreview] = useState<string | null>(null);
   const [submissionPayloadJson, setSubmissionPayloadJson] = useState<string | null>(null);
@@ -144,8 +139,6 @@ export default function EventFormPage() {
     }
   
     let newInitialValues: EventFormValues = { ...defaultFormValues, tenent_id: userTenentId || '' };
-    let newTagsUI: string[] = [];
-    let newSpeakersUI: string[] = [];
     let newPosterPreview: string | null = null;
   
     if (isEditing) {
@@ -164,7 +157,7 @@ export default function EventFormPage() {
       }
   
       console.log("[EventForm] useEffect: Checking conditions for existing event...", "isEditing:", isEditing, "eventData:", eventData, "isLoadingEvent:", isLoadingEvent);
-      if (eventData) { // eventData is loaded and available
+      if (eventData) { 
         console.log("[EventForm] useEffect: Editing mode, eventData present:", eventData);
         if (eventData.tenent_id !== userTenentId) {
           console.error("[EventForm] useEffect: Authorization Error - User tenent_id does not match event tenent_id.");
@@ -177,14 +170,32 @@ export default function EventFormPage() {
         const fetchedTags = getTagValues(eventData.tags);
         const fetchedSpeakers = getTagValues(eventData.speakers);
         
-        newTagsUI = fetchedTags;
-        newSpeakersUI = fetchedSpeakers;
         newPosterPreview = getMediaUrl(eventData.poster);
-  
+        
+        let parsedEventDateTime = new Date();
+        if (eventData.event_date_time) {
+          const parsed = parseISO(eventData.event_date_time as string);
+          if (isValid(parsed)) {
+            parsedEventDateTime = parsed;
+          } else {
+            console.warn(`Invalid event_date_time from API: ${eventData.event_date_time}`);
+          }
+        }
+
+        let parsedPublishDate = null;
+        if (eventData.publish_date) {
+          const parsed = parseISO(eventData.publish_date as string);
+           if (isValid(parsed)) {
+            parsedPublishDate = parsed;
+          } else {
+            console.warn(`Invalid publish_date from API: ${eventData.publish_date}`);
+          }
+        }
+
         newInitialValues = {
           title: eventData.title || "",
           description: eventData.description || "<p></p>",
-          event_date_time: eventData.event_date_time ? parseISO(eventData.event_date_time as string) : new Date(),
+          event_date_time: parsedEventDateTime,
           category: eventData.category || "",
           location: eventData.location || "",
           location_url: eventData.location_url || null,
@@ -194,7 +205,7 @@ export default function EventFormPage() {
           speakers: fetchedSpeakers.join(", "),
           registration_link: eventData.registration_link || null,
           event_status: eventData.event_status || "Draft",
-          publish_date: eventData.publish_date ? parseISO(eventData.publish_date as string) : null,
+          publish_date: parsedPublishDate,
           tenent_id: eventData.tenent_id,
         };
         console.log("[EventForm] useEffect: Populated initialValues for editing:", newInitialValues);
@@ -210,9 +221,7 @@ export default function EventFormPage() {
       newInitialValues.tenent_id = userTenentId!;
     }
     
-    console.log("[EventForm] useEffect: Applying states. newTagsUI:", newTagsUI, "newSpeakersUI:", newSpeakersUI, "newPosterPreview:", newPosterPreview);
-    setTagsUI(newTagsUI);
-    setSpeakersUI(newSpeakersUI);
+    console.log("[EventForm] useEffect: Applying states. newPosterPreview:", newPosterPreview);
     setPosterPreview(newPosterPreview);
     
     console.log("[EventForm] useEffect: Resetting form with final initialValues:", newInitialValues);
@@ -222,55 +231,11 @@ export default function EventFormPage() {
   }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast]);
   
 
-  const handleTagInputChange = (
-      e: React.ChangeEvent<HTMLInputElement>,
-      setTagInputState: React.Dispatch<React.SetStateAction<string>>
-  ) => {
-      setTagInputState(e.target.value);
-  };
-
-  const handleTagKeyDown = (
-      e: React.KeyboardEvent<HTMLInputElement>,
-      currentTagsState: string[],
-      setTagsUIState: React.Dispatch<React.SetStateAction<string[]>>,
-      tagInputState: string,
-      setTagInputState: React.Dispatch<React.SetStateAction<string>>,
-      rhfFieldName: "tags" | "speakers"
-  ) => {
-      if ((e.key === "," || e.key === "Enter") && tagInputState.trim()) {
-          e.preventDefault();
-          const newTag = tagInputState.trim();
-          if (!currentTagsState.includes(newTag)) {
-              const updatedTags = [...currentTagsState, newTag];
-              setTagsUIState(updatedTags);
-              setValue(rhfFieldName, updatedTags.join(", "), { shouldValidate: true });
-          }
-          setTagInputState("");
-      } else if (e.key === "Backspace" && !tagInputState && currentTagsState.length > 0) {
-          e.preventDefault();
-          const updatedTags = currentTagsState.slice(0, -1);
-          setTagsUIState(updatedTags);
-          setValue(rhfFieldName, updatedTags.join(", "), { shouldValidate: true });
-      }
-  };
-
-  const removeTagUI = (
-      tagToRemove: string,
-      currentTagsState: string[],
-      setTagsUIState: React.Dispatch<React.SetStateAction<string[]>>,
-      rhfFieldName: "tags" | "speakers"
-  ) => {
-      const updatedTags = currentTagsState.filter((tag) => tag !== tagToRemove);
-      setTagsUIState(updatedTags);
-      setValue(rhfFieldName, updatedTags.join(", "), { shouldValidate: true });
-  };
-
-
   const openMediaSelector = () => setIsMediaSelectorOpen(true);
 
   const handleMediaSelect = useCallback(
     (selectedMediaItem: CombinedMediaData) => {
-      if (selectedMediaItem && typeof selectedMediaItem.fileId === 'number') { // Ensure fileId is a number
+      if (selectedMediaItem && typeof selectedMediaItem.fileId === 'number') { 
         const fileId = selectedMediaItem.fileId;
         const previewUrl = selectedMediaItem.thumbnailUrl || selectedMediaItem.fileUrl;
         setValue("poster", fileId, { shouldValidate: true });
@@ -305,12 +270,12 @@ export default function EventFormPage() {
       publish_date: data.publish_date ? data.publish_date.toISOString() : null,
       tags: transformTagsToPayload(data.tags),
       speakers: transformTagsToPayload(data.speakers),
-      description: data.description,
+      description: data.description || "",
     };
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
-    const mutation = isEditing ? updateMutation : createMutation;
+    const mutationLoading = isEditing ? updateMutation : createMutation;
     const options = {
       onSuccess: () => {
         toast({ title: "Success", description: `Event ${isEditing ? "updated" : "created"}.` });
@@ -352,63 +317,6 @@ export default function EventFormPage() {
           </div>
       );
   }
-
-  const TagInputComponent = ({
-      label,
-      tagsUIState,
-      setTagsUIState,
-      tagInputState,
-      setTagInputState,
-      rhfFieldName
-  }: {
-      label: string;
-      tagsUIState: string[];
-      setTagsUIState: React.Dispatch<React.SetStateAction<string[]>>;
-      tagInputState: string;
-      setTagInputState: React.Dispatch<React.SetStateAction<string>>;
-      rhfFieldName: "tags" | "speakers";
-  }) => (
-      <FormField
-          control={control}
-          name={rhfFieldName}
-          render={() => ( 
-              <FormItem>
-                  <FormLabel htmlFor={`${rhfFieldName}-input`}>{label}</FormLabel>
-                  <FormControl>
-                      <div>
-                          <div className="flex flex-wrap items-center gap-2 p-2 border border-input rounded-md min-h-[40px]">
-                              {tagsUIState.map(tag => (
-                                  <Badge key={`${rhfFieldName}-${tag}`} variant="secondary" className="flex items-center gap-1">
-                                      {tag}
-                                      <button
-                                          type="button"
-                                          onClick={() => removeTagUI(tag, tagsUIState, setTagsUIState, rhfFieldName)}
-                                          className="ml-1 rounded-full outline-none focus:ring-1 focus:ring-ring"
-                                          disabled={mutationLoading}
-                                      >
-                                          <X className="h-3 w-3" />
-                                      </button>
-                                  </Badge>
-                              ))}
-                              <input
-                                  id={`${rhfFieldName}-input`}
-                                  type="text"
-                                  value={tagInputState}
-                                  onChange={(e) => handleTagInputChange(e, setTagInputState)}
-                                  onKeyDown={(e) => handleTagKeyDown(e, tagsUIState, setTagsUIState, tagInputState, setTagInputState, rhfFieldName)}
-                                  placeholder={tagsUIState.length === 0 ? "Add (comma/Enter)..." : ""}
-                                  className="flex-1 bg-transparent outline-none text-sm min-w-[150px]"
-                                  disabled={mutationLoading}
-                              />
-                          </div>
-                      </div>
-                  </FormControl>
-                  <FormDescription>Optional. Add relevant {label.toLowerCase()}.</FormDescription>
-                  <FormMessage />
-              </FormItem>
-          )}
-      />
-  );
 
 
   return (
@@ -486,7 +394,7 @@ export default function EventFormPage() {
                               )}
                               disabled={mutationLoading}
                             >
-                              {field.value ? (
+                              {field.value && isValid(field.value) ? (
                                 format(field.value, "PPP HH:mm")
                               ) : (
                                 <span>Pick a date and time</span>
@@ -498,7 +406,7 @@ export default function EventFormPage() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={field.value}
+                            selected={field.value && isValid(field.value) ? field.value : undefined}
                             onSelect={field.onChange}
                             disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || mutationLoading}
                             initialFocus
@@ -507,10 +415,10 @@ export default function EventFormPage() {
                                <Label>Time (HH:mm)</Label>
                                <Input
                                   type="time"
-                                  value={field.value ? format(field.value, 'HH:mm') : ''}
+                                  value={field.value && isValid(field.value) ? format(field.value, 'HH:mm') : ''}
                                   onChange={(e) => {
                                       const [hours, minutes] = e.target.value.split(':').map(Number);
-                                      const newDate = field.value ? new Date(field.value) : new Date();
+                                      const newDate = field.value && isValid(field.value) ? new Date(field.value) : new Date();
                                       newDate.setHours(hours, minutes);
                                       field.onChange(newDate);
                                   }}
@@ -529,7 +437,7 @@ export default function EventFormPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Category <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={mutationLoading}>
+                        <Select onValueChange={field.onChange} value={field.value || ""} disabled={mutationLoading}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select event category" />
@@ -637,22 +545,22 @@ export default function EventFormPage() {
                   )}
                 />
 
-                 <TagInputComponent
-                     label="Tags"
-                     tagsUIState={tagsUI}
-                     setTagsUIState={setTagsUI}
-                     tagInputState={tagInputTags}
-                     setTagInputState={setTagInputTags}
-                     rhfFieldName="tags"
-                 />
-                 <TagInputComponent
-                     label="Speakers"
-                     tagsUIState={speakersUI}
-                     setTagsUIState={setSpeakersUI}
-                     tagInputState={tagInputSpeakers}
-                     setTagInputState={setTagInputSpeakers}
-                     rhfFieldName="speakers"
-                 />
+                <TagInputField
+                    control={control}
+                    name="tags"
+                    setValue={setValue}
+                    label="Tags"
+                    disabled={mutationLoading}
+                    description="Optional. Add relevant tags."
+                />
+                 <TagInputField
+                    control={control}
+                    name="speakers"
+                    setValue={setValue}
+                    label="Speakers"
+                    disabled={mutationLoading}
+                    description="Optional. Add event speakers."
+                />
 
 
                  <FormField
@@ -707,7 +615,7 @@ export default function EventFormPage() {
                                   )}
                                   disabled={mutationLoading}
                                 >
-                                  {field.value ? (
+                                  {field.value && isValid(field.value) ? (
                                     format(field.value, "PPP")
                                   ) : (
                                     <span>Pick a publish date</span>
@@ -719,7 +627,7 @@ export default function EventFormPage() {
                             <PopoverContent className="w-auto p-0" align="start">
                               <Calendar
                                 mode="single"
-                                selected={field.value}
+                                selected={field.value && isValid(field.value) ? field.value : undefined}
                                 onSelect={field.onChange}
                                 disabled={mutationLoading}
                                 initialFocus
@@ -851,5 +759,3 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
-
-    
