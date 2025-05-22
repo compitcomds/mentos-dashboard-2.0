@@ -43,6 +43,8 @@ const formatBytesLocal = (bytes: number | null, decimals = 2): string => {
   return sizeValue + " " + sizes[i];
 };
 
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 export default function UploadButton({ onUploadSuccess, disabled }: UploadButtonProps) {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = React.useState(false);
@@ -81,7 +83,28 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
     setIsEditorOpen(false); // Ensure editor is closed on full reset
   };
 
-  const onDrop = React.useCallback((acceptedFiles: File[]) => {
+  const onDrop = React.useCallback((acceptedFiles: File[], fileRejections: any[]) => {
+    if (fileRejections && fileRejections.length > 0) {
+        fileRejections.forEach(rejection => {
+            rejection.errors.forEach((error: any) => {
+                if (error.code === 'file-too-large') {
+                    toast({
+                        variant: "destructive",
+                        title: "File Too Large",
+                        description: `File "${rejection.file.name}" exceeds the ${MAX_FILE_SIZE_MB}MB limit.`,
+                    });
+                } else {
+                     toast({
+                        variant: "destructive",
+                        title: "File Rejected",
+                        description: `Could not accept file "${rejection.file.name}": ${error.message}`,
+                    });
+                }
+            });
+        });
+        return;
+    }
+
     if (acceptedFiles && acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
       const fileNameBase = file.name.split(".").slice(0, -1).join(".");
@@ -103,15 +126,13 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
       setUploadProgress(null);
       setIsEditorOpen(false); // Start in detail view, not editor
     }
-  }, []); // Removed resetAllStates from dependencies
+  }, [toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      "image/*": [".jpeg", ".png", ".gif", ".webp", ".svg", ".jpg"],
-      "video/*": [".mp4", ".webm", ".ogg"],
-      "application/pdf": [".pdf"],
-    },
+    // Removed specific accept prop to allow more file types
+    // Strapi will handle server-side validation for allowed types
+    maxSize: MAX_FILE_SIZE_BYTES, // 10MB limit
     multiple: false,
   });
 
@@ -245,7 +266,7 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
                     <DialogHeader>
                         <DialogTitle>Upload Media</DialogTitle>
                         <DialogDescription>
-                        Review the file details and add metadata. Edit images before uploading.
+                        Review the file details and add metadata. Max file size: {MAX_FILE_SIZE_MB}MB.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -274,7 +295,7 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
                             </p>
                         )}
                         <p className="text-xs text-muted-foreground mt-1">
-                            Images, Videos, PDFs supported
+                            Max {MAX_FILE_SIZE_MB}MB. Most file types accepted.
                         </p>
                         </div>
                     )}
