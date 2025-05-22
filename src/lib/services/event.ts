@@ -67,7 +67,9 @@ export const getEvent = async (id: string, userTenentId: string): Promise<Event 
         throw new Error('User tenent_id is required to verify fetched event.');
     }
     const params = {
-        'populate':'*',
+        'populate[speakers][populate]':'image',
+        'populate[tags]':'*'
+        
     };
     const url = `/events/${id}`; // Using numeric ID here
     console.log(`[getEvent] Fetching URL: ${url} (using numeric ID) with params:`, params);

@@ -81,7 +81,7 @@ const getMediaUrl = (mediaField: Media | null | undefined): string | null => {
 const defaultFormValues: EventFormValues = {
   title: "",
   description: "<p></p>",
-  event_date_time: new Date(), // Will be overridden by fetched data or remain for new
+  event_date_time: new Date(),
   category: "",
   location: "",
   location_url: null,
@@ -93,20 +93,18 @@ const defaultFormValues: EventFormValues = {
   event_status: "Draft",
   publish_date: null,
   tenent_id: '',
-  // user: null, // User field removed
 };
 
 const mockCategories = ["Conference", "Workshop", "Webinar", "Meetup", "Party", "Product Launch", "Networking", "Charity", "Sports", "Cultural"];
 
 export default function EventFormPage() {
   const params = useParams();
-  const eventId = params?.id as string | undefined; // Renamed to eventId for clarity
+  const eventId = params?.id as string | undefined;
   const isEditing = eventId && eventId !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
-  // const currentUserId = currentUser?.id; // User field removed
 
 
   const [componentIsLoading, setComponentIsLoading] = useState(true);
@@ -145,7 +143,7 @@ export default function EventFormPage() {
       return;
     }
   
-    if (!userTenentId && !isEditing) { // For new event, tenent_id is crucial
+    if (!userTenentId && !isEditing) { 
       console.error("[EventForm] useEffect: User tenent_id is missing for new event. Cannot proceed.");
       toast({ variant: "destructive", title: "User Error", description: "Cannot create a new event without user tenant ID." });
       setComponentIsLoading(false); 
@@ -157,20 +155,19 @@ export default function EventFormPage() {
     let newPosterPreview: string | null = null;
   
     if (isEditing) {
-      console.log("[EventForm] useEffect (Edit Mode): isLoadingEvent:", isLoadingEvent, "isErrorEvent:", isErrorEvent, "eventData:", eventData);
+      console.log("[EventForm] useEffect (Edit Mode): isLoadingEvent:", isLoadingEvent, "isErrorEvent:", isErrorEvent);
       if (isLoadingEvent) {
         setComponentIsLoading(true);
         return; 
       }
-      if (isErrorEvent || !eventData) { // Added !eventData check here
-        console.error("[EventForm] useEffect (Edit Mode): Error loading event data or eventData is null.", errorEvent, eventData);
+      if (isErrorEvent || !eventData) {
+        console.error("[EventForm] useEffect (Edit Mode): Error loading event data or eventData is null. Error:", errorEvent, "Data:", eventData);
         toast({ variant: "destructive", title: "Error Loading Event", description: errorEvent?.message || "The requested event could not be loaded." });
         setComponentIsLoading(false);
         router.push('/dashboard/event');
         return;
       }
   
-      // eventData is guaranteed to exist here if no error and not loading
       if (eventData.tenent_id !== userTenentId) {
         console.error("[EventForm] useEffect (Edit Mode): Authorization Error - User tenent_id does not match event tenent_id.");
         toast({ variant: "destructive", title: "Authorization Error", description: "You are not authorized to edit this event." });
@@ -190,7 +187,7 @@ export default function EventFormPage() {
       
       newPosterPreview = getMediaUrl(eventData.poster as Media | null);
       
-      let parsedEventDateTime = new Date(); // Default to now if parsing fails
+      let parsedEventDateTime = new Date();
       if (eventData.event_date_time) {
         const parsed = typeof eventData.event_date_time === 'string' ? parseISO(eventData.event_date_time) : eventData.event_date_time;
         if (isValid(parsed)) parsedEventDateTime = parsed;
@@ -218,11 +215,9 @@ export default function EventFormPage() {
         registration_link: eventData.registration_link || null,
         event_status: eventData.event_status || "Draft",
         publish_date: parsedPublishDate,
-        tenent_id: eventData.tenent_id, // Should match userTenentId due to check above
-        // user: getUserId(eventData.user as User | null), // User field removed
+        tenent_id: eventData.tenent_id,
       };
     } else {
-      // For new events, ensure tenent_id is set, and other fields use defaults
       newInitialValues = { ...defaultFormValues, tenent_id: userTenentId || ''};
     }
     
@@ -250,9 +245,9 @@ export default function EventFormPage() {
         return;
       }
 
-      const fileIdToSet = selectedMediaItem.fileId;
+      const fileIdToSet = selectedMediaItem.fileId; // This is numeric Media.id
       const previewUrl = selectedMediaItem.thumbnailUrl || selectedMediaItem.fileUrl;
-      console.log(`[EventForm handleMediaSelect] fileIdToSet: ${fileIdToSet}, previewUrl: ${previewUrl}`);
+      console.log(`[EventForm handleMediaSelect] fileIdToSet (Media ID): ${fileIdToSet}, previewUrl: ${previewUrl}`);
 
 
       if (typeof fileIdToSet !== 'number' && fileIdToSet !== null) {
@@ -272,6 +267,7 @@ export default function EventFormPage() {
           setValue(`speakers.${speakerIndex}.image_id`, fileIdToSet, { shouldValidate: true });
           setValue(`speakers.${speakerIndex}.image_preview_url`, previewUrl, { shouldValidate: true });
           toast({ title: `Speaker ${speakerIndex + 1} Image Selected`, description: `Image ID: ${fileIdToSet}` });
+          console.log(`[EventForm handleMediaSelect] Set speaker ${speakerIndex} image_id to: ${fileIdToSet}`);
         }
       } else {
         toast({ variant: "destructive", title: "Invalid File Type", description: "Please select an image file." });
@@ -305,14 +301,18 @@ export default function EventFormPage() {
         return tagsString ? tagsString.split(",").map(tag => tag.trim()).filter(Boolean).map(val => ({ tag_value: val })) : [];
     };
     
-    const transformedSpeakers: ApiSpeakerComponent[] | null = data.speakers ? data.speakers.map(formSpeaker => {
-        console.log(`[EventForm onSubmit] Mapping speaker: ${formSpeaker.name}, image_id: ${formSpeaker.image_id}`);
-        return {
-            id: formSpeaker.id,
-            name: formSpeaker.name || null,
-            image: formSpeaker.image_id === undefined ? null : formSpeaker.image_id, // Ensure undefined becomes null
-            excerpt: formSpeaker.excerpt || null,
+    const transformedSpeakers: ApiSpeakerComponent[] | null = data.speakers ? data.speakers.map(speaker => {
+        const apiSpeaker: Partial<ApiSpeakerComponent> = { // Use Partial for building
+            name: speaker.name || null,
+            image: speaker.image_id === undefined ? null : speaker.image_id,
+            excerpt: speaker.excerpt || null,
         };
+        // Only include 'id' if it's a number (existing speaker being updated)
+        // For new speakers, 'id' will be undefined and thus omitted from apiSpeaker object sent to backend.
+        if (typeof speaker.id === 'number') {
+            apiSpeaker.id = speaker.id;
+        }
+        return apiSpeaker as ApiSpeakerComponent; // Cast to full type
     }) : null;
     console.log("[EventForm onSubmit] Transformed speakers for payload:", JSON.stringify(transformedSpeakers, null, 2));
 
@@ -320,7 +320,6 @@ export default function EventFormPage() {
     const payload: CreateEventPayload = {
       ...data,
       tenent_id: userTenentId,
-      // user: data.user, // User field removed
       event_date_time: data.event_date_time.toISOString(),
       publish_date: data.publish_date ? data.publish_date.toISOString() : null,
       tags: transformTagsToPayload(data.tags),
@@ -645,8 +644,8 @@ export default function EventFormPage() {
                         />
                        <FormField
                         control={control}
-                        name={`speakers.${index}.image_id`}
-                        render={({ field }) => (
+                        name={`speakers.${index}.image_id`} 
+                        render={({ field }) => ( // field.value here is speakers[index].image_id
                           <FormItem>
                             <FormLabel className="text-xs">Image</FormLabel>
                              <div className="flex items-center gap-4">
@@ -802,7 +801,6 @@ export default function EventFormPage() {
                       )}
                     />
                 </div>
-                {/* User (Assigned) field removed from UI */}
             </CardContent>
 
             <CardFooter className="flex flex-col items-end space-y-4 p-4 border-t flex-shrink-0 bg-background sticky bottom-0">
@@ -915,7 +913,6 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
                         <Skeleton className="h-10 w-full" />
                      </div>
                </div>
-                {/* User (Assigned) field removed from skeleton */}
         </CardContent>
         <CardFooter className="flex justify-end space-x-2 p-4 border-t flex-shrink-0 bg-background sticky bottom-0">
           <Skeleton className="h-10 w-20" />
