@@ -27,7 +27,7 @@ import type {
   CreateEventPayload,
   GetTagValuesFunction,
 } from "@/types/event";
-import type { OtherTag } from "@/types/common";
+import type { OtherTag, SpeakerComponent } from "@/types/common"; // Import SpeakerComponent
 import {
   Select,
   SelectContent,
@@ -54,12 +54,19 @@ import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-sel
 import NextImage from "next/image";
 import { eventFormSchema } from "@/types/event";
 import type { CombinedMediaData, Media } from "@/types/media";
-import TagInputField from "../_components/tag-input-field";
+import TagInputField from "../_components/tag-input-field"; // Keep for Tags
 
 const getTagValues: GetTagValuesFunction = (tagField) => {
   if (!tagField || !Array.isArray(tagField)) return [];
   return tagField.map((t) => t.tag_value).filter(Boolean) as string[];
 };
+
+// Helper to convert SpeakerComponent array to a string for display (if needed, not for form value)
+const getSpeakerNames = (speakers: SpeakerComponent[] | null | undefined): string => {
+  if (!speakers || !Array.isArray(speakers)) return "";
+  return speakers.map(s => s.name || "Unnamed Speaker").join(", ");
+};
+
 
 const getMediaId = (mediaField: Media | null | undefined): number | null => {
   return mediaField?.id ?? null;
@@ -86,7 +93,7 @@ const defaultFormValues: EventFormValues = {
   organizer_name: "",
   poster: null,
   tags: "",
-  speakers: "",
+  speakers: [], // Default to empty array for the new structure
   registration_link: null,
   event_status: "Draft",
   publish_date: null,
@@ -97,8 +104,8 @@ const mockCategories = ["Conference", "Workshop", "Webinar", "Meetup", "Party"];
 
 export default function EventFormPage() {
   const params = useParams();
-  const eventNumericId = params?.id as string | undefined; // This is the numeric ID from URL
-  const isEditing = eventNumericId && eventNumericId !== "new";
+  const eventId = params?.id as string | undefined; // This is the numeric ID from URL
+  const isEditing = eventId && eventId !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
@@ -109,7 +116,7 @@ export default function EventFormPage() {
   const [posterPreview, setPosterPreview] = useState<string | null>(null);
   const [submissionPayloadJson, setSubmissionPayloadJson] = useState<string | null>(null);
 
-  const { data: eventData, isLoading: isLoadingEvent, isError: isErrorEvent, error: errorEvent } = useGetEvent(isEditing ? eventNumericId : null);
+  const { data: eventData, isLoading: isLoadingEvent, isError: isErrorEvent, error: errorEvent } = useGetEvent(isEditing ? eventId : null);
 
   const createMutation = useCreateEvent();
   const updateMutation = useUpdateEvent();
@@ -122,7 +129,7 @@ export default function EventFormPage() {
   const { control, handleSubmit, reset, setValue } = form;
 
   useEffect(() => {
-    console.log("[EventForm] useEffect triggered. isEditing:", isEditing, "isLoadingUser:", isLoadingUser, "isLoadingEvent:", isLoadingEvent, "eventNumericId:", eventNumericId);
+    console.log("[EventForm] useEffect triggered. isEditing:", isEditing, "isLoadingUser:", isLoadingUser, "isLoadingEvent:", isLoadingEvent, "eventId:", eventId);
     
     if (isLoadingUser) {
       console.log("[EventForm] useEffect: User is loading, setting componentIsLoading=true and returning.");
@@ -168,29 +175,37 @@ export default function EventFormPage() {
         }
   
         const fetchedTags = getTagValues(eventData.tags);
-        const fetchedSpeakers = getTagValues(eventData.speakers);
+        // For speakers, we now have an array of objects. We'll pass this directly to the form.
+        // The UI to manage this complex field is not yet built.
+        const fetchedSpeakersArray = eventData.speakers || []; 
         
         newPosterPreview = getMediaUrl(eventData.poster);
         
         let parsedEventDateTime = new Date();
-        if (eventData.event_date_time) {
-          const parsed = parseISO(eventData.event_date_time as string);
+        if (eventData.event_date_time && typeof eventData.event_date_time === 'string') {
+          const parsed = parseISO(eventData.event_date_time);
           if (isValid(parsed)) {
             parsedEventDateTime = parsed;
           } else {
             console.warn(`Invalid event_date_time from API: ${eventData.event_date_time}`);
           }
+        } else if (eventData.event_date_time instanceof Date) {
+            parsedEventDateTime = eventData.event_date_time;
         }
 
+
         let parsedPublishDate = null;
-        if (eventData.publish_date) {
-          const parsed = parseISO(eventData.publish_date as string);
+        if (eventData.publish_date && typeof eventData.publish_date === 'string') {
+          const parsed = parseISO(eventData.publish_date);
            if (isValid(parsed)) {
             parsedPublishDate = parsed;
           } else {
             console.warn(`Invalid publish_date from API: ${eventData.publish_date}`);
           }
+        } else if (eventData.publish_date instanceof Date) {
+            parsedPublishDate = eventData.publish_date;
         }
+
 
         newInitialValues = {
           title: eventData.title || "",
@@ -202,23 +217,25 @@ export default function EventFormPage() {
           organizer_name: eventData.organizer_name || "",
           poster: getMediaId(eventData.poster),
           tags: fetchedTags.join(", "),
-          speakers: fetchedSpeakers.join(", "),
+          speakers: fetchedSpeakersArray, // Pass the array of SpeakerComponent objects
           registration_link: eventData.registration_link || null,
           event_status: eventData.event_status || "Draft",
           publish_date: parsedPublishDate,
-          tenent_id: eventData.tenent_id, // This should be present and match userTenentId
+          tenent_id: eventData.tenent_id, 
         };
         console.log("[EventForm] useEffect: Populated initialValues for editing:", newInitialValues);
-      } else if (!isLoadingEvent && !isErrorEvent) { // eventData is null/undefined but not loading AND no error
-        console.warn("[EventForm] useEffect: Editing mode, eventData is null/undefined, not loading, and no error. Event might not exist or access denied (404/403).");
+      } else if (!isLoadingEvent && !isErrorEvent) { 
+        console.warn("[EventForm] useEffect: Editing mode, but eventData is null/undefined, not loading, and no error. Toasting and redirecting.");
         toast({ variant: "destructive", title: "Event Not Found", description: "The requested event could not be loaded." });
         setComponentIsLoading(false);
         router.push('/dashboard/event');
         return;
       }
     } else { 
-      console.log("[EventForm] useEffect: New event mode. Using defaults and userTenentId.");
-      newInitialValues.tenent_id = userTenentId!; // Should be safe if !isEditing
+      console.log("[EventForm] useEffect: New event mode. Using defaults and userTenentId if available:", userTenentId);
+      if (userTenentId) {
+        newInitialValues.tenent_id = userTenentId;
+      }
     }
     
     console.log("[EventForm] useEffect: Applying states. newPosterPreview:", newPosterPreview);
@@ -228,7 +245,7 @@ export default function EventFormPage() {
     reset(newInitialValues);
     setComponentIsLoading(false);
   
-  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast, eventNumericId]);
+  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast, eventId]);
   
 
   const openMediaSelector = () => setIsMediaSelectorOpen(true);
@@ -263,13 +280,18 @@ export default function EventFormPage() {
         return tagsString ? tagsString.split(",").map(tag => tag.trim()).filter(Boolean).map(val => ({ tag_value: val })) : [];
     };
 
+    // For speakers, data.speakers should already be an array of SpeakerComponent objects
+    // if the form state is managed correctly (though UI is missing).
+    const speakersPayload: SpeakerComponent[] | null = Array.isArray(data.speakers) ? data.speakers : null;
+
+
     const payload: CreateEventPayload = {
       ...data,
       tenent_id: userTenentId,
       event_date_time: data.event_date_time.toISOString(),
       publish_date: data.publish_date ? data.publish_date.toISOString() : null,
       tags: transformTagsToPayload(data.tags),
-      speakers: transformTagsToPayload(data.speakers),
+      speakers: speakersPayload, // Use the directly passed array
       description: data.description || "",
     };
 
@@ -286,8 +308,8 @@ export default function EventFormPage() {
       },
     };
 
-    if (isEditing && eventData?.documentId) { // Use eventData.documentId for update
-      updateMutation.mutate({ documentId: eventData.documentId, event: payload }, options);
+    if (isEditing && eventData?.documentId) { 
+      updateMutation.mutate({ documentId: eventData.documentId, event: payload, numericId: eventId }, options);
     } else if (!isEditing) {
       createMutation.mutate(payload, options);
     } else {
@@ -367,7 +389,7 @@ export default function EventFormPage() {
                       <FormLabel htmlFor="content">Description</FormLabel>
                       <FormControl>
                          <TipTapEditor
-                              key={`event-editor-${eventNumericId || "new"}`}
+                              key={`event-editor-${eventId || "new"}`}
                               content={field.value || "<p></p>"}
                               onContentChange={field.onChange}
                               className="flex-1 min-h-full border border-input rounded-md"
@@ -556,13 +578,25 @@ export default function EventFormPage() {
                     disabled={mutationLoading}
                     description="Optional. Add relevant tags."
                 />
-                 <TagInputField
-                    control={control}
-                    name="speakers"
-                    setValue={setValue}
-                    label="Speakers"
-                    disabled={mutationLoading}
-                    description="Optional. Add event speakers."
+                
+                {/* Placeholder for Speakers UI - to be developed separately */}
+                <FormField
+                  control={control}
+                  name="speakers"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Speakers</FormLabel>
+                      <FormControl>
+                        <div className="p-2 border rounded-md bg-muted/50 min-h-[40px]">
+                          <p className="text-sm text-muted-foreground">
+                            Speakers UI to be implemented. Currently, speakers data (if any) is: {getSpeakerNames(field.value)}
+                          </p>
+                        </div>
+                      </FormControl>
+                      <FormDescription>Optional. Manage event speakers (UI coming soon).</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
 
 
@@ -731,10 +765,12 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
                   <Skeleton className="h-4 w-1/6 mb-1" />
                   <Skeleton className="h-10 w-32" />
               </div>
+              {/* Tags skeleton */}
               <div className="space-y-1.5">
                  <Skeleton className="h-4 w-1/6 mb-1" />
                  <Skeleton className="h-10 w-full" />
               </div>
+              {/* Speakers (placeholder) skeleton */}
               <div className="space-y-1.5">
                  <Skeleton className="h-4 w-1/6 mb-1" />
                  <Skeleton className="h-10 w-full" />

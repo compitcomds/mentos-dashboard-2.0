@@ -1,3 +1,4 @@
+
 // src/types/common.ts
 
 // Based on the user-provided 'Other' interface, renamed for clarity
@@ -15,4 +16,12 @@ export interface Role {
   name: string;
   description: string;
   type: string;
+}
+
+// New Speaker Component Type based on Strapi schema
+export interface SpeakerComponent {
+  id?: number; // Strapi component instances often have an ID when fetched
+  name?: string | null;
+  image?: number | null; // Media ID for the image relation
+  excerpt?: string | null;
 }

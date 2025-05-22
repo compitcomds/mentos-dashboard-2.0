@@ -1,10 +1,18 @@
 
 import { z } from 'zod';
-import type { Media } from './media'; // Import the updated Media type
+import type { Media } from './media';
 import type { User } from './auth';
-import type { OtherTag } from './common'; // Import OtherTag
+import type { OtherTag, SpeakerComponent } from './common'; // Import SpeakerComponent
 
 // --- Zod Schema Definition ---
+
+// Schema for the Speaker component (used in array for speakers field)
+const speakerComponentSchema = z.object({
+  id: z.number().optional(), // ID for existing components
+  name: z.string().min(1, "Speaker name cannot be empty.").optional().nullable(),
+  image: z.number().nullable().optional(), // Media ID
+  excerpt: z.string().optional().nullable(),
+});
 
 // Schema for the Event form validation
 export const eventFormSchema = z.object({
@@ -16,12 +24,12 @@ export const eventFormSchema = z.object({
   location_url: z.string().url({ message: "Invalid Location URL (optional)" }).nullable().optional(),
   organizer_name: z.string().min(1, { message: "Organizer Name is required." }),
   poster: z.number().nullable().optional(), // Media ID for Poster
-  tags: z.string().optional().default(''),
-  speakers: z.string().optional().default(''),
+  tags: z.string().optional().default(''), // Kept as string for TagInputField
+  speakers: z.array(speakerComponentSchema).optional().nullable().default([]), // Array of speaker objects
   registration_link: z.string().url({ message: "Invalid Registration Link" }).nullable().optional(),
   event_status: z.enum(["Draft", "Published"]).default("Draft"),
   publish_date: z.date().nullable().optional(),
-  tenent_id: z.string().optional(), // Will be populated by system
+  tenent_id: z.string(), // Made mandatory as per previous discussions
 });
 
 // Type derived from Zod schema for the form values
@@ -41,7 +49,7 @@ export type CreateEventPayload = {
     organizer_name?: string;
     poster?: number | null; // Media ID
     tags?: OtherTag[];
-    speakers?: OtherTag[];
+    speakers?: SpeakerComponent[] | null; // Array of SpeakerComponent objects
     registration_link?: string | null;
     event_status?: "Draft" | "Published";
     publish_date?: string | null; // Send as ISO string
@@ -51,27 +59,27 @@ export type CreateEventPayload = {
 
 // Represents the actual Event data structure as received from the API
 export interface Event {
-  id?: number; // Numeric ID, primarily for URL routing and some get operations
-  documentId?: string; // String documentId, used for specific API operations like update/delete
+  id?: number;
+  documentId?: string;
   createdAt?: Date | string;
   updatedAt?: Date | string;
-  publishedAt?: Date | string | null; // draftAndPublish: true means this can be null
+  publishedAt?: Date | string | null;
   locale?: string | null;
-  category?: string | null; // from schema (type: "string")
-  title?: string | null; // from schema (type: "string")
-  event_date_time?: Date | string | null; // from schema (type: "datetime")
-  location?: string | null; // from schema (type: "string")
-  location_url?: string | null; // from schema (type: "string")
-  description?: string | null; // from schema (type: "text")
-  poster?: Media | null; // from schema (type: "media")
-  tags?: OtherTag[] | null; // from schema (type: "component", component: "other.tags")
-  speakers?: OtherTag[] | null; // from schema (type: "component", component: "other.tags")
-  registration_link?: string | null; // from schema (type: "string")
-  publish_date?: Date | string | null; // from schema (type: "datetime")
-  tenent_id: string; // from schema (type: "string"), marked as mandatory for our logic
-  organizer_name?: string | null; // from schema (type: "string")
-  event_status?: "Draft" | "Published" | null; // from schema (type: "enumeration")
-  user?: User | null; // from schema (type: "relation")
+  category?: string | null;
+  title?: string | null;
+  event_date_time?: Date | string | null;
+  location?: string | null;
+  location_url?: string | null;
+  description?: string | null;
+  poster?: Media | null;
+  tags?: OtherTag[] | null;
+  speakers?: SpeakerComponent[] | null; // Updated to SpeakerComponent array
+  registration_link?: string | null;
+  publish_date?: Date | string | null;
+  tenent_id: string; // Keep mandatory based on prior discussion
+  organizer_name?: string | null;
+  event_status?: "Draft" | "Published" | null;
+  user?: User | null;
 };
 
 
