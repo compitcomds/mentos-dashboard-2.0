@@ -25,6 +25,7 @@ import type {
   Event,
   EventFormValues,
   CreateEventPayload,
+  SpeakerFormSchemaValues, // Import the new type for form speaker
 } from "@/types/event";
 import type { OtherTag, SpeakerComponent as ApiSpeakerComponent } from "@/types/common"; // Renamed to avoid conflict
 import {
@@ -55,9 +56,6 @@ import { eventFormSchema } from "@/types/event";
 import type { CombinedMediaData, Media } from "@/types/media";
 import TagInputField from "../_components/tag-input-field";
 import { Textarea } from "@/components/ui/textarea"; // Import Textarea
-
-// Renamed to avoid conflict with the form's Speaker type
-// export type { SpeakerComponent as ApiSpeakerComponent } from "@/types/common";
 
 
 const getTagValues = (tagField: OtherTag[] | null | undefined): string[] => {
@@ -102,8 +100,8 @@ const mockCategories = ["Conference", "Workshop", "Webinar", "Meetup", "Party"];
 
 export default function EventFormPage() {
   const params = useParams();
-  const eventId = params?.id as string | undefined;
-  const isEditing = eventId && eventId !== "new";
+  const eventNumericId = params?.id as string | undefined; // This is the numeric ID from URL
+  const isEditing = eventNumericId && eventNumericId !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
@@ -119,7 +117,7 @@ export default function EventFormPage() {
   const [currentMediaTarget, setCurrentMediaTarget] = useState<'poster' | { type: 'speaker'; index: number } | null>(null);
 
 
-  const { data: eventData, isLoading: isLoadingEvent, isError: isErrorEvent, error: errorEvent } = useGetEvent(isEditing ? eventId : null);
+  const { data: eventData, isLoading: isLoadingEvent, isError: isErrorEvent, error: errorEvent } = useGetEvent(isEditing ? eventNumericId : null);
 
   const createMutation = useCreateEvent();
   const updateMutation = useUpdateEvent();
@@ -138,7 +136,7 @@ export default function EventFormPage() {
 
 
   useEffect(() => {
-    console.log("[EventForm] useEffect triggered. isEditing:", isEditing, "isLoadingUser:", isLoadingUser, "isLoadingEvent:", isLoadingEvent, "eventId:", eventId);
+    console.log("[EventForm] useEffect triggered. isEditing:", isEditing, "isLoadingUser:", isLoadingUser, "isLoadingEvent:", isLoadingEvent, "eventNumericId:", eventNumericId);
     
     if (isLoadingUser) {
       console.log("[EventForm] useEffect: User is loading, setting componentIsLoading=true and returning.");
@@ -158,13 +156,13 @@ export default function EventFormPage() {
     let newPosterPreview: string | null = null;
   
     if (isEditing) {
-      console.log("[EventForm] useEffect: Editing mode. isLoadingEvent:", isLoadingEvent, "isErrorEvent:", isErrorEvent);
+      console.log("[EventForm] useEffect (Edit Mode): isLoadingEvent:", isLoadingEvent, "isErrorEvent:", isErrorEvent, "eventData:", eventData);
       if (isLoadingEvent) {
         setComponentIsLoading(true);
         return; 
       }
       if (isErrorEvent) {
-        console.error("[EventForm] useEffect: Error loading event data.", errorEvent);
+        console.error("[EventForm] useEffect (Edit Mode): Error loading event data.", errorEvent);
         toast({ variant: "destructive", title: "Error Loading Event", description: errorEvent?.message || "Could not load event details." });
         setComponentIsLoading(false);
         router.push('/dashboard/event');
@@ -173,7 +171,7 @@ export default function EventFormPage() {
   
       if (eventData) { 
         if (eventData.tenent_id !== userTenentId) {
-          console.error("[EventForm] useEffect: Authorization Error - User tenent_id does not match event tenent_id.");
+          console.error("[EventForm] useEffect (Edit Mode): Authorization Error - User tenent_id does not match event tenent_id.");
           toast({ variant: "destructive", title: "Authorization Error", description: "You are not authorized to edit this event." });
           setComponentIsLoading(false);
           router.push('/dashboard/event');
@@ -181,15 +179,16 @@ export default function EventFormPage() {
         }
   
         const fetchedTags = getTagValues(eventData.tags);
-        const formSpeakers = (eventData.speakers || []).map(speaker => ({
-            id: speaker.id, // Keep the Strapi component ID if present
-            name: speaker.name || "",
-            image_id: getMediaId(speaker.image),
-            image_preview_url: getMediaUrl(speaker.image),
-            excerpt: speaker.excerpt || ""
+        // Map API speakers to form speakers
+        const formSpeakers: SpeakerFormSchemaValues[] = (eventData.speakers || []).map(apiSpeaker => ({
+            id: apiSpeaker.id, // Strapi component ID
+            name: apiSpeaker.name || "",
+            image_id: getMediaId(apiSpeaker.image as Media | null), // Assuming apiSpeaker.image is populated Media
+            image_preview_url: getMediaUrl(apiSpeaker.image as Media | null),
+            excerpt: apiSpeaker.excerpt || ""
         }));
         
-        newPosterPreview = getMediaUrl(eventData.poster);
+        newPosterPreview = getMediaUrl(eventData.poster as Media | null);
         
         let parsedEventDateTime = new Date();
         if (eventData.event_date_time && typeof eventData.event_date_time === 'string') {
@@ -215,7 +214,7 @@ export default function EventFormPage() {
           location: eventData.location || "",
           location_url: eventData.location_url || null,
           organizer_name: eventData.organizer_name || "",
-          poster: getMediaId(eventData.poster),
+          poster: getMediaId(eventData.poster as Media | null),
           tags: fetchedTags.join(", "),
           speakers: formSpeakers,
           registration_link: eventData.registration_link || null,
@@ -225,7 +224,7 @@ export default function EventFormPage() {
           user: eventData.user?.id ?? currentUserId ?? null,
         };
       } else if (!isLoadingEvent && !isErrorEvent) { 
-        console.warn("[EventForm] useEffect: Editing mode, but eventData is null/undefined, not loading, and no error. Toasting and redirecting.", {isEditing, eventId, isLoadingEvent, eventData});
+        console.warn("[EventForm] useEffect: Editing mode, but eventData is null/undefined, not loading, and no error. Toasting and redirecting.", {isEditing, eventNumericId, isLoadingEvent, eventData, isErrorEvent, errorEvent});
         toast({ variant: "destructive", title: "Event Not Found", description: "The requested event could not be loaded." });
         setComponentIsLoading(false);
         router.push('/dashboard/event');
@@ -233,11 +232,12 @@ export default function EventFormPage() {
       }
     }
     
+    console.log("[EventForm] useEffect: Resetting form with initialValues:", newInitialValues);
     setPosterPreview(newPosterPreview);
     reset(newInitialValues);
     setComponentIsLoading(false);
   
-  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast, eventId, currentUserId]);
+  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast, eventNumericId, currentUserId]);
   
 
   const openMediaSelector = (target: 'poster' | { type: 'speaker'; index: number }) => {
@@ -247,25 +247,34 @@ export default function EventFormPage() {
 
   const handleMediaSelect = useCallback(
     (selectedMediaItem: CombinedMediaData) => {
-      if (!currentMediaTarget || !selectedMediaItem || typeof selectedMediaItem.fileId !== 'number') {
-        toast({ variant: "destructive", title: "Error", description: "Media target or selected media ID missing or invalid." });
+      if (!currentMediaTarget || !selectedMediaItem ) { // Removed fileId check here as it might be null
+        toast({ variant: "destructive", title: "Error", description: "Media target or selected media item missing." });
         setIsMediaSelectorOpen(false);
         return;
       }
 
-      const fileId = selectedMediaItem.fileId;
+      const fileIdToSet = selectedMediaItem.fileId; // This can be null if media item has no file linked
       const previewUrl = selectedMediaItem.thumbnailUrl || selectedMediaItem.fileUrl;
+
+      // Check if a fileId is actually present if required by the context
+      if (typeof fileIdToSet !== 'number' && fileIdToSet !== null) {
+          toast({ variant: "destructive", title: "Error", description: "Selected media item ID is invalid or missing." });
+          setIsMediaSelectorOpen(false);
+          return;
+      }
+
 
       if (selectedMediaItem.mime?.startsWith("image/")) {
         if (currentMediaTarget === 'poster') {
-          setValue("poster", fileId, { shouldValidate: true });
+          setValue("poster", fileIdToSet, { shouldValidate: true });
           setPosterPreview(previewUrl);
-          toast({ title: "Poster Image Selected", description: `Set poster to image ID: ${fileId}` });
+          toast({ title: "Poster Image Selected", description: `Set poster to image ID: ${fileIdToSet}` });
         } else if (typeof currentMediaTarget === 'object' && currentMediaTarget.type === 'speaker') {
           const speakerIndex = currentMediaTarget.index;
-          setValue(`speakers.${speakerIndex}.image_id`, fileId, { shouldValidate: true });
+          console.log(`[EventForm handleMediaSelect] For speaker ${speakerIndex}, fileIdToSet from dialog:`, fileIdToSet); // DEBUG LINE
+          setValue(`speakers.${speakerIndex}.image_id`, fileIdToSet, { shouldValidate: true });
           setValue(`speakers.${speakerIndex}.image_preview_url`, previewUrl, { shouldValidate: true });
-          toast({ title: `Speaker ${speakerIndex + 1} Image Selected`, description: `Image ID: ${fileId}` });
+          toast({ title: `Speaker ${speakerIndex + 1} Image Selected`, description: `Image ID: ${fileIdToSet}` });
         }
       } else {
         toast({ variant: "destructive", title: "Invalid File Type", description: "Please select an image file." });
@@ -288,6 +297,8 @@ export default function EventFormPage() {
   };
 
   const onSubmit: SubmitHandler<EventFormValues> = async (data) => {
+    console.log("[EventForm onSubmit] Form data received:", JSON.stringify(data, null, 2)); // DEBUG: Log all form data
+
     if (!userTenentId) {
       toast({ variant: "destructive", title: "Error", description: "User tenent_id is missing. Cannot submit." });
       return;
@@ -297,12 +308,17 @@ export default function EventFormPage() {
         return tagsString ? tagsString.split(",").map(tag => tag.trim()).filter(Boolean).map(val => ({ tag_value: val })) : [];
     };
     
-    const transformedSpeakers: ApiSpeakerComponent[] | null = data.speakers ? data.speakers.map(speaker => ({
-        id: speaker.id, // Pass Strapi ID if present (for updates)
-        name: speaker.name || null,
-        image: speaker.image_id || null, // Use image_id which holds the Media ID
-        excerpt: speaker.excerpt || null,
-    })) : null;
+    // Map form speakers (SpeakerFormSchemaValues[]) to payload speakers (ApiSpeakerComponent[])
+    const transformedSpeakers: ApiSpeakerComponent[] | null = data.speakers ? data.speakers.map(formSpeaker => {
+        console.log(`[EventForm onSubmit] Mapping speaker from form data:`, JSON.stringify(formSpeaker, null, 2)); // DEBUG LINE
+        console.log(`[EventForm onSubmit] Speaker image_id from form data being mapped:`, formSpeaker.image_id); // DEBUG LINE
+        return {
+            id: formSpeaker.id, // Pass Strapi component ID if present (for updates)
+            name: formSpeaker.name || null,
+            image: formSpeaker.image_id || null, // This is the critical mapping
+            excerpt: formSpeaker.excerpt || null,
+        };
+    }) : null;
 
 
     const payload: CreateEventPayload = {
@@ -317,6 +333,8 @@ export default function EventFormPage() {
     };
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
+    console.log("[EventForm onSubmit] Final payload to be sent:", JSON.stringify(payload, null, 2));
+
 
     const options = {
       onSuccess: () => {
@@ -408,7 +426,7 @@ export default function EventFormPage() {
                       <FormLabel htmlFor="content">Description</FormLabel>
                       <FormControl>
                          <TipTapEditor
-                              key={`event-editor-${eventId || "new"}`}
+                              key={`event-editor-${eventNumericId || "new"}`}
                               content={field.value || "<p></p>"}
                               onContentChange={field.onChange}
                               className="flex-1 min-h-full border border-input rounded-md"
@@ -601,9 +619,9 @@ export default function EventFormPage() {
                 {/* Speakers Field Array UI */}
                 <div className="space-y-4">
                   <Label>Speakers</Label>
-                  {speakerFields.map((speaker, index) => (
-                    <Card key={speaker.id} className="p-4 space-y-3 bg-muted/50">
-                      <div className="flex justify-between items-center">
+                  {speakerFields.map((speakerItem, index) => (
+                    <Card key={speakerItem.id} className="p-4 space-y-3 bg-muted/50">
+                       <div className="flex justify-between items-center">
                         <h4 className="font-medium text-sm">Speaker {index + 1}</h4>
                         <Button
                           type="button"
@@ -616,8 +634,7 @@ export default function EventFormPage() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-
-                      <FormField
+                       <FormField
                         control={control}
                         name={`speakers.${index}.name`}
                         render={({ field }) => (
@@ -630,14 +647,13 @@ export default function EventFormPage() {
                           </FormItem>
                         )}
                       />
-
-                      <FormField
+                       <FormField
                         control={control}
-                        name={`speakers.${index}.image_id`}
-                        render={({ field }) => (
+                        name={`speakers.${index}.image_id`} // Connects to form state for image ID
+                        render={({ field }) => ( // field.value here is speakers[index].image_id
                           <FormItem>
                             <FormLabel className="text-xs">Image</FormLabel>
-                            <div className="flex items-center gap-4">
+                             <div className="flex items-center gap-4">
                               <Button
                                 type="button"
                                 variant="outline"
@@ -646,9 +662,9 @@ export default function EventFormPage() {
                                 disabled={mutationLoading}
                               >
                                 <ImageIcon className="mr-2 h-3.5 w-3.5" />
-                                {watch(`speakers.${index}.image_preview_url`) ? "Change Image" : "Select Image"}
+                                 {watch(`speakers.${index}.image_preview_url`) ? "Change Image" : "Select Image"}
                               </Button>
-                              {watch(`speakers.${index}.image_preview_url`) && (
+                               {watch(`speakers.${index}.image_preview_url`) && (
                                 <div className="relative group">
                                   <div className="relative w-12 h-12 rounded-md border overflow-hidden">
                                     <NextImage
@@ -677,8 +693,7 @@ export default function EventFormPage() {
                           </FormItem>
                         )}
                       />
-                      
-                      <FormField
+                       <FormField
                         control={control}
                         name={`speakers.${index}.excerpt`}
                         render={({ field }) => (
@@ -786,23 +801,24 @@ export default function EventFormPage() {
                  <FormField
                     control={control}
                     name="user"
-                    render={({ field }) => (
+                    render={({ field }) => ( // field.value here is the user ID
                         <FormItem>
                             <FormLabel>User (Assigned)</FormLabel>
                             <FormControl>
                                 <Input
-                                    value={
+                                    value={ // Display logic based on context
                                         isEditing && eventData?.user?.username
-                                            ? eventData.user.username
+                                            ? eventData.user.username // Show existing event's user
                                             : !isEditing && currentUser?.username
-                                            ? currentUser.username
-                                            : 'N/A'
+                                            ? currentUser.username // Show current user for new event
+                                            : 'N/A' // Fallback
                                     }
-                                    disabled // This field is for display, ID is managed in state
+                                    disabled // This field is for display; ID is managed in RHF state
                                 />
                             </FormControl>
+                             <input type="hidden" {...field} value={field.value ?? ""} />
                             <FormDescription>
-                                This event will be associated with {isEditing && eventData?.user ? 'the displayed user' : 'the current user'}.
+                                This event will be associated with {isEditing && eventData?.user ? `the user: ${eventData.user.username}` : `the current user: ${currentUser?.username || 'N/A'}`}.
                             </FormDescription>
                             <FormMessage />
                         </FormItem>
@@ -921,6 +937,10 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
                         <Skeleton className="h-10 w-full" />
                      </div>
                </div>
+                 <div className="space-y-1.5">
+                     <Skeleton className="h-4 w-1/4 mb-1" />
+                     <Skeleton className="h-10 w-full" />
+                 </div>
         </CardContent>
         <CardFooter className="flex justify-end space-x-2 p-4 border-t flex-shrink-0 bg-background sticky bottom-0">
           <Skeleton className="h-10 w-20" />
@@ -931,3 +951,5 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
   );
 }
 
+
+    
