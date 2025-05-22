@@ -11,12 +11,12 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Keep Label
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
-import { useForm, SubmitHandler, Controller } from "react-hook-form";
+import { useForm, SubmitHandler, Controller, useFieldArray } from "react-hook-form"; // Added useFieldArray
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
 import TipTapEditor from "@/components/ui/tiptap";
@@ -25,9 +25,8 @@ import type {
   Event,
   EventFormValues,
   CreateEventPayload,
-  GetTagValuesFunction,
 } from "@/types/event";
-import type { OtherTag, SpeakerComponent } from "@/types/common"; // Import SpeakerComponent
+import type { OtherTag, SpeakerComponent as ApiSpeakerComponent } from "@/types/common"; // Renamed to avoid conflict
 import {
   Select,
   SelectContent,
@@ -45,28 +44,26 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon as CalendarIconLucide, Loader2, X, Image as ImageIcon } from "lucide-react";
+import { CalendarIcon as CalendarIconLucide, Loader2, X, Image as ImageIcon, PlusCircle, Trash2 } from "lucide-react"; // Added PlusCircle, Trash2
 import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO, isValid } from "date-fns";
 import { useCreateEvent, useGetEvent, useUpdateEvent } from "@/lib/queries/event";
 import { useCurrentUser } from "@/lib/queries/user";
 import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
-import NextImage from "next/image";
+import NextImage from "next/image"; // Keep NextImage
 import { eventFormSchema } from "@/types/event";
 import type { CombinedMediaData, Media } from "@/types/media";
-import TagInputField from "../_components/tag-input-field"; // Keep for Tags
+import TagInputField from "../_components/tag-input-field";
+import { Textarea } from "@/components/ui/textarea"; // Import Textarea
 
-const getTagValues: GetTagValuesFunction = (tagField) => {
+// Renamed to avoid conflict with the form's Speaker type
+// export type { SpeakerComponent as ApiSpeakerComponent } from "@/types/common";
+
+
+const getTagValues = (tagField: OtherTag[] | null | undefined): string[] => {
   if (!tagField || !Array.isArray(tagField)) return [];
-  return tagField.map((t) => t.tag_value).filter(Boolean) as string[];
+  return tagField.map((t) => t.tag_value || "").filter(Boolean);
 };
-
-// Helper to convert SpeakerComponent array to a string for display (if needed, not for form value)
-const getSpeakerNames = (speakers: SpeakerComponent[] | null | undefined): string => {
-  if (!speakers || !Array.isArray(speakers)) return "";
-  return speakers.map(s => s.name || "Unnamed Speaker").join(", ");
-};
-
 
 const getMediaId = (mediaField: Media | null | undefined): number | null => {
   return mediaField?.id ?? null;
@@ -93,28 +90,34 @@ const defaultFormValues: EventFormValues = {
   organizer_name: "",
   poster: null,
   tags: "",
-  speakers: [], // Default to empty array for the new structure
+  speakers: [],
   registration_link: null,
   event_status: "Draft",
   publish_date: null,
   tenent_id: '',
+  user: null,
 };
 
 const mockCategories = ["Conference", "Workshop", "Webinar", "Meetup", "Party"];
 
 export default function EventFormPage() {
   const params = useParams();
-  const eventId = params?.id as string | undefined; // This is the numeric ID from URL
+  const eventId = params?.id as string | undefined;
   const isEditing = eventId && eventId !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
+  const currentUserId = currentUser?.id;
+
 
   const [componentIsLoading, setComponentIsLoading] = useState(true);
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
   const [posterPreview, setPosterPreview] = useState<string | null>(null);
   const [submissionPayloadJson, setSubmissionPayloadJson] = useState<string | null>(null);
+
+  const [currentMediaTarget, setCurrentMediaTarget] = useState<'poster' | { type: 'speaker'; index: number } | null>(null);
+
 
   const { data: eventData, isLoading: isLoadingEvent, isError: isErrorEvent, error: errorEvent } = useGetEvent(isEditing ? eventId : null);
 
@@ -126,7 +129,13 @@ export default function EventFormPage() {
     defaultValues: defaultFormValues,
   });
 
-  const { control, handleSubmit, reset, setValue } = form;
+  const { control, handleSubmit, reset, setValue, watch } = form;
+
+  const { fields: speakerFields, append: appendSpeaker, remove: removeSpeaker } = useFieldArray({
+    control,
+    name: "speakers",
+  });
+
 
   useEffect(() => {
     console.log("[EventForm] useEffect triggered. isEditing:", isEditing, "isLoadingUser:", isLoadingUser, "isLoadingEvent:", isLoadingEvent, "eventId:", eventId);
@@ -145,13 +154,12 @@ export default function EventFormPage() {
       return;
     }
   
-    let newInitialValues: EventFormValues = { ...defaultFormValues, tenent_id: userTenentId || '' };
+    let newInitialValues: EventFormValues = { ...defaultFormValues, tenent_id: userTenentId || '', user: currentUserId || null };
     let newPosterPreview: string | null = null;
   
     if (isEditing) {
       console.log("[EventForm] useEffect: Editing mode. isLoadingEvent:", isLoadingEvent, "isErrorEvent:", isErrorEvent);
       if (isLoadingEvent) {
-        console.log("[EventForm] useEffect: Editing mode, eventData is loading. Waiting...");
         setComponentIsLoading(true);
         return; 
       }
@@ -163,9 +171,7 @@ export default function EventFormPage() {
         return;
       }
   
-      console.log("[EventForm] useEffect: Checking conditions for existing event...", "isEditing:", isEditing, "eventData:", eventData, "isLoadingEvent:", isLoadingEvent);
       if (eventData) { 
-        console.log("[EventForm] useEffect: Editing mode, eventData present:", eventData);
         if (eventData.tenent_id !== userTenentId) {
           console.error("[EventForm] useEffect: Authorization Error - User tenent_id does not match event tenent_id.");
           toast({ variant: "destructive", title: "Authorization Error", description: "You are not authorized to edit this event." });
@@ -175,37 +181,31 @@ export default function EventFormPage() {
         }
   
         const fetchedTags = getTagValues(eventData.tags);
-        // For speakers, we now have an array of objects. We'll pass this directly to the form.
-        // The UI to manage this complex field is not yet built.
-        const fetchedSpeakersArray = eventData.speakers || []; 
+        const formSpeakers = (eventData.speakers || []).map(speaker => ({
+            id: speaker.id, // Keep the Strapi component ID if present
+            name: speaker.name || "",
+            image_id: getMediaId(speaker.image),
+            image_preview_url: getMediaUrl(speaker.image),
+            excerpt: speaker.excerpt || ""
+        }));
         
         newPosterPreview = getMediaUrl(eventData.poster);
         
         let parsedEventDateTime = new Date();
         if (eventData.event_date_time && typeof eventData.event_date_time === 'string') {
           const parsed = parseISO(eventData.event_date_time);
-          if (isValid(parsed)) {
-            parsedEventDateTime = parsed;
-          } else {
-            console.warn(`Invalid event_date_time from API: ${eventData.event_date_time}`);
-          }
+          if (isValid(parsed)) parsedEventDateTime = parsed;
         } else if (eventData.event_date_time instanceof Date) {
             parsedEventDateTime = eventData.event_date_time;
         }
 
-
         let parsedPublishDate = null;
         if (eventData.publish_date && typeof eventData.publish_date === 'string') {
           const parsed = parseISO(eventData.publish_date);
-           if (isValid(parsed)) {
-            parsedPublishDate = parsed;
-          } else {
-            console.warn(`Invalid publish_date from API: ${eventData.publish_date}`);
-          }
+           if (isValid(parsed)) parsedPublishDate = parsed;
         } else if (eventData.publish_date instanceof Date) {
             parsedPublishDate = eventData.publish_date;
         }
-
 
         newInitialValues = {
           title: eventData.title || "",
@@ -217,57 +217,74 @@ export default function EventFormPage() {
           organizer_name: eventData.organizer_name || "",
           poster: getMediaId(eventData.poster),
           tags: fetchedTags.join(", "),
-          speakers: fetchedSpeakersArray, // Pass the array of SpeakerComponent objects
+          speakers: formSpeakers,
           registration_link: eventData.registration_link || null,
           event_status: eventData.event_status || "Draft",
           publish_date: parsedPublishDate,
           tenent_id: eventData.tenent_id, 
+          user: eventData.user?.id ?? currentUserId ?? null,
         };
-        console.log("[EventForm] useEffect: Populated initialValues for editing:", newInitialValues);
       } else if (!isLoadingEvent && !isErrorEvent) { 
-        console.warn("[EventForm] useEffect: Editing mode, but eventData is null/undefined, not loading, and no error. Toasting and redirecting.");
+        console.warn("[EventForm] useEffect: Editing mode, but eventData is null/undefined, not loading, and no error. Toasting and redirecting.", {isEditing, eventId, isLoadingEvent, eventData});
         toast({ variant: "destructive", title: "Event Not Found", description: "The requested event could not be loaded." });
         setComponentIsLoading(false);
         router.push('/dashboard/event');
         return;
       }
-    } else { 
-      console.log("[EventForm] useEffect: New event mode. Using defaults and userTenentId if available:", userTenentId);
-      if (userTenentId) {
-        newInitialValues.tenent_id = userTenentId;
-      }
     }
     
-    console.log("[EventForm] useEffect: Applying states. newPosterPreview:", newPosterPreview);
     setPosterPreview(newPosterPreview);
-    
-    console.log("[EventForm] useEffect: Resetting form with final initialValues:", newInitialValues);
     reset(newInitialValues);
     setComponentIsLoading(false);
   
-  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast, eventId]);
+  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast, eventId, currentUserId]);
   
 
-  const openMediaSelector = () => setIsMediaSelectorOpen(true);
+  const openMediaSelector = (target: 'poster' | { type: 'speaker'; index: number }) => {
+    setCurrentMediaTarget(target);
+    setIsMediaSelectorOpen(true);
+  };
 
   const handleMediaSelect = useCallback(
     (selectedMediaItem: CombinedMediaData) => {
-      if (selectedMediaItem && typeof selectedMediaItem.fileId === 'number') { 
-        const fileId = selectedMediaItem.fileId;
-        const previewUrl = selectedMediaItem.thumbnailUrl || selectedMediaItem.fileUrl;
-        setValue("poster", fileId, { shouldValidate: true });
-        setPosterPreview(previewUrl);
-        toast({ title: "Poster Image Selected", description: `Set poster to image ID: ${fileId}` });
-      } else {
-        toast({ variant: "destructive", title: "Error", description: "Media selection failed or file ID missing/invalid." });
+      if (!currentMediaTarget || !selectedMediaItem || typeof selectedMediaItem.fileId !== 'number') {
+        toast({ variant: "destructive", title: "Error", description: "Media target or selected media ID missing or invalid." });
+        setIsMediaSelectorOpen(false);
+        return;
       }
+
+      const fileId = selectedMediaItem.fileId;
+      const previewUrl = selectedMediaItem.thumbnailUrl || selectedMediaItem.fileUrl;
+
+      if (selectedMediaItem.mime?.startsWith("image/")) {
+        if (currentMediaTarget === 'poster') {
+          setValue("poster", fileId, { shouldValidate: true });
+          setPosterPreview(previewUrl);
+          toast({ title: "Poster Image Selected", description: `Set poster to image ID: ${fileId}` });
+        } else if (typeof currentMediaTarget === 'object' && currentMediaTarget.type === 'speaker') {
+          const speakerIndex = currentMediaTarget.index;
+          setValue(`speakers.${speakerIndex}.image_id`, fileId, { shouldValidate: true });
+          setValue(`speakers.${speakerIndex}.image_preview_url`, previewUrl, { shouldValidate: true });
+          toast({ title: `Speaker ${speakerIndex + 1} Image Selected`, description: `Image ID: ${fileId}` });
+        }
+      } else {
+        toast({ variant: "destructive", title: "Invalid File Type", description: "Please select an image file." });
+      }
+
       setIsMediaSelectorOpen(false);
-    }, [setValue, toast]
+      setCurrentMediaTarget(null);
+    },
+    [currentMediaTarget, setValue, toast]
   );
 
   const removePosterImage = () => {
     setValue("poster", null, { shouldValidate: true });
     setPosterPreview(null);
+  };
+
+  const removeSpeakerImage = (index: number) => {
+    setValue(`speakers.${index}.image_id`, null, { shouldValidate: true });
+    setValue(`speakers.${index}.image_preview_url`, null, { shouldValidate: true });
   };
 
   const onSubmit: SubmitHandler<EventFormValues> = async (data) => {
@@ -279,19 +296,23 @@ export default function EventFormPage() {
     const transformTagsToPayload = (tagsString: string | undefined): OtherTag[] => {
         return tagsString ? tagsString.split(",").map(tag => tag.trim()).filter(Boolean).map(val => ({ tag_value: val })) : [];
     };
-
-    // For speakers, data.speakers should already be an array of SpeakerComponent objects
-    // if the form state is managed correctly (though UI is missing).
-    const speakersPayload: SpeakerComponent[] | null = Array.isArray(data.speakers) ? data.speakers : null;
+    
+    const transformedSpeakers: ApiSpeakerComponent[] | null = data.speakers ? data.speakers.map(speaker => ({
+        id: speaker.id, // Pass Strapi ID if present (for updates)
+        name: speaker.name || null,
+        image: speaker.image_id || null, // Use image_id which holds the Media ID
+        excerpt: speaker.excerpt || null,
+    })) : null;
 
 
     const payload: CreateEventPayload = {
       ...data,
       tenent_id: userTenentId,
+      user: data.user ?? currentUserId ?? null,
       event_date_time: data.event_date_time.toISOString(),
       publish_date: data.publish_date ? data.publish_date.toISOString() : null,
       tags: transformTagsToPayload(data.tags),
-      speakers: speakersPayload, // Use the directly passed array
+      speakers: transformedSpeakers,
       description: data.description || "",
     };
 
@@ -303,18 +324,16 @@ export default function EventFormPage() {
         router.push("/dashboard/event");
       },
       onError: (err: any) => {
-        // Toast for error is handled by the mutation hook
         setSubmissionPayloadJson(`Error: ${err.message}\n\n${JSON.stringify(err.response?.data || err, null, 2)}`);
       },
     };
 
     if (isEditing && eventData?.documentId) { 
-      updateMutation.mutate({ documentId: eventData.documentId, event: payload, numericId: eventId }, options);
+      updateMutation.mutate({ documentId: eventData.documentId, event: payload }, options);
     } else if (!isEditing) {
       createMutation.mutate(payload, options);
     } else {
         toast({ variant: "destructive", title: "Error", description: "Cannot update event: Event documentId is missing." });
-        console.error("Update error: eventData or eventData.documentId is missing.", eventData);
     }
   };
 
@@ -532,7 +551,7 @@ export default function EventFormPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={openMediaSelector}
+                            onClick={() => openMediaSelector('poster')}
                             disabled={mutationLoading}
                           >
                             <ImageIcon className="mr-2 h-4 w-4" />
@@ -579,25 +598,112 @@ export default function EventFormPage() {
                     description="Optional. Add relevant tags."
                 />
                 
-                {/* Placeholder for Speakers UI - to be developed separately */}
-                <FormField
-                  control={control}
-                  name="speakers"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Speakers</FormLabel>
-                      <FormControl>
-                        <div className="p-2 border rounded-md bg-muted/50 min-h-[40px]">
-                          <p className="text-sm text-muted-foreground">
-                            Speakers UI to be implemented. Currently, speakers data (if any) is: {getSpeakerNames(field.value)}
-                          </p>
-                        </div>
-                      </FormControl>
-                      <FormDescription>Optional. Manage event speakers (UI coming soon).</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Speakers Field Array UI */}
+                <div className="space-y-4">
+                  <Label>Speakers</Label>
+                  {speakerFields.map((speaker, index) => (
+                    <Card key={speaker.id} className="p-4 space-y-3 bg-muted/50">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium text-sm">Speaker {index + 1}</h4>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeSpeaker(index)}
+                          disabled={mutationLoading}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <FormField
+                        control={control}
+                        name={`speakers.${index}.name`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Speaker Name" {...field} disabled={mutationLoading} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={control}
+                        name={`speakers.${index}.image_id`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Image</FormLabel>
+                            <div className="flex items-center gap-4">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openMediaSelector({ type: 'speaker', index })}
+                                disabled={mutationLoading}
+                              >
+                                <ImageIcon className="mr-2 h-3.5 w-3.5" />
+                                {watch(`speakers.${index}.image_preview_url`) ? "Change Image" : "Select Image"}
+                              </Button>
+                              {watch(`speakers.${index}.image_preview_url`) && (
+                                <div className="relative group">
+                                  <div className="relative w-12 h-12 rounded-md border overflow-hidden">
+                                    <NextImage
+                                      src={watch(`speakers.${index}.image_preview_url`)!}
+                                      alt={`Speaker ${index + 1} preview`}
+                                      fill
+                                      sizes="48px"
+                                      className="object-cover"
+                                      unoptimized
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="icon"
+                                    className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => removeSpeakerImage(index)}
+                                    disabled={mutationLoading}
+                                  >
+                                    <X className="h-2.5 w-2.5" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={control}
+                        name={`speakers.${index}.excerpt`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Excerpt/Bio</FormLabel>
+                            <FormControl>
+                              <Textarea placeholder="Short bio or topic (optional)" {...field} rows={2} disabled={mutationLoading} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </Card>
+                  ))}
+                  <Button
+                    type="button"
+                    onClick={() => appendSpeaker({ name: "", image_id: null, image_preview_url: null, excerpt: "", id: undefined })}
+                    variant="outline"
+                    className="mt-2"
+                    disabled={mutationLoading}
+                  >
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add Speaker
+                  </Button>
+                   <FormDescription>Optional. Add event speakers.</FormDescription>
+                </div>
 
 
                  <FormField
@@ -677,6 +783,31 @@ export default function EventFormPage() {
                       )}
                     />
                 </div>
+                 <FormField
+                    control={control}
+                    name="user"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>User (Assigned)</FormLabel>
+                            <FormControl>
+                                <Input
+                                    value={
+                                        isEditing && eventData?.user?.username
+                                            ? eventData.user.username
+                                            : !isEditing && currentUser?.username
+                                            ? currentUser.username
+                                            : 'N/A'
+                                    }
+                                    disabled // This field is for display, ID is managed in state
+                                />
+                            </FormControl>
+                            <FormDescription>
+                                This event will be associated with {isEditing && eventData?.user ? 'the displayed user' : 'the current user'}.
+                            </FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                  />
 
             </CardContent>
 
@@ -770,10 +901,11 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
                  <Skeleton className="h-4 w-1/6 mb-1" />
                  <Skeleton className="h-10 w-full" />
               </div>
-              {/* Speakers (placeholder) skeleton */}
-              <div className="space-y-1.5">
-                 <Skeleton className="h-4 w-1/6 mb-1" />
-                 <Skeleton className="h-10 w-full" />
+              {/* Speakers skeleton */}
+              <div className="space-y-4">
+                <Skeleton className="h-4 w-1/6 mb-1" />
+                <Skeleton className="h-24 w-full" /> {/* Placeholder for one speaker item */}
+                <Skeleton className="h-10 w-32" /> {/* Add Speaker button */}
               </div>
                <div className="space-y-1.5">
                    <Skeleton className="h-4 w-1/4 mb-1" />
@@ -798,3 +930,4 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
+
