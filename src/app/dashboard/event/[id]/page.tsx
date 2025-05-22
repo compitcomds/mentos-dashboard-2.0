@@ -178,7 +178,6 @@ export default function EventFormPage() {
 
       const fetchedTags = getTagValues(eventData.tags);
       const formSpeakers: SpeakerFormSchemaValues[] = (eventData.speakers || []).map(apiSpeaker => ({
-          id: apiSpeaker.id,
           name: apiSpeaker.name || "",
           image_id: getMediaId(apiSpeaker.image as Media | null),
           image_preview_url: getMediaUrl(apiSpeaker.image as Media | null),
@@ -636,7 +635,7 @@ export default function EventFormPage() {
                                 <FormItem>
                                 <FormLabel className="text-xs">Name</FormLabel>
                                 <FormControl>
-                                    <Input placeholder="Speaker Name" {...field} disabled={mutationLoading} />
+                                    <Input placeholder="Speaker Name" {...field} value={field.value ?? ""} disabled={mutationLoading} />
                                 </FormControl>
                                 <FormMessage />
                                 </FormItem>
@@ -695,7 +694,7 @@ export default function EventFormPage() {
                                 <FormItem>
                                 <FormLabel className="text-xs">Excerpt/Bio (Max 200 chars)</FormLabel>
                                 <FormControl>
-                                    <Textarea placeholder="Short bio or topic (optional)" {...field} rows={2} disabled={mutationLoading} maxLength={200} />
+                                    <Textarea placeholder="Short bio or topic (optional)" {...field} value={field.value ?? ""} rows={2} disabled={mutationLoading} maxLength={200} />
                                 </FormControl>
                                 <FormMessage />
                                 </FormItem>

@@ -189,8 +189,7 @@ export const updateEvent = async (documentId: string, eventUpdatePayload: Partia
         const response = await axiosInstance.put<FindOne<Event>>(url,
             { data: updateData },
             {
-                headers,
-                params: { populate: '*' }
+                headers
             }
         );
 
