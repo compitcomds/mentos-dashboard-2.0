@@ -2,17 +2,21 @@
 import { z } from 'zod';
 import type { Media } from './media';
 import type { User } from './auth';
-import type { OtherTag, SpeakerComponent } from './common'; // Import SpeakerComponent
+import type { OtherTag, SpeakerComponent as ApiSpeakerComponent } from './common'; // Renamed to avoid conflict
 
 // --- Zod Schema Definition ---
 
 // Schema for the Speaker component (used in array for speakers field)
-const speakerComponentSchema = z.object({
-  id: z.number().optional(), // ID for existing components
+// This is for the form's internal state.
+export const speakerFormSchema = z.object({
+  id: z.number().optional(), // Strapi component ID, if updating an existing one
   name: z.string().min(1, "Speaker name cannot be empty.").optional().nullable(),
-  image: z.number().nullable().optional(), // Media ID
-  excerpt: z.string().optional().nullable(),
+  image_id: z.number().nullable().optional(), // Media ID for the selected image
+  image_preview_url: z.string().url({message: "Invalid image preview URL"}).nullable().optional(), // For UI preview
+  excerpt: z.string().max(200, "Excerpt must be 200 characters or less.").optional().nullable(),
 });
+export type SpeakerFormSchemaValues = z.infer<typeof speakerFormSchema>;
+
 
 // Schema for the Event form validation
 export const eventFormSchema = z.object({
@@ -25,11 +29,12 @@ export const eventFormSchema = z.object({
   organizer_name: z.string().min(1, { message: "Organizer Name is required." }),
   poster: z.number().nullable().optional(), // Media ID for Poster
   tags: z.string().optional().default(''), // Kept as string for TagInputField
-  speakers: z.array(speakerComponentSchema).optional().nullable().default([]), // Array of speaker objects
+  speakers: z.array(speakerFormSchema).optional().nullable().default([]), // Array of speaker form objects
   registration_link: z.string().url({ message: "Invalid Registration Link" }).nullable().optional(),
   event_status: z.enum(["Draft", "Published"]).default("Draft"),
   publish_date: z.date().nullable().optional(),
-  tenent_id: z.string(), // Made mandatory as per previous discussions
+  tenent_id: z.string(),
+  // user field removed from form schema
 });
 
 // Type derived from Zod schema for the form values
@@ -49,12 +54,12 @@ export type CreateEventPayload = {
     organizer_name?: string;
     poster?: number | null; // Media ID
     tags?: OtherTag[];
-    speakers?: SpeakerComponent[] | null; // Array of SpeakerComponent objects
+    speakers?: ApiSpeakerComponent[] | null; // Array of SpeakerComponent objects for API
     registration_link?: string | null;
     event_status?: "Draft" | "Published";
     publish_date?: string | null; // Send as ISO string
     tenent_id: string;
-    user?: number | null; // User ID for relation
+    // user field removed from payload
 };
 
 // Represents the actual Event data structure as received from the API
@@ -73,13 +78,13 @@ export interface Event {
   description?: string | null;
   poster?: Media | null;
   tags?: OtherTag[] | null;
-  speakers?: SpeakerComponent[] | null; // Updated to SpeakerComponent array
+  speakers?: ApiSpeakerComponent[] | null; // Updated to ApiSpeakerComponent array
   registration_link?: string | null;
   publish_date?: Date | string | null;
-  tenent_id: string; // Keep mandatory based on prior discussion
+  tenent_id: string;
   organizer_name?: string | null;
   event_status?: "Draft" | "Published" | null;
-  user?: User | null;
+  user?: User | null; // Kept here as API might still return it
 };
 
 
