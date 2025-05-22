@@ -101,7 +101,9 @@ const formatStructuredData = (data: any): string | null => {
        JSON.parse(data);
        return data;
     } catch {
-       return data || '{ "@context": "https://schema.org", "@type": "Article" }';
+       // If parsing fails but it's a non-empty string, return it as is, assuming it might be pre-formatted or a simple string keyword.
+       // If it's an empty string, fall back to default.
+       return data.trim() !== '' ? data : '{ "@context": "https://schema.org", "@type": "Article" }';
     }
   } else if (typeof data === "object" && data !== null) {
     try {
@@ -110,8 +112,10 @@ const formatStructuredData = (data: any): string | null => {
         return '{ "@context": "https://schema.org", "@type": "Article" }';
     }
   }
+  // Default for null, undefined, or unparseable objects
   return '{ "@context": "https://schema.org", "@type": "Article" }';
 };
+
 
 const defaultFormValues: BlogFormValues = {
     title: "",
@@ -120,11 +124,11 @@ const defaultFormValues: BlogFormValues = {
     content: "<p></p>",
     image: null,
     categories: null,
-    author: null, // Changed from authors to author
+    author: null,
     tags: "",
     view: 0,
     Blog_status: "draft",
-    seo_blog: {
+    seo_blog: { // Ensure this matches SeoBlogPayload structure for defaults
         metaTitle: "",
         metaDescription: "",
         metaImage: null,
@@ -147,7 +151,6 @@ const defaultFormValues: BlogFormValues = {
 
 export default function BlogFormPage() {
   const params = useParams();
-  // The URL parameter 'id' is now treated as the string documentId
   const blogDocumentIdFromUrl = params?.id as string | undefined; 
   const isEditing = blogDocumentIdFromUrl && blogDocumentIdFromUrl !== "new";
   const router = useRouter();
@@ -158,7 +161,7 @@ export default function BlogFormPage() {
   const { data: fetchedCategories, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories(userTenentId);
 
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingComponent, setIsLoadingComponent] = useState(true); // Renamed from isLoading to avoid conflict
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
@@ -178,7 +181,6 @@ export default function BlogFormPage() {
     string | null
   >(null);
 
-  // Fetch blog data using the string documentId from the URL
   const {
     data: blogData,
     isLoading: isLoadingBlog,
@@ -223,11 +225,11 @@ export default function BlogFormPage() {
 
 
     if (isEditing && blogData && (fetchedCategories || !isCategoriesError)) { 
-        setIsLoading(true);
+        setIsLoadingComponent(true);
         if (blogData.tenent_id !== userTenentId) {
             toast({ variant: "destructive", title: "Authorization Error", description: "You are not authorized to edit this blog post." });
             router.push('/dashboard/blog');
-            setIsLoading(false);
+            setIsLoadingComponent(false);
             return;
         }
 
@@ -256,7 +258,7 @@ export default function BlogFormPage() {
                     ogImage: getMediaId(blogData.seo_blog.openGraph.ogImage as Media | null),
                     ogUrl: blogData.seo_blog.openGraph.ogUrl || null,
                     ogType: blogData.seo_blog.openGraph.ogType || "article",
-                } : defaultFormValues.seo_blog?.openGraph,
+                } : defaultFormValues.seo_blog.openGraph,
                 keywords: blogData.seo_blog.keywords || null,
                 metaRobots: blogData.seo_blog.metaRobots || "index, follow",
                 metaViewport: blogData.seo_blog.metaViewport || "width=device-width, initial-scale=1.0",
@@ -275,10 +277,14 @@ export default function BlogFormPage() {
     } else if (!isEditing) {
         setImagePreviews({ featured: null, meta: null, og: null });
         setTags([]);
+         // For new posts, ensure tenent_id is set if available from current user
+        if (userTenentId) {
+            initialValues.tenent_id = userTenentId;
+        }
     }
 
     reset(initialValues);
-    setIsLoading(false);
+    setIsLoadingComponent(false);
 
   }, [isEditing, blogData, fetchedCategories, reset, isLoadingUser, userTenentId, router, toast, isCategoriesError]);
 
@@ -380,12 +386,10 @@ export default function BlogFormPage() {
     const tagsPayload: OtherTag[] = data.tags
       ? data.tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tagVal) => ({ tag_value: tagVal }))
       : [];
-
-    // Destructure 'author' (singular) from data, as per form schema
-    const { author, ...restOfData } = data;
-
+    
+    // The form uses 'author' (singular), which matches CreateBlogPayload
     const payload: CreateBlogPayload = {
-      ...restOfData,
+      ...data, // Spread all form data
       tags: tagsPayload,
       tenent_id: userTenentId,
       categories: data.categories, 
@@ -393,17 +397,16 @@ export default function BlogFormPage() {
           ...data.seo_blog,
           openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}) ,
       } : undefined,
-      author: author, // Use the destructured 'author'
+      // 'author' field from 'data' is already correct
     };
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
-    // For update, use the numeric blogData.id for API path, pass documentId for cache invalidation
     if (isEditing && blogData?.id && blogData.documentId) { 
       updateMutation.mutate({ 
-        id: blogData.id, 
+        id: blogData.id, // Numeric ID for the API path
         blog: payload,
-        documentIdForInvalidation: blogData.documentId 
+        numericId: blogData.documentId // String documentId for cache invalidation, matches hook variable name
       }, mutationOptions);
     } else {
       createMutation.mutate(payload, mutationOptions);
@@ -411,7 +414,7 @@ export default function BlogFormPage() {
   };
 
   const isSubmittingForm = createMutation.isPending || updateMutation.isPending;
-  const isPageLoading = isLoading || isLoadingUser || (isEditing && isLoadingBlog) || isLoadingCategories;
+  const isPageLoading = isLoadingComponent || isLoadingUser || (isEditing && isLoadingBlog) || isLoadingCategories;
 
   if (isPageLoading) {
     return <BlogFormSkeleton isEditing={!!isEditing} />;
@@ -727,7 +730,7 @@ export default function BlogFormPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                 <FormField
                   control={control}
-                  name="author" // Changed from authors
+                  name="author" 
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Author</FormLabel>
@@ -1331,3 +1334,4 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
+

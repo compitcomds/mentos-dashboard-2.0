@@ -70,7 +70,9 @@ export const getBlog = async (id: string, userTenentId: string): Promise<Blog | 
         throw new Error('User tenent_id is required to verify fetched blog.');
     }
     const params = {
-        'populate':'*', 
+
+        'populate[seo_blog][populate][openGraph][populate]':'*'
+
     };
     const url = `/blogs/${id}`; // Use numeric ID for this GET request
     console.log(`[getBlog] Fetching URL: ${url} (using numeric ID) with params:`, params);

@@ -12,7 +12,6 @@ import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from './user'; 
 
 const BLOGS_QUERY_KEY = (userTenentId?: string) => ['blogs', userTenentId || 'all'];
-// Changed query key to reflect string documentId is used.
 const BLOG_DETAIL_QUERY_KEY = (documentId?: string, userTenentId?: string) => ['blog', documentId || 'new', userTenentId || 'all'];
 
 
@@ -32,7 +31,6 @@ export const useCreateBlog = () => {
     onSuccess: (data) => {
        toast({ title: "Success", description: "Blog post created successfully." });
        queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
-       // Invalidate detail query using documentId if available
        if (data.documentId) {
         queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(data.documentId, userTenentId) });
        }
@@ -65,8 +63,7 @@ export const useGetBlogs = () => {
   });
 };
 
-// Changed parameter from blogNumericId to documentId (string)
-export const useGetBlog = (documentId: string | null) => {
+export const useGetBlog = (documentId: string | null) => { // Parameter changed to documentId (string)
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
 
@@ -78,7 +75,6 @@ export const useGetBlog = (documentId: string | null) => {
         return null;
       }
       console.log(`[useGetBlog] Attempting to fetch blog with documentId: ${documentId} for userTenentId: ${userTenentId}`);
-      // Directly call getBlogService with the string documentId
       const blog = await getBlogService(documentId, userTenentId);
       if (!blog) {
         console.warn(`[useGetBlog] getBlogService returned null for documentId: ${documentId}`);
@@ -90,15 +86,14 @@ export const useGetBlog = (documentId: string | null) => {
   });
 };
 
-
-// Update still uses numeric ID for the API path as per previous request "documentId:int" for update
+// Update uses numeric ID for the API path
 export const useUpdateBlog = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
 
-  // `id` here is numeric blog ID for the API path, `documentIdForInvalidation` is string documentId for cache
-  return useMutation<Blog, Error, { id: number; blog: Partial<CreateBlogPayload>; documentIdForInvalidation?: string }>({
+  // numericId here is the string documentId for cache invalidation
+  return useMutation<Blog, Error, { id: number; blog: Partial<CreateBlogPayload>; numericId?: string }>({
     mutationFn: ({ id, blog }: { id: number; blog: Partial<CreateBlogPayload> }) => {
         if (!userTenentId) {
              throw new Error('User tenent_id is not available. Cannot update blog.');
@@ -108,10 +103,10 @@ export const useUpdateBlog = () => {
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post updated successfully." });
       queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
-      // Invalidate detail query using the string documentId if available
-      if (variables.documentIdForInvalidation) {
-        queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.documentIdForInvalidation, userTenentId) });
-      } else if (data.documentId) { // Fallback to using documentId from response data
+      // Invalidate detail query using the string documentId (passed as variables.numericId)
+      if (variables.numericId) {
+        queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.numericId, userTenentId) });
+      } else if (data.documentId) { 
         queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(data.documentId, userTenentId) });
       }
     },
@@ -143,7 +138,9 @@ export const useDeleteBlog = () => {
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post deleted successfully." });
       queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
-      // Remove detail query using documentId
+      // Remove detail query using string documentId (which is variables.documentId here)
+      // or fallback to numericId if detail query key was based on that.
+      // Since BLOG_DETAIL_QUERY_KEY uses string documentId, variables.documentId is correct.
       if (variables.documentId) {
         queryClient.removeQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.documentId, userTenentId) });
       }
@@ -156,3 +153,4 @@ export const useDeleteBlog = () => {
     }
   });
 };
+
