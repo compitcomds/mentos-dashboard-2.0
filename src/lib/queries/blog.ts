@@ -12,7 +12,8 @@ import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from './user'; 
 
 const BLOGS_QUERY_KEY = (userTenentId?: string) => ['blogs', userTenentId || 'all'];
-const BLOG_DETAIL_QUERY_KEY = (id?: string, userTenentId?: string) => ['blog', id || 'new', userTenentId || 'all'];
+// Changed query key to reflect string documentId is used.
+const BLOG_DETAIL_QUERY_KEY = (documentId?: string, userTenentId?: string) => ['blog', documentId || 'new', userTenentId || 'all'];
 
 
 export const useCreateBlog = () => {
@@ -31,6 +32,10 @@ export const useCreateBlog = () => {
     onSuccess: (data) => {
        toast({ title: "Success", description: "Blog post created successfully." });
        queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
+       // Invalidate detail query using documentId if available
+       if (data.documentId) {
+        queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(data.documentId, userTenentId) });
+       }
     },
      onError: (error: any) => {
         const message = error?.response?.data?.error?.message
@@ -60,52 +65,66 @@ export const useGetBlogs = () => {
   });
 };
 
-export const useGetBlog = (id: string | null) => {
+// Changed parameter from blogNumericId to documentId (string)
+export const useGetBlog = (documentId: string | null) => {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
 
   return useQuery<Blog | null, Error>({
-    queryKey: BLOG_DETAIL_QUERY_KEY(id ?? undefined, userTenentId),
-    queryFn: () => {
-        if (!id || !userTenentId) return null; 
-        return getBlogService(id, userTenentId); 
+    queryKey: BLOG_DETAIL_QUERY_KEY(documentId ?? undefined, userTenentId),
+    queryFn: async () => {
+      if (!documentId || !userTenentId) {
+        console.log("[useGetBlog] documentId or userTenentId missing, returning null.", { documentId, userTenentId });
+        return null;
+      }
+      console.log(`[useGetBlog] Attempting to fetch blog with documentId: ${documentId} for userTenentId: ${userTenentId}`);
+      // Directly call getBlogService with the string documentId
+      const blog = await getBlogService(documentId, userTenentId);
+      if (!blog) {
+        console.warn(`[useGetBlog] getBlogService returned null for documentId: ${documentId}`);
+      }
+      return blog;
     },
-    enabled: !!id && !!userTenentId && !isLoadingUser, 
+    enabled: !!documentId && !!userTenentId && !isLoadingUser,
     staleTime: 1000 * 60 * 5,
   });
 };
 
+
+// Update still uses numeric ID for the API path as per previous request "documentId:int" for update
 export const useUpdateBlog = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
 
-  return useMutation<Blog, Error, { documentId: string; blog: Partial<CreateBlogPayload>; numericId?: string }>({
-    mutationFn: ({ documentId, blog }: { documentId: string; blog: Partial<CreateBlogPayload> }) => {
+  // `id` here is numeric blog ID for the API path, `documentIdForInvalidation` is string documentId for cache
+  return useMutation<Blog, Error, { id: number; blog: Partial<CreateBlogPayload>; documentIdForInvalidation?: string }>({
+    mutationFn: ({ id, blog }: { id: number; blog: Partial<CreateBlogPayload> }) => {
         if (!userTenentId) {
              throw new Error('User tenent_id is not available. Cannot update blog.');
         }
-        return updateBlogService(documentId, blog, userTenentId);
+        return updateBlogService(id, blog, userTenentId);
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post updated successfully." });
       queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
-      // Invalidate detail query using the numericId if available (passed from form)
-      if (variables.numericId) {
-        queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.numericId, userTenentId) });
-      } else if (data.id) { // Fallback to using id from response data if numericId wasn't passed
-        queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(String(data.id), userTenentId) });
+      // Invalidate detail query using the string documentId if available
+      if (variables.documentIdForInvalidation) {
+        queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.documentIdForInvalidation, userTenentId) });
+      } else if (data.documentId) { // Fallback to using documentId from response data
+        queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(data.documentId, userTenentId) });
       }
     },
      onError: (error: any, variables) => {
         const message = error?.response?.data?.error?.message
                      || error.message
-                     || `An unknown error occurred while updating blog post with documentId ${variables.documentId}.`;
+                     || `An unknown error occurred while updating blog post with id ${variables.id}.`;
         toast({ variant: "destructive", title: "Error Updating Blog", description: message });
      }
   });
 };
 
+// Delete uses string documentId for the API path
 export const useDeleteBlog = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
@@ -124,8 +143,9 @@ export const useDeleteBlog = () => {
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post deleted successfully." });
       queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
-      if (variables.numericId) {
-        queryClient.removeQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.numericId, userTenentId) });
+      // Remove detail query using documentId
+      if (variables.documentId) {
+        queryClient.removeQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.documentId, userTenentId) });
       }
     },
     onError: (error: any, variables) => {
@@ -136,5 +156,3 @@ export const useDeleteBlog = () => {
     }
   });
 };
-
-    

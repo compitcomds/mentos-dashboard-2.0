@@ -38,12 +38,11 @@ import type {
   BlogFormValues,
   CreateBlogPayload,
   GetMediaUrlFunction,
-  GetMediaIdFunction,
   GetTagValuesFunction,
   SeoBlogPayload,
   OpenGraphPayload,
 } from "@/types/blog";
-import type { Categorie } from '@/types/category'; // Corrected type import
+import type { Categorie } from '@/types/category';
 import type { OtherTag } from "@/types/common";
 import type { Media } from "@/types/media";
 import {
@@ -85,9 +84,11 @@ const getMediaUrl: GetMediaUrlFunction = (mediaField) => {
   return fullUrl;
 };
 
-const getMediaId: GetMediaIdFunction = (mediaField) => {
+// Updated to get numeric ID from media object
+const getMediaId = (mediaField: Media | null | undefined): number | null => {
   return mediaField?.id ?? null;
 };
+
 
 const getTagValues: GetTagValuesFunction = (tagField) => {
   if (!tagField || !Array.isArray(tagField)) return [];
@@ -119,7 +120,7 @@ const defaultFormValues: BlogFormValues = {
     content: "<p></p>",
     image: null,
     categories: null,
-    authors: null,
+    author: null, // Changed from authors to author
     tags: "",
     view: 0,
     Blog_status: "draft",
@@ -146,8 +147,9 @@ const defaultFormValues: BlogFormValues = {
 
 export default function BlogFormPage() {
   const params = useParams();
-  const blogNumericId = params?.id as string | undefined; // This is the numeric ID from URL
-  const isEditing = blogNumericId && blogNumericId !== "new";
+  // The URL parameter 'id' is now treated as the string documentId
+  const blogDocumentIdFromUrl = params?.id as string | undefined; 
+  const isEditing = blogDocumentIdFromUrl && blogDocumentIdFromUrl !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
@@ -176,12 +178,13 @@ export default function BlogFormPage() {
     string | null
   >(null);
 
+  // Fetch blog data using the string documentId from the URL
   const {
-    data: blogData, // This is the data fetched by numeric ID
+    data: blogData,
     isLoading: isLoadingBlog,
     isError: isErrorBlog,
     error: errorBlog,
-  } = useGetBlog(isEditing ? blogNumericId : null);
+  } = useGetBlog(isEditing ? blogDocumentIdFromUrl : null);
 
   const createMutation = useCreateBlog();
   const updateMutation = useUpdateBlog();
@@ -239,7 +242,7 @@ export default function BlogFormPage() {
             content: blogData.content || "<p></p>",
             image: getMediaId(blogData.image as Media | null),
             categories: blogData.categories?.id ?? null, 
-            authors: blogData.author || null, 
+            author: blogData.author || null, 
             tags: fetchedTags.join(", "),
             view: blogData.view ?? 0,
             Blog_status: blogData.Blog_status || "draft",
@@ -378,7 +381,8 @@ export default function BlogFormPage() {
       ? data.tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tagVal) => ({ tag_value: tagVal }))
       : [];
 
-    const { authors, ...restOfData } = data;
+    // Destructure 'author' (singular) from data, as per form schema
+    const { author, ...restOfData } = data;
 
     const payload: CreateBlogPayload = {
       ...restOfData,
@@ -389,16 +393,17 @@ export default function BlogFormPage() {
           ...data.seo_blog,
           openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}) ,
       } : undefined,
-      author: authors, 
+      author: author, // Use the destructured 'author'
     };
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
-    if (isEditing && blogData?.documentId) { // Use blogData.documentId (string)
+    // For update, use the numeric blogData.id for API path, pass documentId for cache invalidation
+    if (isEditing && blogData?.id && blogData.documentId) { 
       updateMutation.mutate({ 
-        documentId: blogData.documentId, 
+        id: blogData.id, 
         blog: payload,
-        numericId: blogNumericId // Pass numericId for query invalidation
+        documentIdForInvalidation: blogData.documentId 
       }, mutationOptions);
     } else {
       createMutation.mutate(payload, mutationOptions);
@@ -420,7 +425,7 @@ export default function BlogFormPage() {
         <Card>
           <CardContent className="p-6">
             <p className="text-destructive">
-              Failed to load blog post data. Please try again.
+              Failed to load blog post data. Please try again. DocumentID: {blogDocumentIdFromUrl}
             </p>
             <pre className="mt-2 text-xs text-muted-foreground bg-muted p-2 rounded">
               Error: {errorBlog?.message}
@@ -644,7 +649,7 @@ export default function BlogFormPage() {
                     <FormLabel htmlFor="content">Content</FormLabel>
                     <FormControl>
                       <TipTapEditor
-                        key={`blog-editor-${blogNumericId || "new"}`}
+                        key={`blog-editor-${blogDocumentIdFromUrl || "new"}`}
                         content={field.value || "<p></p>"}
                         onContentChange={field.onChange}
                         className="flex-1 min-h-full border border-input rounded-md"
@@ -722,7 +727,7 @@ export default function BlogFormPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                 <FormField
                   control={control}
-                  name="authors"
+                  name="author" // Changed from authors
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Author</FormLabel>
@@ -1326,6 +1331,3 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
-
-
-    

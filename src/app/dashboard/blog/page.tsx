@@ -28,8 +28,8 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+    AlertDialogTrigger, // Make sure AlertDialogTrigger is imported
+} from "@/components/ui/alert-dialog"; 
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -45,7 +45,8 @@ import BlogCardGrid from './_components/blog-card-grid';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useGetCategories } from '@/lib/queries/category';
-import type { Categorie } from '@/types/category'; // Corrected type import
+import type { Categorie } from '@/types/category'; 
+import { toast } from '@/hooks/use-toast';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || '';
 
@@ -67,7 +68,7 @@ export default function BlogPage() {
    const isError = isUserError || isBlogsError || isCategoriesError;
    const error = isUserError ? new Error("Failed to load user data.") : isBlogsError ? blogsError : isCategoriesError ? new Error("Failed to load categories.") : new Error("An unknown error occurred.");
 
-  const handleDelete = (post: Blog) => { // Expect full Blog object
+  const handleDelete = (post: Blog) => { 
       if (!post.documentId) {
         console.error("Cannot delete blog: documentId is missing.", post);
         toast({ variant: "destructive", title: "Error", description: "Cannot delete blog: missing identifier."});
@@ -243,6 +244,9 @@ export default function BlogPage() {
                             const authorName = post.author || 'N/A';
                             const categoryName = post.categories?.name ?? 'N/A'; 
                             const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null;
+                            // Use documentId for edit link if available, fallback to id
+                            const editLink = post.documentId ? `/dashboard/blog/${post.documentId}` : (post.id ? `/dashboard/blog/${post.id}`: '#');
+
 
                             return (
                              <TableRow key={post.id}>
@@ -300,7 +304,7 @@ export default function BlogPage() {
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                              <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                                                 <Link href={`/dashboard/blog/${post.id}`}>
+                                                 <Link href={editLink}>
                                                     <Pencil className="h-4 w-4" />
                                                  </Link>
                                              </Button>
@@ -359,7 +363,7 @@ export default function BlogPage() {
             <BlogCardGrid
                 blogPosts={filteredBlogPosts}
                 getImageUrl={getImageUrl}
-                onDelete={handleDelete} // Pass handleDelete directly
+                onDelete={handleDelete} 
                 deleteMutation={deleteMutation}
              />
            )
@@ -448,4 +452,3 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
     </div>
   );
 }
-
