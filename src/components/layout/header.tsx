@@ -4,7 +4,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, LogOut, UserCircle, LucideIcon, HelpCircle, LayoutList, FileJson } from 'lucide-react'; // Added FileJson
+import { Menu, LogOut, UserCircle, LucideIcon, HelpCircle, LayoutList, FileJson } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
@@ -34,7 +34,8 @@ const environment = process.env.NEXT_PUBLIC_ENVIRONMENT || 'production';
 
 export default function Header({ userName, onLogout, menuItems }: HeaderProps) {
    const pathname = usePathname();
-   const mobileMenuItems = menuItems; // menuItems already updated in DashboardLayout
+   // menuItems are passed down from DashboardLayout, which already has the updated label and path
+   const mobileMenuItems = menuItems; 
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:px-6">

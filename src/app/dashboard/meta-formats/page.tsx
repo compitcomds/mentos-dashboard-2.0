@@ -25,18 +25,18 @@ import { useGetMetaFormats } from '@/lib/queries/meta-format';
 import type { MetaFormat } from '@/types/meta-format';
 import { AlertCircle, Loader2, FileJson, Settings2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 
-export default function MetaFormatsPage() {
+export default function ExtraContentPage() { // Renamed component
   const { data: metaFormats, isLoading, isError, error, refetch, isFetching } = useGetMetaFormats();
 
   return (
     <TooltipProvider>
       <div className="flex flex-col space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">Meta Formats</h1>
-          {/* Future: Add "Create New Meta Format" button here */}
+          <h1 className="text-3xl font-bold tracking-tight">Extra Content Management</h1> {/* Renamed title */}
            <Button disabled>
-             <Settings2 className="mr-2 h-4 w-4" /> Configure New Format (Soon)
+             <Settings2 className="mr-2 h-4 w-4" /> Configure New (Soon)
            </Button>
         </div>
 
@@ -53,6 +53,7 @@ export default function MetaFormatsPage() {
                     <TableRow>
                       <TableHead><Skeleton className="h-5 w-1/4" /></TableHead>
                       <TableHead className="hidden md:table-cell"><Skeleton className="h-5 w-1/2" /></TableHead>
+                      <TableHead className="hidden sm:table-cell"><Skeleton className="h-5 w-1/4" /></TableHead> {/* Added for Placing */}
                       <TableHead className="text-right"><Skeleton className="h-5 w-16" /></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -61,6 +62,7 @@ export default function MetaFormatsPage() {
                       <TableRow key={i}>
                         <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
                         <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-full" /></TableCell>
+                        <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-1/2" /></TableCell> {/* Added for Placing */}
                         <TableCell className="text-right"><Skeleton className="h-8 w-20" /></TableCell>
                       </TableRow>
                     ))}
@@ -74,9 +76,9 @@ export default function MetaFormatsPage() {
         {isError && !isFetching && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error Loading Meta Formats</AlertTitle>
+            <AlertTitle>Error Loading Extra Content</AlertTitle> {/* Renamed */}
             <AlertDescription>
-              Could not fetch meta formats. {error?.message}
+              Could not fetch extra content data. {error?.message}
               <Button onClick={() => refetch()} variant="secondary" size="sm" className="ml-2 mt-2" disabled={isFetching}>
                 {isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Retry
@@ -87,16 +89,16 @@ export default function MetaFormatsPage() {
 
         {!isLoading && !isError && metaFormats && metaFormats.length === 0 && (
           <div className="mt-4 border border-dashed border-border rounded-md p-8 text-center text-muted-foreground">
-            No meta formats found.
+            No extra content formats found.
           </div>
         )}
 
         {!isLoading && !isError && metaFormats && metaFormats.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Available Meta Formats</CardTitle>
+              <CardTitle>Available Extra Content Formats</CardTitle> {/* Renamed */}
               <CardDescription>
-                Select a format to render a dynamic form.
+                Select a format to open and render its dynamic form.
                 {isFetching && <Loader2 className="ml-2 h-4 w-4 animate-spin inline-block" />}
               </CardDescription>
             </CardHeader>
@@ -106,7 +108,7 @@ export default function MetaFormatsPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead className="hidden md:table-cell">Description</TableHead>
-                    <TableHead className="hidden sm:table-cell">Placing</TableHead>
+                    <TableHead className="hidden sm:table-cell">Placing</TableHead> {/* Added Placing column */}
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -117,13 +119,18 @@ export default function MetaFormatsPage() {
                       <TableCell className="hidden md:table-cell text-muted-foreground truncate max-w-xs">
                         {format.description || '-'}
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell text-muted-foreground">
-                        {format.placing || '-'}
+                      <TableCell className="hidden sm:table-cell"> {/* Added Placing cell */}
+                        {format.placing ? (
+                            <Badge variant="outline">{format.placing.charAt(0).toUpperCase() + format.placing.slice(1)}</Badge>
+                        ) : (
+                            '-'
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button asChild variant="outline" size="sm" disabled={!format.documentId}>
-                          <Link href={format.documentId ? `/dashboard/meta-formats/render/${format.documentId}` : '#'}>
-                            Render Form
+                          {/* Updated link path */}
+                          <Link href={format.documentId ? `/dashboard/extra-content/render/${format.documentId}` : '#'}>
+                            Open {/* Renamed button */}
                           </Link>
                         </Button>
                       </TableCell>

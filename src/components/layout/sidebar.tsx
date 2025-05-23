@@ -5,7 +5,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronLeft, HelpCircle, LayoutList, FileJson } from 'lucide-react'; // Added FileJson
+import { ChevronLeft, HelpCircle, LayoutList, FileJson } from 'lucide-react';
 
 import {
   Sidebar,
@@ -36,7 +36,7 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
   const pathname = usePathname();
   const { state } = useSidebar();
 
-  // menuItems prop already includes Meta Formats from DashboardLayout
+  // menuItems prop already includes the updated label and path from DashboardLayout
   const updatedMenuItems = menuItems;
 
   return (

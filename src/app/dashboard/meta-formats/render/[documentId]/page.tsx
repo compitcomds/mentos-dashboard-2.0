@@ -21,16 +21,14 @@ import { Calendar } from '@/components/ui/calendar';
 import { AlertCircle, CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import type { FormFormatComponent, MetaFormat } from '@/types/meta-format';
-import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog'; // Assuming this exists
+import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog';
 import TipTapEditor from '@/components/ui/tiptap';
 
 // Helper to generate a unique field name for RHF
 const getFieldName = (component: FormFormatComponent): string => {
-  // Use component.id if available and a string, otherwise fallback to a slugified label or a generated ID
   if (component.id) {
     return `component_${component.id}`;
   }
-  // Fallback if id is not present (shouldn't happen with Strapi components)
   const label = component.label || component.__component.split('.').pop() || 'unknown_field';
   return label.toLowerCase().replace(/\s+/g, '_') + `_${Math.random().toString(36).substring(7)}`;
 };
@@ -74,11 +72,11 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
         defaultValues[fieldName] = component.default !== undefined ? Number(component.default) : null;
         break;
       case 'dynamic-component.media-field':
-        fieldSchema = z.number().nullable(); // Stores media ID
+        fieldSchema = z.number().nullable(); 
         if (component.required) {
           fieldSchema = z.number({ required_error: `${component.label || 'Media'} is required.` });
         }
-        defaultValues[fieldName] = null; // Default to no media selected
+        defaultValues[fieldName] = null; 
         break;
       case 'dynamic-component.enum-field':
         const options = component.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
@@ -86,7 +84,7 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
           fieldSchema = z.array(z.string()).optional();
           if (component.required) fieldSchema = z.array(z.string()).nonempty(`${component.label || 'Field'} is required.`);
           defaultValues[fieldName] = component.default ? component.default.split(',') : [];
-        } else { // single-select
+        } else { 
           fieldSchema = z.string().optional().nullable();
           if (component.required) fieldSchema = z.string().min(1, `${component.label || 'Field'} is required.`);
           defaultValues[fieldName] = component.default || null;
@@ -114,7 +112,7 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
 };
 
 
-export default function RenderMetaFormatPage() {
+export default function RenderExtraContentPage() { // Renamed component
   const router = useRouter();
   const params = useParams();
   const documentId = params.documentId as string;
@@ -139,7 +137,7 @@ export default function RenderMetaFormatPage() {
       const { schema, defaultValues } = generateFormSchemaAndDefaults(metaFormat);
       setFormSchema(schema);
       setFormDefaultValues(defaultValues);
-      reset(defaultValues); // Reset form with new defaults and re-init resolver
+      reset(defaultValues);
       setIsFormInitialized(true);
     }
   }, [metaFormat, reset]);
@@ -151,7 +149,6 @@ export default function RenderMetaFormatPage() {
   const handleMediaSelect = (selectedMedia: { fileId: number | null; thumbnailUrl: string | null }) => {
     if (currentMediaFieldTarget && selectedMedia.fileId !== null) {
       methods.setValue(currentMediaFieldTarget, selectedMedia.fileId, { shouldValidate: true });
-      // Optionally store/display thumbnail URL if needed for preview in the form
     }
     setIsMediaSelectorOpen(false);
     setCurrentMediaFieldTarget(null);
@@ -159,9 +156,6 @@ export default function RenderMetaFormatPage() {
 
   const onSubmit = (data: FieldValues) => {
     console.log("Dynamic Form Submitted Data:", data);
-    // Here you would typically send the data to another API endpoint
-    // For now, we just log it.
-    // Example: createMetaEntryMutation.mutate({ metaFormatId: metaFormat?.id, data });
   };
 
   if (isLoading || (!isFormInitialized && !isError)) {
@@ -186,8 +180,8 @@ export default function RenderMetaFormatPage() {
       <div className="p-6">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error Loading Meta Format</AlertTitle>
-          <AlertDescription>{error?.message || 'Could not load the meta format data.'}</AlertDescription>
+          <AlertTitle>Error Loading Extra Content Format</AlertTitle> {/* Renamed */}
+          <AlertDescription>{error?.message || 'Could not load the extra content format data.'}</AlertDescription> {/* Renamed */}
         </Alert>
       </div>
     );
@@ -197,8 +191,8 @@ export default function RenderMetaFormatPage() {
     return (
       <div className="p-6">
         <Alert>
-          <AlertTitle>Meta Format Not Found</AlertTitle>
-          <AlertDescription>The requested meta format could not be found or you do not have permission to view it.</AlertDescription>
+          <AlertTitle>Extra Content Format Not Found</AlertTitle> {/* Renamed */}
+          <AlertDescription>The requested extra content format could not be found or you do not have permission to view it.</AlertDescription> {/* Renamed */}
         </Alert>
       </div>
     );
@@ -207,7 +201,7 @@ export default function RenderMetaFormatPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Button variant="outline" onClick={() => router.back()}>
-        &larr; Back to Meta Formats
+        &larr; Back to Extra Content Management {/* Renamed */}
       </Button>
       <FormProvider {...methods}>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -261,14 +255,12 @@ export default function RenderMetaFormatPage() {
                                       >
                                         {field.value ? `Media ID: ${field.value} (Change)` : placeholder || 'Select Media'}
                                       </Button>
-                                      {/* Basic preview for selected media ID - can be enhanced */}
                                       {field.value && <p className="text-xs text-muted-foreground mt-1">Selected Media ID: {field.value}</p>}
                                     </div>
                                   );
                                 case 'dynamic-component.enum-field':
                                   const options = component.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
                                   if (component.type === 'multi-select') {
-                                    // Basic multi-select with checkboxes
                                     return (
                                       <div className="space-y-2">
                                         {options.map(option => (
@@ -357,7 +349,7 @@ export default function RenderMetaFormatPage() {
                   );
                 })
               ) : (
-                <p className="text-muted-foreground">No form fields defined for this meta format.</p>
+                <p className="text-muted-foreground">No form fields defined for this extra content format.</p> /* Renamed */
               )}
             </CardContent>
             <CardFooter>
@@ -373,11 +365,9 @@ export default function RenderMetaFormatPage() {
       <MediaSelectorDialog
         isOpen={isMediaSelectorOpen}
         onOpenChange={setIsMediaSelectorOpen}
-        onMediaSelect={handleMediaSelect as any} // Cast as any for now if signature mismatch
-        returnType="id" // Assuming you want the media ID
+        onMediaSelect={handleMediaSelect as any}
+        returnType="id"
       />
     </div>
   );
 }
-
-    
