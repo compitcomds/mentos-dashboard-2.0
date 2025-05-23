@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon } from 'lucide-react'; // Removed PlusCircle, Trash2 as they are in ArrayFieldRenderer
+import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import type { FormFormatComponent, MetaFormat } from '@/types/meta-format';
 import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog';
@@ -28,7 +28,7 @@ import { useCurrentUser } from '@/lib/queries/user';
 import type { CreateMetaDataPayload } from '@/types/meta-data';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import ArrayFieldRenderer from './_components/array-field-renderer'; // Import the new component
+import ArrayFieldRenderer from '../_components/array-field-renderer'; // Corrected import path
 
 // Helper to generate a unique field name for RHF
 const getFieldName = (component: FormFormatComponent): string => {
@@ -55,7 +55,7 @@ const getDefaultValueForComponent = (componentType: string, component?: FormForm
     case 'dynamic-component.date-field':
       return component?.default ? new Date(component.default) : null;
     case 'dynamic-component.boolean-field':
-      return component?.default === 'true' || component?.default === true; // Handle string 'true' and boolean true
+      return component?.default === 'true' || component?.default === true;
     default:
       return null;
   }
@@ -179,7 +179,7 @@ export default function RenderExtraContentPage() {
   });
 
   React.useEffect(() => {
-    if (metaFormat && (action === 'create' || (action === 'edit' && (metaDataEntry || !metaDataEntryDocumentId)))) {
+    if (metaFormat && (action === 'create' || (action === 'edit' && (metaDataEntry || !metaDataEntryDocumentId || isErrorMetaDataEntry)))) {
       const { schema, defaultValues: generatedDefaults } = generateFormSchemaAndDefaults(metaFormat);
       setFormSchema(schema);
       setFormDefaultValues(generatedDefaults);
@@ -187,7 +187,6 @@ export default function RenderExtraContentPage() {
       let initialValues = { ...generatedDefaults };
 
       if (action === 'edit' && metaDataEntry) {
-        // Map fetched meta_data to form fields
         metaFormat.from_formate?.forEach(component => {
           const fieldName = getFieldName(component);
           const entryValue = metaDataEntry.meta_data?.[fieldName];
@@ -212,7 +211,7 @@ export default function RenderExtraContentPage() {
       methods.reset(initialValues);
       setIsFormInitialized(true);
     }
-  }, [metaFormat, action, metaDataEntry, metaDataEntryDocumentId, methods]);
+  }, [metaFormat, action, metaDataEntry, metaDataEntryDocumentId, methods, isErrorMetaDataEntry]);
 
 
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = React.useState(false);
@@ -258,7 +257,7 @@ export default function RenderExtraContentPage() {
             console.error(`Validation Error - ${fieldName}:`, error?.message, 'Field Value:', data[fieldName]);
             if (error?.type === 'invalid_type' && Array.isArray(data[fieldName])) {
               console.error(`  ↳ Error for field '${fieldName}' which is an array. Check individual item errors or array-level validation.`);
-            } else if (Array.isArray(error)) { // For array fields with per-item errors
+            } else if (Array.isArray(error)) { 
                error.forEach((itemError, index) => {
                  if (itemError) {
                    Object.entries(itemError).forEach(([subFieldName, subError] : [string, any]) => {
@@ -284,7 +283,6 @@ export default function RenderExtraContentPage() {
         } else if (component.is_array && data[fieldName] === undefined) {
             processedData[fieldName] = [];
         }
-         // Convert date objects back to ISO strings for submission if they are dates
          if (component.__component === 'dynamic-component.date-field') {
            if (component.is_array && Array.isArray(processedData[fieldName])) {
              processedData[fieldName] = processedData[fieldName].map((dateVal: string | Date | null) => dateVal instanceof Date ? dateVal.toISOString() : dateVal);
@@ -426,7 +424,6 @@ export default function RenderExtraContentPage() {
                       />
                     );
                   }
-                  // --- Original rendering for non-array fields ---
                   return (
                     <FormField
                       key={fieldName}
@@ -585,3 +582,5 @@ export default function RenderExtraContentPage() {
   );
 }
       
+
+    
