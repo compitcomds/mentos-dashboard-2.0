@@ -1,8 +1,9 @@
+
 'use client';
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, PenSquare, Settings, Loader2, Image as ImageIconLucide, CalendarClock, BookText, HelpCircle, LayoutList } from 'lucide-react'; // Added LayoutList
+import { LayoutDashboard, PenSquare, Settings, Loader2, Image as ImageIconLucide, CalendarClock, BookText, HelpCircle, LayoutList, FileJson } from 'lucide-react'; // Added FileJson
 import { useToast } from '@/hooks/use-toast';
 import { removeAccessToken, getAccessToken } from '@/lib/actions/auth';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
@@ -94,7 +95,8 @@ export default function DashboardLayout({
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/dashboard/blog', label: 'Blog', icon: PenSquare },
     { href: '/dashboard/event', label: 'Events', icon: CalendarClock },
-    { href: '/dashboard/categories', label: 'Categories', icon: LayoutList }, // Added Categories
+    { href: '/dashboard/categories', label: 'Categories', icon: LayoutList },
+    { href: '/dashboard/meta-formats', label: 'Meta Formats', icon: FileJson }, // Added Meta Formats
     { href: '/dashboard/web-media', label: 'Web Media', icon: ImageIconLucide },
     { href: '/dashboard/query-forms', label: 'Query Forms', icon: HelpCircle },
     { href: '/dashboard/developer-docs', label: 'Developer Docs', icon: BookText },
