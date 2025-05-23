@@ -2,8 +2,8 @@
 'use client';
 
 import * as React from 'react';
-import { useParams, useRouter } from 'next/navigation'; // Corrected: Link removed from here
-import Link from 'next/link'; // Corrected: Link imported from next/link
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useGetMetaFormat } from '@/lib/queries/meta-format';
 import { useGetMetaDataEntries, useDeleteMetaDataEntry } from '@/lib/queries/meta-data';
 import { Button } from '@/components/ui/button';
@@ -20,12 +20,22 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from '@/components/ui/alert-dialog'; // AlertDialogTrigger removed as it's part of DropdownMenu now
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import type { MetaData } from '@/types/meta-data';
+import type { FormFormatComponent } from '@/types/meta-format'; // Import FormFormatComponent
+
+// Helper to generate a unique field name for RHF from MetaFormat component
+// This needs to be consistent with how names are generated in RenderExtraContentPage
+const getFieldName = (component: FormFormatComponent): string => {
+  if (component.id) {
+    return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
+  }
+  const label = component.label || component.__component.split('.').pop() || 'unknown_field';
+  return label.toLowerCase().replace(/\s+/g, '_') + `_${Math.random().toString(36).substring(7)}`;
+};
 
 export default function MetaDataListingPage() {
   const router = useRouter();
@@ -53,15 +63,59 @@ export default function MetaDataListingPage() {
           onSuccess: () => {
             setIsAlertOpen(false);
             setMetaDataToDelete(null);
-            // refetchMetaData(); // Query invalidation should handle this
           },
           onError: () => {
-            setIsAlertOpen(false); // Error toast handled by hook
+            setIsAlertOpen(false);
           }
         }
       );
     }
   };
+
+  const getContentPreview = (entry: MetaData): string => {
+    if (!metaFormat || !metaFormat.from_formate || !entry.meta_data) {
+      return 'N/A';
+    }
+
+    let previewValue: string | null = null;
+
+    // Prioritize fields with labels "Name" or "Title"
+    for (const component of metaFormat.from_formate) {
+      const fieldName = getFieldName(component);
+      const value = entry.meta_data[fieldName];
+      if (component.label && (component.label.toLowerCase().includes('name') || component.label.toLowerCase().includes('title'))) {
+        if (typeof value === 'string' && value.trim() !== '') {
+          previewValue = value;
+          break;
+        } else if (typeof value === 'number') {
+          previewValue = String(value);
+          break;
+        }
+      }
+    }
+
+    // If no priority field found, take the first string/number value
+    if (!previewValue) {
+      for (const component of metaFormat.from_formate) {
+        const fieldName = getFieldName(component);
+        const value = entry.meta_data[fieldName];
+        if (typeof value === 'string' && value.trim() !== '') {
+          previewValue = value;
+          break;
+        } else if (typeof value === 'number') {
+          previewValue = String(value);
+          break;
+        }
+      }
+    }
+    
+    if (previewValue) {
+        return previewValue.length > 50 ? `${previewValue.substring(0, 47)}...` : previewValue;
+    }
+
+    return 'N/A';
+  };
+
 
   const isLoading = isLoadingMetaFormat || isLoadingMetaData;
   const isError = isErrorMetaFormat || isErrorMetaData;
@@ -107,7 +161,6 @@ export default function MetaDataListingPage() {
   }
   
   const createNewEntryLink = `/dashboard/extra-content/render/${metaFormatDocumentId}?action=create`;
-  // For edit, it would be: `/dashboard/extra-content/render/${metaFormatDocumentId}?action=edit&entry=${entry.documentId}`
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -142,7 +195,8 @@ export default function MetaDataListingPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Entry ID</TableHead>
+                  <TableHead>Data Entry ID</TableHead>
+                  <TableHead>Content Preview</TableHead>
                   <TableHead className="hidden sm:table-cell">Created At</TableHead>
                   <TableHead className="hidden md:table-cell">Last Updated</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -152,6 +206,7 @@ export default function MetaDataListingPage() {
                 {metaDataEntries?.map((entry) => (
                   <TableRow key={entry.documentId || entry.id}>
                     <TableCell className="font-mono text-xs">{entry.documentId || 'N/A'}</TableCell>
+                    <TableCell className="truncate max-w-xs">{getContentPreview(entry)}</TableCell>
                     <TableCell className="hidden sm:table-cell">
                       {entry.createdAt ? format(new Date(entry.createdAt), 'PPp') : 'N/A'}
                     </TableCell>
@@ -228,3 +283,5 @@ export default function MetaDataListingPage() {
     </div>
   );
 }
+    
+    
