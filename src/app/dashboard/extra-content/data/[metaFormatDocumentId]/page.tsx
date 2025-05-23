@@ -12,6 +12,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -20,12 +30,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'; // AlertDialogTrigger removed as it's part of DropdownMenu now
+} from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, Eye, Loader2 } from 'lucide-react';
+import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, Eye, Loader2, FileJson as FileJsonIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import type { MetaData } from '@/types/meta-data';
-import type { FormFormatComponent } from '@/types/meta-format'; // Import FormFormatComponent
+import type { FormFormatComponent } from '@/types/meta-format';
 
 // Helper to generate a unique field name for RHF from MetaFormat component
 // This needs to be consistent with how names are generated in RenderExtraContentPage
@@ -48,6 +58,9 @@ export default function MetaDataListingPage() {
 
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [metaDataToDelete, setMetaDataToDelete] = React.useState<MetaData | null>(null);
+  const [isJsonDialogOpen, setIsJsonDialogOpen] = React.useState(false);
+  const [selectedEntryJson, setSelectedEntryJson] = React.useState<Record<string, any> | null>(null);
+  const [selectedEntryIdForJson, setSelectedEntryIdForJson] = React.useState<string | null>(null);
 
 
   const handleDeleteConfirmation = (entry: MetaData) => {
@@ -72,6 +85,12 @@ export default function MetaDataListingPage() {
     }
   };
 
+  const handleViewJson = (entry: MetaData) => {
+    setSelectedEntryJson(entry.meta_data || {});
+    setSelectedEntryIdForJson(entry.documentId || entry.id?.toString() || 'N/A');
+    setIsJsonDialogOpen(true);
+  };
+
   const getContentPreview = (entry: MetaData): string => {
     if (!metaFormat || !metaFormat.from_formate || !entry.meta_data) {
       return 'N/A';
@@ -79,7 +98,6 @@ export default function MetaDataListingPage() {
 
     let previewValue: string | null = null;
 
-    // Prioritize fields with labels "Name" or "Title"
     for (const component of metaFormat.from_formate) {
       const fieldName = getFieldName(component);
       const value = entry.meta_data[fieldName];
@@ -87,14 +105,13 @@ export default function MetaDataListingPage() {
         if (typeof value === 'string' && value.trim() !== '') {
           previewValue = value;
           break;
-        } else if (typeof value === 'number') {
+        } else if (typeof value === 'number' || typeof value === 'boolean') {
           previewValue = String(value);
           break;
         }
       }
     }
 
-    // If no priority field found, take the first string/number value
     if (!previewValue) {
       for (const component of metaFormat.from_formate) {
         const fieldName = getFieldName(component);
@@ -102,7 +119,7 @@ export default function MetaDataListingPage() {
         if (typeof value === 'string' && value.trim() !== '') {
           previewValue = value;
           break;
-        } else if (typeof value === 'number') {
+        } else if (typeof value === 'number' || typeof value === 'boolean') {
           previewValue = String(value);
           break;
         }
@@ -228,11 +245,17 @@ export default function MetaDataListingPage() {
                             <Edit className="mr-2 h-4 w-4" /> Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            onSelect={() => handleViewJson(entry)}
+                            disabled={!entry.meta_data}
+                          >
+                            <FileJsonIcon className="mr-2 h-4 w-4" /> View JSON
+                          </DropdownMenuItem>
+                          {/* <DropdownMenuItem
                             onSelect={() => router.push(`/dashboard/extra-content/render/${metaFormatDocumentId}?action=view&entry=${entry.documentId}`)}
                             disabled={true} // View functionality not yet implemented
                           >
                             <Eye className="mr-2 h-4 w-4" /> View (Soon)
-                          </DropdownMenuItem>
+                          </DropdownMenuItem> */}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
@@ -280,8 +303,31 @@ export default function MetaDataListingPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <Dialog open={isJsonDialogOpen} onOpenChange={setIsJsonDialogOpen}>
+        <DialogContent className="sm:max-w-2xl"> {/* Wider dialog for JSON */}
+          <DialogHeader>
+            <DialogTitle>Raw JSON Data for Entry: {selectedEntryIdForJson}</DialogTitle>
+            <DialogDescription>
+              This is the raw JSON data stored for this entry.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] mt-4 border rounded-md">
+            <pre className="p-4 text-xs whitespace-pre-wrap break-all">
+              {selectedEntryJson ? JSON.stringify(selectedEntryJson, null, 2) : 'No JSON data available.'}
+            </pre>
+          </ScrollArea>
+          <DialogFooter className="mt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
     
+    
+
     
