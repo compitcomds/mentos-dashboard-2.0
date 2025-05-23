@@ -12,7 +12,8 @@ import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from './user'; 
 
 const BLOGS_QUERY_KEY = (userTenentId?: string) => ['blogs', userTenentId || 'all'];
-const BLOG_DETAIL_QUERY_KEY = (documentId?: string, userTenentId?: string) => ['blog', documentId || 'new', userTenentId || 'all'];
+// Query key for single blog post now uses string documentId
+const BLOG_DETAIL_QUERY_KEY = (documentId?: string, userTenentId?: string) => ['blog', documentId || 'new-detail', userTenentId || 'all'];
 
 
 export const useCreateBlog = () => {
@@ -63,7 +64,8 @@ export const useGetBlogs = () => {
   });
 };
 
-export const useGetBlog = (documentId: string | null) => { // Parameter changed to documentId (string)
+// Hook to get a single blog post by its string documentId
+export const useGetBlog = (documentId: string | null) => {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
 
@@ -86,14 +88,15 @@ export const useGetBlog = (documentId: string | null) => { // Parameter changed 
   });
 };
 
-// Update uses numeric ID for the API path
+
+// Update uses numeric ID for the API path, but invalidates based on string documentId
 export const useUpdateBlog = () => {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
 
-  // numericId here is the string documentId for cache invalidation
-  return useMutation<Blog, Error, { id: number; blog: Partial<CreateBlogPayload>; numericId?: string }>({
+  // numericId is the string documentId for cache invalidation
+  return useMutation<Blog, Error, { id: number; blog: Partial<CreateBlogPayload>; documentIdForInvalidation?: string }>({
     mutationFn: ({ id, blog }: { id: number; blog: Partial<CreateBlogPayload> }) => {
         if (!userTenentId) {
              throw new Error('User tenent_id is not available. Cannot update blog.');
@@ -103,9 +106,9 @@ export const useUpdateBlog = () => {
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post updated successfully." });
       queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
-      // Invalidate detail query using the string documentId (passed as variables.numericId)
-      if (variables.numericId) {
-        queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.numericId, userTenentId) });
+      // Invalidate detail query using the string documentId (passed as variables.documentIdForInvalidation)
+      if (variables.documentIdForInvalidation) {
+        queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.documentIdForInvalidation, userTenentId) });
       } else if (data.documentId) { 
         queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(data.documentId, userTenentId) });
       }
@@ -125,8 +128,8 @@ export const useDeleteBlog = () => {
   const { data: currentUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
 
-  return useMutation<Blog | void, Error, { documentId: string; numericId?: string }>({
-    mutationFn: ({ documentId }: { documentId: string; numericId?: string }) => {
+  return useMutation<Blog | void, Error, { documentId: string; documentIdForInvalidation?: string }>({
+    mutationFn: ({ documentId }: { documentId: string; documentIdForInvalidation?: string }) => {
       if (!userTenentId) {
         throw new Error('User tenent_id is not available. Cannot delete blog.');
       }
@@ -138,11 +141,10 @@ export const useDeleteBlog = () => {
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post deleted successfully." });
       queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
-      // Remove detail query using string documentId (which is variables.documentId here)
-      // or fallback to numericId if detail query key was based on that.
-      // Since BLOG_DETAIL_QUERY_KEY uses string documentId, variables.documentId is correct.
-      if (variables.documentId) {
-        queryClient.removeQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.documentId, userTenentId) });
+      // Remove detail query using string documentId (which is variables.documentId or documentIdForInvalidation)
+      const idToInvalidate = variables.documentIdForInvalidation || variables.documentId;
+      if (idToInvalidate) {
+        queryClient.removeQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(idToInvalidate, userTenentId) });
       }
     },
     onError: (error: any, variables) => {
@@ -153,4 +155,3 @@ export const useDeleteBlog = () => {
     }
   });
 };
-

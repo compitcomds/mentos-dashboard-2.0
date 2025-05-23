@@ -28,7 +28,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger, // Make sure AlertDialogTrigger is imported
+    AlertDialogTrigger, 
 } from "@/components/ui/alert-dialog"; 
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -76,7 +76,7 @@ export default function BlogPage() {
       }
       deleteMutation.mutate({ 
         documentId: post.documentId, 
-        numericId: post.id ? String(post.id) : undefined 
+        documentIdForInvalidation: post.documentId // Pass string documentId for cache invalidation
       });
   };
 
@@ -244,8 +244,8 @@ export default function BlogPage() {
                             const authorName = post.author || 'N/A';
                             const categoryName = post.categories?.name ?? 'N/A'; 
                             const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null;
-                            // Use documentId for edit link if available, fallback to id
-                            const editLink = post.documentId ? `/dashboard/blog/${post.documentId}` : (post.id ? `/dashboard/blog/${post.id}`: '#');
+                            // Use string documentId for edit link
+                            const editLink = post.documentId ? `/dashboard/blog/${post.documentId}` : '#';
 
 
                             return (
@@ -303,7 +303,7 @@ export default function BlogPage() {
                                      </Tooltip>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                             <Button asChild size="icon" variant="ghost" className="h-8 w-8">
+                                             <Button asChild size="icon" variant="ghost" className="h-8 w-8" disabled={!post.documentId}>
                                                  <Link href={editLink}>
                                                     <Pencil className="h-4 w-4" />
                                                  </Link>
@@ -319,7 +319,7 @@ export default function BlogPage() {
                                              size="icon"
                                              variant="ghost"
                                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                             disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === post.documentId}
+                                             disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === post.documentId || !post.documentId}
                                          >
                                              <Trash2 className="h-4 w-4" />
                                          </Button>
@@ -363,7 +363,10 @@ export default function BlogPage() {
             <BlogCardGrid
                 blogPosts={filteredBlogPosts}
                 getImageUrl={getImageUrl}
-                onDelete={handleDelete} 
+                onDelete={() => {
+                    const postToDelete = filteredBlogPosts.find(p => deleteMutation.variables?.documentId === p.documentId);
+                    if(postToDelete) handleDelete(postToDelete);
+                }}
                 deleteMutation={deleteMutation}
              />
            )

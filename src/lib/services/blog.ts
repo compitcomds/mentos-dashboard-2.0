@@ -36,11 +36,11 @@ export const getBlogs = async (userTenentId: string): Promise<Blog[]> => {
         
         if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
            console.error(`[getBlogs] Unexpected API response structure for tenent_id ${userTenentId}. Expected 'data' array, received:`, response.data);
-           if (response.data === null || response.data === undefined) {
-                console.warn(`[getBlogs] API returned null or undefined for tenent_id ${userTenentId}. Returning empty array.`);
+           if (response.data === null || response.data === undefined || (response.data && !response.data.data)) { // Check if response.data.data is missing
+                console.warn(`[getBlogs] API returned null, undefined, or no 'data' property for tenent_id ${userTenentId}. Returning empty array.`);
                 return [];
            }
-           return []; 
+           throw new Error('Unexpected API response structure. Expected an array within a "data" property.');
         }
         console.log(`[getBlogs] Fetched ${response.data.data.length} Blogs for tenent_id ${userTenentId}.`);
         return response.data.data;
@@ -62,59 +62,62 @@ export const getBlogs = async (userTenentId: string): Promise<Blog[]> => {
     }
 };
 
-// Get a specific blog by its numeric id, ensuring it matches the userTenentId after fetch
-export const getBlog = async (id: string, userTenentId: string): Promise<Blog | null> => {
-    if (!id) return null;
+// Get a specific blog by its string documentId, ensuring it matches the userTenentId after fetch
+export const getBlog = async (documentId: string, userTenentId: string): Promise<Blog | null> => {
+    if (!documentId) {
+        console.warn(`[Service getBlog]: documentId is missing.`);
+        return null;
+    }
     if (!userTenentId) {
-        console.error(`[Service getBlog]: userTenentId is missing for blog ID ${id}.`);
+        console.error(`[Service getBlog]: userTenentId is missing for blog documentId ${documentId}.`);
         throw new Error('User tenent_id is required to verify fetched blog.');
     }
     const params = {
-
-        'populate[seo_blog][populate][openGraph][populate]':'*'
-
+        'populate[seo_blog][populate][openGraph][populate]':'*',
+        'populate[categories]':'*', // Ensure categories are populated
+        'populate[image]':'*', // Ensure image is populated
     };
-    const url = `/blogs/${id}`; // Use numeric ID for this GET request
-    console.log(`[getBlog] Fetching URL: ${url} (using numeric ID) with params:`, params);
+    const url = `/blogs/${documentId}`; // Use string documentId for this GET request path
+    console.log(`[getBlog] Fetching URL: ${url} (using string documentId) with params:`, params);
 
     try {
         const headers = await getAuthHeader();
         const response = await axiosInstance.get<FindOne<Blog>>(url, { params, headers });
 
         if (!response.data || !response.data.data || typeof response.data.data !== 'object' || response.data.data === null) {
-            console.error(`[getBlog] Unexpected API response structure for blog ${id} from ${url}. Expected 'data' object, received:`, response.data);
+            console.error(`[getBlog] Unexpected API response structure for blog ${documentId} from ${url}. Expected 'data' object, received:`, response.data);
             return null; 
         }
 
         if (response.data.data.tenent_id !== userTenentId) {
-             console.warn(`[getBlog] Fetched blog ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}). Access denied or wrong item.`);
+             console.warn(`[getBlog] Fetched blog ${documentId} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}). Access denied or wrong item.`);
              return null; 
         }
 
-        console.log(`[getBlog] Fetched Blog ${id} Data for tenent_id ${userTenentId}:`, response.data.data);
+        console.log(`[getBlog] Fetched Blog ${documentId} Data for tenent_id ${userTenentId}:`, response.data.data);
         return response.data.data;
 
     } catch (error: unknown) {
-         let message = `Failed to fetch blog ${id}.`;
+         let message = `Failed to fetch blog ${documentId}.`;
          if (error instanceof AxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data || { message: error.message };
              if (status === 404) {
-                 console.warn(`[getBlog] Blog ${id} not found.`);
+                 console.warn(`[getBlog] Blog ${documentId} not found.`);
                  return null;
              }
              if (status === 403) {
-                console.warn(`[getBlog] Access to blog ${id} forbidden.`);
+                console.warn(`[getBlog] Access to blog ${documentId} forbidden.`);
                 return null;
             }
-            console.error(`[getBlog] Failed to fetch blog ${id} from ${url} (Status: ${status}):`, JSON.stringify(errorData, null, 2));
+            console.error(`[getBlog] Failed to fetch blog ${documentId} from ${url} (Status: ${status}):`, JSON.stringify(errorData, null, 2));
             const strapiErrorMessage = (errorData as any)?.error?.message;
-            message = strapiErrorMessage || `Failed to fetch blog ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
+            message = strapiErrorMessage || `Failed to fetch blog ${documentId} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
         } else if (error instanceof Error) {
-            console.error(`[getBlog] Generic Error for blog ${id}:`, error.message);
+            console.error(`[getBlog] Generic Error for blog ${documentId}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[getBlog] Unknown Error for blog ${id}:`, error);
+            console.error(`[getBlog] Unknown Error for blog ${documentId}:`, error);
         }
         throw new Error(message);
     }
@@ -164,15 +167,15 @@ export const createBlog = async (blog: CreateBlogPayload): Promise<Blog> => {
     }
 };
 
-// Update a blog by its documentId.
-export const updateBlog = async (documentId: string, blog: Partial<CreateBlogPayload>, userTenentIdAuthContext: string): Promise<Blog> => {
+// Update a blog by its numeric id.
+export const updateBlog = async (id: number, blog: Partial<CreateBlogPayload>, userTenentIdAuthContext: string): Promise<Blog> => {
     const { tenent_id, ...updateData } = blog; 
     if (tenent_id) {
-        console.warn(`[Service updateBlog]: tenent_id was present in update payload for blog documentId ${documentId} but is being excluded. tenent_id should not be updated.`);
+        console.warn(`[Service updateBlog]: tenent_id was present in update payload for blog ID ${id} but is being excluded. tenent_id should not be updated.`);
     }
 
-    const url = `/blogs/${documentId}`; // Use documentId for the PUT request path
-    console.log(`[updateBlog] Updating blog documentId ${documentId} at ${url} (Auth context tenent_id: ${userTenentIdAuthContext}) with payload:`, JSON.stringify({ data: updateData }, null, 2));
+    const url = `/blogs/${id}`; // Use numeric ID for the PUT request path
+    console.log(`[updateBlog] Updating blog ID ${id} at ${url} (Auth context tenent_id: ${userTenentIdAuthContext}) with payload:`, JSON.stringify({ data: updateData }, null, 2));
     try {
         const headers = await getAuthHeader();
         const response = await axiosInstance.put<FindOne<Blog>>(url, 
@@ -184,42 +187,42 @@ export const updateBlog = async (documentId: string, blog: Partial<CreateBlogPay
         );
 
         if (!response.data || !response.data.data) {
-            console.error(`[updateBlog] Unexpected API response structure after update for blog documentId ${documentId} from ${url}:`, response.data);
+            console.error(`[updateBlog] Unexpected API response structure after update for blog ID ${id} from ${url}:`, response.data);
             throw new Error('Unexpected API response structure after update.');
         }
         
-        console.log(`[updateBlog] Updated Blog documentId ${documentId} Data (Auth context tenent_id ${userTenentIdAuthContext}):`, response.data.data);
+        console.log(`[updateBlog] Updated Blog ID ${id} Data (Auth context tenent_id ${userTenentIdAuthContext}):`, response.data.data);
         return response.data.data;
 
     } catch (error: unknown) {
-         let message = `Failed to update blog documentId ${documentId}.`;
+         let message = `Failed to update blog ID ${id}.`;
          if (error instanceof AxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data || { message: error.message };
              if (status === 404) {
-                 console.error(`[updateBlog] Blog documentId ${documentId} not found (Status: ${status}).`);
+                 console.error(`[updateBlog] Blog ID ${id} not found (Status: ${status}).`);
                  throw new Error(`Blog not found (Status: ${status}).`);
              }
              if (status === 403) {
-                console.error(`[updateBlog] Update forbidden for blog documentId ${documentId} (Status: ${status}).`);
+                console.error(`[updateBlog] Update forbidden for blog ID ${id} (Status: ${status}).`);
                 throw new Error(`Update forbidden (Status: ${status}).`);
             }
-            console.error(`[updateBlog] Failed to update blog documentId ${documentId} at ${url} (${status}):`, errorData);
+            console.error(`[updateBlog] Failed to update blog ID ${id} at ${url} (${status}):`, errorData);
             const strapiErrorMessage = (errorData as any)?.error?.message;
             const strapiErrorDetails = (errorData as any)?.error?.details;
             console.error("[updateBlog] Strapi Error Details:", strapiErrorDetails);
-            message = strapiErrorMessage || `Failed to update blog documentId ${documentId} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
+            message = strapiErrorMessage || `Failed to update blog ID ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
         } else if (error instanceof Error) {
-            console.error(`[updateBlog] Generic Error for blog documentId ${documentId}:`, error.message);
+            console.error(`[updateBlog] Generic Error for blog ID ${id}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[updateBlog] Unknown Error for blog documentId ${documentId}:`, error);
+            console.error(`[updateBlog] Unknown Error for blog ID ${id}:`, error);
         }
         throw new Error(message);
     }
 };
 
-// Delete a blog by its documentId.
+// Delete a blog by its string documentId.
 export const deleteBlog = async (documentId: string, userTenentIdAuthContext: string): Promise<Blog | void> => {
     const url = `/blogs/${documentId}`; // Use documentId for the DELETE request path
     console.log(`[deleteBlog] Deleting blog documentId ${documentId} at ${url} (Auth context tenent_id: ${userTenentIdAuthContext})`);
@@ -262,5 +265,3 @@ export const deleteBlog = async (documentId: string, userTenentIdAuthContext: st
         throw new Error(message);
     }
 };
-
-    

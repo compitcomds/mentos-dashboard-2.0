@@ -186,7 +186,7 @@ export default function BlogFormPage() {
     isLoading: isLoadingBlog,
     isError: isErrorBlog,
     error: errorBlog,
-  } = useGetBlog(isEditing ? blogDocumentIdFromUrl : null);
+  } = useGetBlog(isEditing ? blogDocumentIdFromUrl : null); // Use string documentId for fetching
 
   const createMutation = useCreateBlog();
   const updateMutation = useUpdateBlog();
@@ -387,9 +387,10 @@ export default function BlogFormPage() {
       ? data.tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tagVal) => ({ tag_value: tagVal }))
       : [];
     
-    // The form uses 'author' (singular), which matches CreateBlogPayload
+    const { author: formAuthor, ...restOfData } = data;
+
     const payload: CreateBlogPayload = {
-      ...data, // Spread all form data
+      ...restOfData,
       tags: tagsPayload,
       tenent_id: userTenentId,
       categories: data.categories, 
@@ -397,16 +398,16 @@ export default function BlogFormPage() {
           ...data.seo_blog,
           openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}) ,
       } : undefined,
-      // 'author' field from 'data' is already correct
+      author: formAuthor, // Use the destructured formAuthor (singular)
     };
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
     if (isEditing && blogData?.id && blogData.documentId) { 
       updateMutation.mutate({ 
-        id: blogData.id, // Numeric ID for the API path
+        id: blogData.id, // Numeric ID for the API path for update
         blog: payload,
-        numericId: blogData.documentId // String documentId for cache invalidation, matches hook variable name
+        documentIdForInvalidation: blogData.documentId // String documentId for cache invalidation
       }, mutationOptions);
     } else {
       createMutation.mutate(payload, mutationOptions);
@@ -1334,4 +1335,3 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
-
