@@ -31,7 +31,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
     const headers = await getAuthHeader();
     const params = {
         'filters[tenent_id][$eq]': userTenentId,
-        'populate': '*',
+        'populate': ['media', 'tags', 'user'], // Ensure media relation is populated
     };
     const url = '/web-medias';
     console.log(`[fetchMediaFiles] Fetching URL: ${url} with params:`, JSON.stringify(params));
@@ -79,7 +79,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
 
             return {
                 webMediaId: item.id, 
-                webMediaDocumentId: item.documentId, 
+                webMediaDocumentId: item.documentId || String(item.id), // Fallback for webMediaDocumentId
                 name: item.name || mediaFile.name || 'Unnamed Media',
                 alt: item.alt || null,
                 tenent_id: item.tenent_id,
@@ -87,7 +87,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
                 updatedAt: item.updatedAt!,
                 publishedAt: item.publishedAt || null,
                 fileId: mediaFile.id, 
-                fileDocumentId: (mediaFile as any).documentId || null, 
+                fileDocumentId: mediaFile.documentId || null, // Use direct access if Media type has documentId
                 fileUrl: constructUrl(mediaFile.url),
                 fileName: mediaFile.name ?? 'N/A',
                 mime: mediaFile.mime ?? null,
@@ -155,7 +155,7 @@ export async function uploadFile(formData: FormData): Promise<UploadFile[]> {
                     } catch (e) { /* ignore */ }
                 }
                 if (mainMsg.toLowerCase().includes("unsupported image format") || (strapiError.details as any)?.errors?.some((e: any) => e.message?.toLowerCase().includes("unsupported image format"))) {
-                    detailedMessage += " Strapi reported an unsupported image format. Please check server logs and ensure the file type is supported by the backend media library configuration.";
+                    detailedMessage = `Strapi reported an unsupported image format. Please check server logs and ensure the file type is supported by the backend media library configuration. Original error: ${mainMsg}`;
                 }
             } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
                 detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data.message}`;
@@ -165,7 +165,7 @@ export async function uploadFile(formData: FormData): Promise<UploadFile[]> {
                 detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
             }
              if (status === 500) {
-                detailedMessage += " This is an Internal Server Error from the API. Please check Strapi server logs for more details on why the upload was rejected (e.g., unsupported format, processing error).";
+                detailedMessage = `Internal Server Error. This is an Internal Server Error from the API. Please check Strapi server logs for more details on why the upload was rejected (e.g., unsupported format, processing error). Original error: ${error.message}`;
             }
         } else if (error instanceof Error) {
             detailedMessage = error.message;
@@ -185,7 +185,7 @@ export async function createWebMedia(payload: CreateWebMediaPayload): Promise<We
     try {
         const response = await axiosInstance.post<FindOne<WebMedia>>('/web-medias', { data: payload }, {
             headers,
-            params: { populate: '*' } 
+            params: { populate: ['media', 'tags', 'user'] } 
         });
 
         if (!response.data || !response.data.data) {
@@ -220,7 +220,7 @@ export async function updateWebMedia(webMediaId: number, payload: UpdateWebMedia
     try {
         const response = await axiosInstance.put<FindOne<WebMedia>>(`/web-medias/${webMediaId}`, { data: updateData }, {
             headers,
-            params: { populate: '*' } 
+            params: { populate: ['media', 'tags', 'user'] } 
         });
         if (!response.data || !response.data.data) {
             throw new Error(`Invalid response structure after updating web media ${webMediaId}.`);
@@ -259,8 +259,9 @@ export async function deleteUploadFile(fileId: number): Promise<Media | void> {
              console.log(`[Service deleteUploadFile]: File ${fileId} deleted successfully (204 No Content).`);
              return; 
         } else {
-            console.error(`[Service deleteUploadFile]: Unexpected success response after deleting file ${fileId}. Status: ${response.status}, Data:`, response.data);
-            throw new Error(`Unexpected success response (status ${response.status}) after deleting file ${fileId}.`);
+            const errorMsg = `Unexpected success response (status ${response.status}) after deleting file ${fileId}. Data: ${JSON.stringify(response.data)}`;
+            console.error(`[Service deleteUploadFile]: ${errorMsg}`);
+            throw new Error(errorMsg);
         }
     } catch (error: unknown) {
         let message = `Failed to delete file ${fileId}`;
@@ -295,8 +296,9 @@ export async function deleteWebMedia(webMediaId: number): Promise<WebMedia | voi
             console.log(`[Service deleteWebMedia]: Web media entry ${webMediaId} deleted successfully (204 No Content).`);
             return; 
         } else {
-            console.error(`[Service deleteWebMedia]: Unexpected success response after deleting web media ${webMediaId}. Status: ${response.status}, Data:`, response.data);
-            throw new Error(`Unexpected success response (status ${response.status}) after deleting web media ${webMediaId}.`);
+            const errorMsg = `Unexpected success response (status ${response.status}) after deleting web media ${webMediaId}. Data: ${JSON.stringify(response.data)}`;
+            console.error(`[Service deleteWebMedia]: ${errorMsg}`);
+            throw new Error(errorMsg);
         }
     } catch (error: unknown) {
         let message = `Failed to delete web media entry ${webMediaId}`;
@@ -349,6 +351,8 @@ export async function deleteMediaAndFile(webMediaId: number, fileId: number | nu
             console.log(`[Service deleteMediaAndFile]: Associated file ${fileId} deleted successfully.`);
         } catch (error) {
             console.error(`[Service deleteMediaAndFile]: Error deleting associated file ${fileId} (WebMedia entry ${webMediaId} was already deleted):`, error);
+            // Do not re-throw here if the webMedia entry was successfully deleted,
+            // but the file deletion failed. The returned object will indicate fileDeleted: false.
         }
     } else if (webMediaDeleted && fileId === null) {
         console.log(`[Service deleteMediaAndFile]: Web media entry ${webMediaId} deleted, but no associated file ID was provided to delete.`);
