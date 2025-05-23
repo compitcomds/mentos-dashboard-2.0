@@ -96,7 +96,7 @@ export default function DashboardLayout({
     { href: '/dashboard/blog', label: 'Blog', icon: PenSquare },
     { href: '/dashboard/event', label: 'Events', icon: CalendarClock },
     { href: '/dashboard/categories', label: 'Categories', icon: LayoutList },
-    { href: '/dashboard/extra-content', label: 'Extra Content Management', icon: FileJson }, // Renamed and path updated
+    { href: '/dashboard/extra-content', label: 'Extra Content Management', icon: FileJson },
     { href: '/dashboard/web-media', label: 'Web Media', icon: ImageIconLucide },
     { href: '/dashboard/query-forms', label: 'Query Forms', icon: HelpCircle },
     { href: '/dashboard/developer-docs', label: 'Developer Docs', icon: BookText },
