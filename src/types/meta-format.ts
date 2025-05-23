@@ -12,7 +12,7 @@ export interface DynamicComponentBase {
 // --- Text Field Component ---
 export interface DynamicComponentTextField extends DynamicComponentBase {
   __component: "dynamic-component.text-field";
-  lable?: string | null; // From Strapi schema (likely 'label' intended)
+  label?: string | null; // Corrected from lable
   min?: number | null;
   max?: number | null;
   default?: string | null;
@@ -59,7 +59,7 @@ export interface DynamicComponentEnumField extends DynamicComponentBase {
 // --- Date Field Component ---
 export interface DynamicComponentDateField extends DynamicComponentBase {
   __component: "dynamic-component.date-field";
-  lable?: string | null; // From Strapi schema (likely 'label' intended)
+  label?: string | null; // Corrected from lable
   // Strapi schema has "data&time", assuming it maps to "datetime" conceptually
   type?: "date" | "time" | "datetime" | "data&time" | null;
 }
