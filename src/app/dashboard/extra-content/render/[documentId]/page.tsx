@@ -1,8 +1,9 @@
+
 'use client';
 
 import * as React from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useForm, FormProvider, Controller, FieldValues, useFieldArray } from 'react-hook-form';
+import { useForm, FormProvider, Controller, FieldValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useGetMetaFormat } from '@/lib/queries/meta-format';
@@ -17,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { AlertCircle, CalendarIcon, Loader2, PlusCircle, Trash2, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon } from 'lucide-react'; // Removed PlusCircle, Trash2 as they are in ArrayFieldRenderer
 import { format } from 'date-fns';
 import type { FormFormatComponent, MetaFormat } from '@/types/meta-format';
 import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog';
@@ -27,12 +28,14 @@ import { useCurrentUser } from '@/lib/queries/user';
 import type { CreateMetaDataPayload } from '@/types/meta-data';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-
+import ArrayFieldRenderer from './_components/array-field-renderer'; // Import the new component
 
 // Helper to generate a unique field name for RHF
 const getFieldName = (component: FormFormatComponent): string => {
   if (component.id) {
-    return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
+    // Ensure component.id is a valid string or number before using it in template literal
+    const idPart = typeof component.id === 'number' || typeof component.id === 'string' ? component.id : Math.random().toString(36).substring(7);
+    return `component_${component.__component.replace('dynamic-component.', '')}_${idPart}`;
   }
   const label = component.label || component.__component.split('.').pop() || 'unknown_field';
   return label.toLowerCase().replace(/\s+/g, '_') + `_${Math.random().toString(36).substring(7)}`;
@@ -46,18 +49,17 @@ const getDefaultValueForComponent = (componentType: string, component?: FormForm
     case 'dynamic-component.number-field':
       return component?.default !== undefined && component.default !== null && component.default !== '' ? Number(component.default) : null;
     case 'dynamic-component.media-field':
-      return null; // Default to no media selected
+      return null; // Default to no media selected (string documentId)
     case 'dynamic-component.enum-field':
-      return component?.default || null; // Or first option if required & no default
+      return component?.default || null;
     case 'dynamic-component.date-field':
       return component?.default ? new Date(component.default) : null;
     case 'dynamic-component.boolean-field':
-      return component?.default === 'true';
+      return component?.default === 'true' || component?.default === true; // Handle string 'true' and boolean true
     default:
       return null;
   }
 };
-
 
 // Function to generate Zod schema and default values dynamically
 const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined) => {
@@ -75,13 +77,14 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
 
     switch (component.__component) {
       case 'dynamic-component.text-field':
-        let textSchema = z.string();
-        if (component.required) textSchema = textSchema.min(1, { message: `${component.label || 'Field'} is required.` });
-        else textSchema = textSchema.optional().nullable();
-        if (component.min && typeof component.min === 'number') textSchema = textSchema.min(component.min);
-        if (component.max && typeof component.max === 'number') textSchema = textSchema.max(component.max);
-        if (component.inputType === 'email') textSchema = textSchema.email({ message: "Invalid email address."});
-        fieldSchema = component.is_array ? z.array(textSchema).optional().default([]) : textSchema;
+        let textSchemaCore = z.string();
+        if (component.required) textSchemaCore = textSchemaCore.min(1, { message: `${component.label || 'Field'} is required.` });
+        else textSchemaCore = textSchemaCore.optional().nullable();
+        if (component.min && typeof component.min === 'number') textSchemaCore = textSchemaCore.min(component.min);
+        if (component.max && typeof component.max === 'number') textSchemaCore = textSchemaCore.max(component.max);
+        if (component.inputType === 'email') textSchemaCore = textSchemaCore.email({ message: "Invalid email address."});
+        
+        fieldSchema = component.is_array ? z.array(textSchemaCore).optional().default([]) : textSchemaCore;
         defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
         break;
       case 'dynamic-component.number-field':
@@ -94,23 +97,26 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
         }
         if (component.min !== null && component.min !== undefined) (numSchemaCore as z.ZodNumber) = (numSchemaCore as z.ZodNumber).min(component.min);
         if (component.max !== null && component.max !== undefined) (numSchemaCore as z.ZodNumber) = (numSchemaCore as z.ZodNumber).max(component.max);
+        
         fieldSchema = component.is_array ? z.array(numSchemaCore).optional().default([]) : numSchemaCore;
         defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
         break;
       case 'dynamic-component.media-field':
-        let mediaSchemaCore = z.string().nullable(); // Store documentId as string
-        if (component.required) mediaSchemaCore = z.string({ required_error: `${component.label || 'Media'} is required.` });
+        let mediaSchemaCore = z.string().nullable(); // Stores string documentId
+        if (component.required) mediaSchemaCore = z.string({ required_error: `${component.label || 'Media'} is required.` }).min(1, `${component.label || 'Media'} is required.`);
+        
         fieldSchema = component.is_array ? z.array(mediaSchemaCore).optional().default([]) : mediaSchemaCore;
         defaultValues[fieldName] = component.is_array ? [] : null;
         break;
       case 'dynamic-component.enum-field':
         let enumSchemaCore = z.string().optional().nullable();
         if (component.required) enumSchemaCore = z.string().min(1, `${component.label || 'Field'} is required.`);
-        // Multi-select enums are handled as arrays of strings
         if (component.type === 'multi-select') {
-            fieldSchema = z.array(z.string()).optional().default([]);
-             if (component.required) fieldSchema = z.array(z.string()).nonempty({ message: `${component.label || 'Field'} is required.` });
-            defaultValues[fieldName] = component.default ? component.default.split(',').map(s => s.trim()).filter(Boolean) : [];
+            fieldSchema = component.is_array ? z.array(z.array(z.string()).optional().default([])).optional().default([]) : z.array(z.string()).optional().default([]);
+            if (component.required && !component.is_array) fieldSchema = z.array(z.string()).nonempty({ message: `${component.label || 'Field'} requires at least one selection.` });
+            if (component.required && component.is_array) fieldSchema = z.array(z.array(z.string()).nonempty({ message: `${component.label || 'Field'} item requires at least one selection.` })).nonempty({message: `${component.label || 'Field'} is required.`});
+
+            defaultValues[fieldName] = component.is_array ? [] : (component.default ? component.default.split(',').map(s => s.trim()).filter(Boolean) : []);
         } else {
             fieldSchema = component.is_array ? z.array(enumSchemaCore).optional().default([]) : enumSchemaCore;
             defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
@@ -119,18 +125,21 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
       case 'dynamic-component.date-field':
         let dateSchemaCore = z.date().nullable();
         if (component.required) dateSchemaCore = z.date({ required_error: `${component.label || 'Date'} is required.` });
+        
         fieldSchema = component.is_array ? z.array(dateSchemaCore).optional().default([]) : dateSchemaCore;
         defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
         break;
       case 'dynamic-component.boolean-field':
         let boolSchemaCore = z.boolean().optional();
+        if (component.required) boolSchemaCore = z.boolean({ required_error: `${component.label || 'Field'} is required.`});
+
         fieldSchema = component.is_array ? z.array(boolSchemaCore).optional().default([]) : boolSchemaCore;
         defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
         break;
       default:
         console.warn(`Unsupported component type in MetaFormat: ${component.__component}`);
-        fieldSchema = z.any().optional();
-        defaultValues[fieldName] = null;
+        fieldSchema = z.any().optional(); // Fallback for unsupported types
+        defaultValues[fieldName] = component.is_array ? [] : null;
     }
     schemaShape[fieldName] = fieldSchema;
   });
@@ -146,7 +155,7 @@ export default function RenderExtraContentPage() {
   const { toast } = useToast();
 
   const metaFormatDocumentId = params.documentId as string;
-  const action = searchParams.get('action') || 'create'; // 'create' or 'edit'
+  const action = searchParams.get('action') || 'create'; 
   const metaDataEntryDocumentId = searchParams.get('entry');
 
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
@@ -159,7 +168,6 @@ export default function RenderExtraContentPage() {
   const createMetaDataMutation = useCreateMetaDataEntry();
   const updateMetaDataMutation = useUpdateMetaDataEntry();
 
-
   const [formSchema, setFormSchema] = React.useState<z.ZodObject<any, any, any>>(z.object({}));
   const [formDefaultValues, setFormDefaultValues] = React.useState<FieldValues>({});
   const [isFormInitialized, setIsFormInitialized] = React.useState(false);
@@ -171,37 +179,40 @@ export default function RenderExtraContentPage() {
   });
 
   React.useEffect(() => {
-    if (metaFormat) {
+    if (metaFormat && (action === 'create' || (action === 'edit' && (metaDataEntry || !metaDataEntryDocumentId)))) {
       const { schema, defaultValues: generatedDefaults } = generateFormSchemaAndDefaults(metaFormat);
       setFormSchema(schema);
       setFormDefaultValues(generatedDefaults);
 
+      let initialValues = { ...generatedDefaults };
+
       if (action === 'edit' && metaDataEntry) {
-        const editValues = { ...generatedDefaults };
-        // Map fetched meta_data to form fields, ensuring arrays are correctly populated
+        // Map fetched meta_data to form fields
         metaFormat.from_formate?.forEach(component => {
           const fieldName = getFieldName(component);
           const entryValue = metaDataEntry.meta_data?.[fieldName];
-          if (component.is_array) {
-            editValues[fieldName] = Array.isArray(entryValue) ? entryValue : (entryValue !== undefined && entryValue !== null ? [entryValue] : []);
-            if (component.__component === 'dynamic-component.date-field' && Array.isArray(editValues[fieldName])) {
-                editValues[fieldName] = editValues[fieldName].map((dateStr: string) => dateStr ? new Date(dateStr) : null).filter(Boolean);
+
+          if (entryValue !== undefined) {
+            if (component.is_array) {
+              initialValues[fieldName] = Array.isArray(entryValue) ? entryValue : (entryValue !== null ? [entryValue] : []);
+              if (component.__component === 'dynamic-component.date-field' && Array.isArray(initialValues[fieldName])) {
+                  initialValues[fieldName] = initialValues[fieldName].map((dateStr: string | Date) => dateStr ? new Date(dateStr) : null).filter(Boolean);
+              }
+            } else if (component.__component === 'dynamic-component.date-field' && entryValue) {
+              initialValues[fieldName] = new Date(entryValue);
+            } else {
+              initialValues[fieldName] = entryValue;
             }
-          } else if (component.__component === 'dynamic-component.date-field' && entryValue) {
-            editValues[fieldName] = new Date(entryValue);
-          } else if (entryValue !== undefined) {
-            editValues[fieldName] = entryValue;
           }
         });
-        console.log("[RenderExtraContentPage] EDIT Mode: Resetting form with combined MetaDataEntry values:", editValues);
-        methods.reset(editValues);
+        console.log("[RenderExtraContentPage] EDIT Mode: Resetting form with MetaDataEntry values:", initialValues);
       } else if (action === 'create') {
         console.log("[RenderExtraContentPage] CREATE Mode: Resetting form with MetaFormat defaults:", generatedDefaults);
-        methods.reset(generatedDefaults);
       }
+      methods.reset(initialValues);
       setIsFormInitialized(true);
     }
-  }, [metaFormat, action, metaDataEntry, methods]);
+  }, [metaFormat, action, metaDataEntry, metaDataEntryDocumentId, methods]);
 
 
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = React.useState(false);
@@ -209,13 +220,18 @@ export default function RenderExtraContentPage() {
 
 
   const handleMediaSelect = (selectedMedia: { fileId: string | null; thumbnailUrl: string | null }) => {
-    if (currentMediaFieldTarget && selectedMedia.fileId !== null) {
-      if (typeof currentMediaFieldTarget === 'string') {
-        methods.setValue(currentMediaFieldTarget, selectedMedia.fileId, { shouldValidate: true });
-      } else if (typeof currentMediaFieldTarget === 'object' && currentMediaFieldTarget.fieldName && currentMediaFieldTarget.index !== undefined) {
-        const { fieldName, index } = currentMediaFieldTarget;
-        methods.setValue(`${fieldName}.${index}`, selectedMedia.fileId, { shouldValidate: true });
-      }
+    if (!currentMediaFieldTarget || selectedMedia.fileId === null) {
+        toast({ variant: "destructive", title: "Error", description: "Media target or selected media document ID missing." });
+        setIsMediaSelectorOpen(false);
+        return;
+    }
+    const mediaDocumentId = selectedMedia.fileId; 
+
+    if (typeof currentMediaFieldTarget === 'string') {
+      methods.setValue(currentMediaFieldTarget, mediaDocumentId, { shouldValidate: true });
+    } else if (typeof currentMediaFieldTarget === 'object' && currentMediaFieldTarget.fieldName && currentMediaFieldTarget.index !== undefined) {
+      const { fieldName, index } = currentMediaFieldTarget;
+      methods.setValue(`${fieldName}.${index}`, mediaDocumentId, { shouldValidate: true });
     }
     setIsMediaSelectorOpen(false);
     setCurrentMediaFieldTarget(null);
@@ -238,8 +254,19 @@ export default function RenderExtraContentPage() {
             title: "Validation Error",
             description: "Please check the form for errors and ensure all required fields are filled.",
         });
-        Object.entries(methods.formState.errors).forEach(([fieldName, error]) => {
+        Object.entries(methods.formState.errors).forEach(([fieldName, error]: [string, any]) => {
             console.error(`Validation Error - ${fieldName}:`, error?.message, 'Field Value:', data[fieldName]);
+            if (error?.type === 'invalid_type' && Array.isArray(data[fieldName])) {
+              console.error(`  ↳ Error for field '${fieldName}' which is an array. Check individual item errors or array-level validation.`);
+            } else if (Array.isArray(error)) { // For array fields with per-item errors
+               error.forEach((itemError, index) => {
+                 if (itemError) {
+                   Object.entries(itemError).forEach(([subFieldName, subError] : [string, any]) => {
+                     console.error(`  ↳ Validation Error - ${fieldName}[${index}].${subFieldName}:`, subError?.message, 'Item Value:', data[fieldName]?.[index]);
+                   });
+                 }
+               });
+            }
         });
         return; 
     }
@@ -249,15 +276,22 @@ export default function RenderExtraContentPage() {
       return;
     }
 
-    // Prepare meta_data by processing array fields
     const processedData = { ...data };
     metaFormat?.from_formate?.forEach(component => {
         const fieldName = getFieldName(component);
         if (component.is_array && !Array.isArray(data[fieldName]) && data[fieldName] !== undefined && data[fieldName] !== null) {
-            processedData[fieldName] = [data[fieldName]]; // Ensure single values for array fields become arrays
+            processedData[fieldName] = [data[fieldName]]; 
         } else if (component.is_array && data[fieldName] === undefined) {
-            processedData[fieldName] = []; // Ensure undefined array fields become empty arrays
+            processedData[fieldName] = [];
         }
+         // Convert date objects back to ISO strings for submission if they are dates
+         if (component.__component === 'dynamic-component.date-field') {
+           if (component.is_array && Array.isArray(processedData[fieldName])) {
+             processedData[fieldName] = processedData[fieldName].map((dateVal: string | Date | null) => dateVal instanceof Date ? dateVal.toISOString() : dateVal);
+           } else if (processedData[fieldName] instanceof Date) {
+             processedData[fieldName] = processedData[fieldName].toISOString();
+           }
+         }
     });
 
 
@@ -379,101 +413,19 @@ export default function RenderExtraContentPage() {
                   const isRequired = component.required || false;
 
                   if (component.is_array) {
-                    const { fields, append, remove } = useFieldArray({
-                        control: methods.control,
-                        name: fieldName as any, // Cast to any if TS complains about FieldPath generic
-                    });
-
                     return (
-                        <div key={fieldName} className="space-y-3 p-4 border rounded-md bg-muted/30">
-                             <FormLabel className="font-semibold">{label} {isRequired && <span className="text-destructive">*</span>} (Multiple)</FormLabel>
-                            {fields.map((item, index) => (
-                                <div key={item.id} className="flex items-start gap-2 p-3 border rounded-md bg-background shadow-sm">
-                                    <div className="flex-grow">
-                                        <FormField
-                                            control={methods.control}
-                                            name={`${fieldName}.${index}` as any}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                   {/* No individual label for array items, main label above */}
-                                                    <FormControl>
-                                                        {(() => {
-                                                            switch (component.__component) {
-                                                                case 'dynamic-component.text-field':
-                                                                    if (component.inputType === 'tip-tap') {
-                                                                        return <TipTapEditor content={field.value || ''} onContentChange={field.onChange} className="min-h-[150px]" />;
-                                                                    }
-                                                                    return <Input type={component.inputType === 'email' ? 'email' : 'text'} placeholder={`${placeholder} #${index + 1}`} {...field} value={field.value ?? ''} />;
-                                                                case 'dynamic-component.number-field':
-                                                                    return <Input type="number" placeholder={`${placeholder} #${index + 1}`} {...field} value={field.value ?? ''} step={component.type === 'integer' ? '1' : 'any'} />;
-                                                                case 'dynamic-component.media-field':
-                                                                    return (
-                                                                        <div className="flex items-center gap-2">
-                                                                            <Button type="button" variant="outline" size="sm" onClick={() => openMediaSelector({ fieldName, index })}>
-                                                                                 <ImageIcon className="mr-2 h-4 w-4" />
-                                                                                {field.value ? `Media ID: ${field.value} (Change)` : placeholder || `Select Media #${index + 1}`}
-                                                                            </Button>
-                                                                            {field.value && <p className="text-xs text-muted-foreground">ID: {field.value}</p>}
-                                                                        </div>
-                                                                    );
-                                                                case 'dynamic-component.enum-field':
-                                                                    const options = component.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
-                                                                    // For arrays of enums, multi-select is usually not what's intended for *each item*
-                                                                    // Assuming single select for each item in the array
-                                                                    return (
-                                                                        <Select onValueChange={field.onChange} value={field.value || component.default || undefined}>
-                                                                            <SelectTrigger><SelectValue placeholder={`${placeholder || 'Select option'} #${index + 1}`} /></SelectTrigger>
-                                                                            <SelectContent>
-                                                                                {options.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    );
-                                                                case 'dynamic-component.date-field':
-                                                                    return (
-                                                                        <Popover>
-                                                                        <PopoverTrigger asChild>
-                                                                            <Button variant={"outline"} className={`w-full justify-start text-left font-normal ${!field.value && "text-muted-foreground"}`}>
-                                                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                                                            {field.value ? format(new Date(field.value), (component.type === 'time' ? 'HH:mm' : component.type === 'data&time' || component.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{`${placeholder || 'Pick a date'} #${index + 1}`}</span>}
-                                                                            </Button>
-                                                                        </PopoverTrigger>
-                                                                        <PopoverContent className="w-auto p-0">
-                                                                            <Calendar mode="single" selected={field.value ? new Date(field.value) : undefined} onSelect={field.onChange} initialFocus />
-                                                                            {(component.type === 'time' || component.type === 'data&time' || component.type === 'datetime') && (
-                                                                                <div className="p-3 border-t border-border"><FormLabel>Time (HH:mm)</FormLabel><Input type="time" value={field.value ? format(new Date(field.value), 'HH:mm') : ''} onChange={(e) => {const [hours, minutes] = e.target.value.split(':').map(Number); const newDate = field.value ? new Date(field.value) : new Date(); newDate.setHours(hours, minutes); field.onChange(newDate);}}/></div>
-                                                                            )}
-                                                                        </PopoverContent>
-                                                                        </Popover>
-                                                                    );
-                                                                case 'dynamic-component.boolean-field':
-                                                                    return (
-                                                                        <div className="flex items-center space-x-2 py-2">
-                                                                             <Switch id={`${fieldName}.${index}`} checked={field.value || false} onCheckedChange={field.onChange} />
-                                                                             <FormLabel htmlFor={`${fieldName}.${index}`} className="text-sm font-normal">{placeholder || `Toggle #${index + 1}`}</FormLabel>
-                                                                        </div>
-                                                                    );
-                                                                default: return <Input placeholder={`Unsupported component: ${component.__component}`} {...field} value={field.value ?? ''} disabled />;
-                                                            }
-                                                        })()}
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
-                                    <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} className="text-destructive hover:text-destructive flex-shrink-0 mt-1">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            ))}
-                            <Button type="button" variant="outline" size="sm" onClick={() => append(getDefaultValueForComponent(component.__component, component))} className="mt-2">
-                                <PlusCircle className="mr-2 h-4 w-4" /> Add {label}
-                            </Button>
-                            {component.description && <FormDescription className="mt-1">{component.description}</FormDescription>}
-                        </div>
+                      <ArrayFieldRenderer
+                        key={fieldName}
+                        fieldName={fieldName}
+                        componentDefinition={component}
+                        control={methods.control}
+                        methods={methods}
+                        isSubmitting={isSubmitting}
+                        openMediaSelector={openMediaSelector}
+                        getDefaultValueForComponent={getDefaultValueForComponent}
+                      />
                     );
                   }
-
                   // --- Original rendering for non-array fields ---
                   return (
                     <FormField
@@ -496,42 +448,44 @@ export default function RenderExtraContentPage() {
                                       />
                                     );
                                   }
-                                  return <Input type={component.inputType === 'email' ? 'email' : 'text'} placeholder={placeholder} {...field} value={field.value ?? ''} />;
+                                  return <Input type={component.inputType === 'email' ? 'email' : 'text'} placeholder={placeholder} {...field} value={field.value ?? ''} disabled={isSubmitting}/>;
                                 case 'dynamic-component.number-field':
-                                  return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={component.type === 'integer' ? '1' : 'any'} />;
+                                  return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={component.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
                                 case 'dynamic-component.media-field':
                                   const mediaTypeHint = component.type ? `a ${component.type}` : 'Media';
+                                  const currentMediaDocId = field.value as string | null;
                                   return (
                                     <div className="flex items-center gap-2">
                                       <Button
                                         type="button"
                                         variant="outline"
                                         onClick={() => openMediaSelector(fieldName)}
+                                        disabled={isSubmitting}
                                       >
                                          <ImageIcon className="mr-2 h-4 w-4" />
-                                        {field.value ? `Media DocID: ${field.value} (Change)` : placeholder || `Select ${mediaTypeHint}`}
+                                        {currentMediaDocId ? `Media DocID: ${currentMediaDocId} (Change)` : placeholder || `Select ${mediaTypeHint}`}
                                       </Button>
-                                       {field.value && <p className="text-xs text-muted-foreground">Document ID: {field.value}</p>}
+                                       {currentMediaDocId && <p className="text-xs text-muted-foreground">Document ID: {currentMediaDocId}</p>}
                                     </div>
                                   );
                                 case 'dynamic-component.enum-field':
                                   const options = component.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
-                                  if (component.type === 'multi-select') { // This case is for single enum field that behaves like multi-select
+                                  if (component.type === 'multi-select') { 
                                     return (
                                       <div className="space-y-2 p-2 border rounded-md">
                                         {options.map(option => (
                                           <FormItem key={option} className="flex flex-row items-center space-x-3 space-y-0">
                                             <FormControl>
                                               <Switch
-                                                checked={(field.value || []).includes(option)}
+                                                checked={(Array.isArray(field.value) ? field.value : []).includes(option)}
                                                 onCheckedChange={(checked) => {
                                                   const currentValues = Array.isArray(field.value) ? field.value : [];
-                                                  if (checked) {
-                                                    methods.setValue(fieldName, [...currentValues, option], {shouldValidate: true});
-                                                  } else {
-                                                    methods.setValue(fieldName, currentValues.filter((v: string) => v !== option), {shouldValidate: true});
-                                                  }
+                                                  const newValues = checked
+                                                    ? [...currentValues, option]
+                                                    : currentValues.filter((v: string) => v !== option);
+                                                  methods.setValue(fieldName, newValues, {shouldValidate: true});
                                                 }}
+                                                disabled={isSubmitting}
                                               />
                                             </FormControl>
                                             <FormLabel className="font-normal">{option}</FormLabel>
@@ -541,7 +495,7 @@ export default function RenderExtraContentPage() {
                                     );
                                   }
                                   return (
-                                    <Select onValueChange={field.onChange} value={field.value || component.default || ""} >
+                                    <Select onValueChange={field.onChange} value={field.value || component.default || ""} disabled={isSubmitting} >
                                       <SelectTrigger><SelectValue placeholder={placeholder || 'Select an option'} /></SelectTrigger>
                                       <SelectContent>
                                         {options.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
@@ -555,6 +509,7 @@ export default function RenderExtraContentPage() {
                                         <Button
                                           variant={"outline"}
                                           className={cn("w-[280px] justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                                          disabled={isSubmitting}
                                         >
                                           <CalendarIcon className="mr-2 h-4 w-4" />
                                           {field.value ? format(new Date(field.value), (component.type === 'time' ? 'HH:mm' : component.type === 'data&time' || component.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
@@ -566,6 +521,7 @@ export default function RenderExtraContentPage() {
                                           selected={field.value ? new Date(field.value) : undefined}
                                           onSelect={field.onChange}
                                           initialFocus
+                                          disabled={isSubmitting}
                                         />
                                          {(component.type === 'time' || component.type === 'data&time' || component.type === 'datetime') && (
                                             <div className="p-3 border-t border-border">
@@ -579,6 +535,7 @@ export default function RenderExtraContentPage() {
                                                         newDate.setHours(hours, minutes);
                                                         field.onChange(newDate);
                                                     }}
+                                                    disabled={isSubmitting}
                                                 />
                                             </div>
                                         )}
@@ -588,7 +545,7 @@ export default function RenderExtraContentPage() {
                                 case 'dynamic-component.boolean-field':
                                   return (
                                     <div className="flex items-center space-x-2 pt-2">
-                                      <Switch id={fieldName} checked={field.value || false} onCheckedChange={field.onChange} />
+                                      <Switch id={fieldName} checked={field.value || false} onCheckedChange={field.onChange} disabled={isSubmitting} />
                                       <FormLabel htmlFor={fieldName} className="text-sm font-normal">{placeholder || 'Enable'}</FormLabel>
                                     </div>
                                   );
@@ -627,3 +584,4 @@ export default function RenderExtraContentPage() {
     </div>
   );
 }
+      
