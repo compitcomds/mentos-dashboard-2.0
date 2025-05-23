@@ -8,6 +8,7 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Pencil, Trash2, Loader2, AlertCircle, Eye, ImageIcon, LayoutGrid, List, Search, X } from "lucide-react";

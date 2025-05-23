@@ -96,8 +96,8 @@ export const useUpdateBlog = () => {
   const userTenentId = currentUser?.tenent_id;
 
   // numericId is the string documentId for cache invalidation
-  return useMutation<Blog, Error, { id: number; blog: Partial<CreateBlogPayload>; documentIdForInvalidation?: string }>({
-    mutationFn: ({ id, blog }: { id: number; blog: Partial<CreateBlogPayload> }) => {
+  return useMutation<Blog, Error, { id: string; blog: Partial<CreateBlogPayload>; documentIdForInvalidation?: string }>({
+    mutationFn: ({ id, blog }: { id: string; blog: Partial<CreateBlogPayload> }) => {
         if (!userTenentId) {
              throw new Error('User tenent_id is not available. Cannot update blog.');
         }

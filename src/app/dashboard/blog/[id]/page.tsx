@@ -405,7 +405,7 @@ export default function BlogFormPage() {
 
     if (isEditing && blogData?.id && blogData.documentId) { 
       updateMutation.mutate({ 
-        id: blogData.id, // Numeric ID for the API path for update
+        id: blogData.documentId, // Numeric ID for the API path for update
         blog: payload,
         documentIdForInvalidation: blogData.documentId // String documentId for cache invalidation
       }, mutationOptions);
