@@ -2,9 +2,10 @@
 'use client';
 
 import * as React from 'react';
-import { useParams, useRouter, Link } from 'next/navigation'; // Added Link
+import { useParams, useRouter } from 'next/navigation'; // Corrected: Link removed from here
+import Link from 'next/link'; // Corrected: Link imported from next/link
 import { useGetMetaFormat } from '@/lib/queries/meta-format';
-import { useGetMetaDataEntries, useDeleteMetaDataEntry } from '@/lib/queries/meta-data'; // Added useDeleteMetaDataEntry
+import { useGetMetaDataEntries, useDeleteMetaDataEntry } from '@/lib/queries/meta-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -88,7 +89,7 @@ export default function MetaDataListingPage() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>{error?.message || 'Could not load data for this extra content format.'}</AlertDescription>
+          <AlertDescription>{(error as Error)?.message || 'Could not load data for this extra content format.'}</AlertDescription>
         </Alert>
       </div>
     );
