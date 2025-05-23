@@ -36,8 +36,8 @@ import type { Media } from '@/types/media'; // Import Media type
 interface BlogCardGridProps {
   blogPosts: Blog[];
   getImageUrl: (post: Blog) => string | null;
-  onDelete: (id: string) => void;
-  deleteMutation: UseMutationResult<Blog | void, Error, string, unknown>;
+  onDelete: (post: Blog) => void; // Changed to accept full Blog object
+  deleteMutation: UseMutationResult<Blog | void, Error, { documentId: string; documentIdForInvalidation?: string }, unknown>; // Updated variables type
 }
 
 export default function BlogCardGrid({
@@ -51,7 +51,7 @@ export default function BlogCardGrid({
       {blogPosts.map((post) => {
         const imageUrl = getImageUrl(post);
         const authorName = post.author || 'N/A';
-        const categoryName = post.categories?.name ?? 'N/A'; // Updated for oneToOne relation
+        const categoryName = post.categories?.name ?? 'N/A';
         const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null;
 
         return (
@@ -111,7 +111,8 @@ export default function BlogCardGrid({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                    <Link href={`/dashboard/blog/${post.id}`}>
+                    {/* Link to edit page uses documentId if available, falls back to id */}
+                    <Link href={post.documentId ? `/dashboard/blog/${post.documentId}` : `/dashboard/blog/${post.id}`}>
                       <Pencil className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -126,7 +127,7 @@ export default function BlogCardGrid({
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        disabled={deleteMutation.isPending && deleteMutation.variables === String(post.id)}
+                        disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === post.documentId} // Compare with documentId
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -145,11 +146,11 @@ export default function BlogCardGrid({
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => onDelete(String(post.id))}
-                      disabled={deleteMutation.isPending && deleteMutation.variables === String(post.id)}
+                      onClick={() => onDelete(post)} // Pass full post object
+                      disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === post.documentId}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      {deleteMutation.isPending && deleteMutation.variables === String(post.id) ? (
+                      {deleteMutation.isPending && deleteMutation.variables?.documentId === post.documentId ? ( // Compare with documentId
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : null}
                       Delete

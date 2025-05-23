@@ -72,12 +72,13 @@ export default function BlogPage() {
   const handleDelete = (post: Blog) => { 
       if (!post.documentId) {
         console.error("Cannot delete blog: documentId is missing.", post);
-        toast({ variant: "destructive", title: "Error", description: "Cannot delete blog: missing identifier."});
+        toast({ variant: "destructive", title: "Error", description: "Cannot delete blog: missing string documentId."});
         return;
       }
+      // Use documentIdForInvalidation for the string documentId, and pass numericId as well for the detail query
       deleteMutation.mutate({ 
         documentId: post.documentId, 
-        documentIdForInvalidation: post.documentId // Pass string documentId for cache invalidation
+        documentIdForInvalidation: post.documentId 
       });
   };
 
@@ -245,8 +246,8 @@ export default function BlogPage() {
                             const authorName = post.author || 'N/A';
                             const categoryName = post.categories?.name ?? 'N/A'; 
                             const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null;
-                            // Use string documentId for edit link
-                            const editLink = post.documentId ? `/dashboard/blog/${post.documentId}` : '#';
+                            // Use string documentId for edit link if available, otherwise numeric id
+                            const editLink = post.documentId ? `/dashboard/blog/${post.documentId}` : `/dashboard/blog/${post.id}`;
 
 
                             return (
@@ -304,7 +305,7 @@ export default function BlogPage() {
                                      </Tooltip>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                             <Button asChild size="icon" variant="ghost" className="h-8 w-8" disabled={!post.documentId}>
+                                             <Button asChild size="icon" variant="ghost" className="h-8 w-8" disabled={!post.documentId && !post.id}>
                                                  <Link href={editLink}>
                                                     <Pencil className="h-4 w-4" />
                                                  </Link>
@@ -364,10 +365,7 @@ export default function BlogPage() {
             <BlogCardGrid
                 blogPosts={filteredBlogPosts}
                 getImageUrl={getImageUrl}
-                onDelete={() => {
-                    const postToDelete = filteredBlogPosts.find(p => deleteMutation.variables?.documentId === p.documentId);
-                    if(postToDelete) handleDelete(postToDelete);
-                }}
+                onDelete={handleDelete} // Pass the handleDelete directly
                 deleteMutation={deleteMutation}
              />
            )
@@ -456,3 +454,4 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
     </div>
   );
 }
+
