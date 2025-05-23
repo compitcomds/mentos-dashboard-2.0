@@ -5,19 +5,18 @@ import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Activity, CreditCard, DollarSign, Users, Loader2, AlertCircle } from "lucide-react";
-import { fetchCurrentUser } from '@/lib/services/user'; // Import the service function
-import type { User } from '@/types/auth'; // Import the User type
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert component
+import { fetchCurrentUser } from '@/lib/services/user';
+import type { User } from '@/types/auth';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import QuickNav from './_components/quick-nav'; // Import the new QuickNav component
 
 export default function DashboardPage() {
-
-  // Fetch current user data
   const { data: userData, isLoading, error, isError } = useQuery<User, Error>({
     queryKey: ['currentUser'],
     queryFn: fetchCurrentUser,
     staleTime: 1000 * 60 * 15, // 15 minutes
     gcTime: 1000 * 60 * 60, // 1 hour
-    retry: 1, // Retry once on failure
+    retry: 1,
   });
 
   return (
@@ -42,20 +41,21 @@ export default function DashboardPage() {
                          <AlertCircle className="h-4 w-4" />
                          <AlertTitle>Error Loading User</AlertTitle>
                          <AlertDescription>
-                           Could not fetch your user details. Please try refreshing the page. Error: {error.message}
+                           Could not fetch your user details. Please try refreshing the page. Error: {(error as Error).message}
                          </AlertDescription>
                      </Alert>
                  )}
                  {userData && !isLoading && !isError && (
                     <div>
                         <p className="text-sm">Your registered email: <strong>{userData.email}</strong></p>
-                        {/* You can add more user details here if available */}
-                        {/* <p className="text-sm mt-1">Full Name: <strong>{userData.full_name || 'N/A'}</strong></p> */}
                         <p className="mt-4 text-sm text-muted-foreground">Use the sidebar navigation to explore different sections.</p>
                     </div>
                  )}
              </CardContent>
         </Card>
+
+      {/* Quick Navigation Section */}
+      <QuickNav />
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
