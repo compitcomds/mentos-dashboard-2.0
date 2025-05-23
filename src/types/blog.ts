@@ -91,7 +91,7 @@ export const blogFormSchema = z.object({
     content: z.string().optional().default('<p></p>'),
     image: z.number().nullable().optional(), // Media ID
     categories: z.number().nullable().optional(), // Category ID (single selection in form)
-    authors: z.string().nullable().optional(), // Author Name (string, as per new Blog type)
+    author: z.string().nullable().optional(), // Author Name (string, as per new Blog type)
     tags: z.string().optional().default('')
         .refine((val) => {
             const tagCount = val ? val.split(',').map(tag => tag.trim()).filter(Boolean).length : 0;

@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -42,14 +41,10 @@ import type {
   SeoBlogPayload,
   OpenGraphPayload,
 } from "@/types/blog";
-import type { Categorie } from '@/types/category';
+import type { Categorie } from "@/types/category";
 import type { OtherTag } from "@/types/common";
 import type { Media } from "@/types/media";
-import {
-  Loader2,
-  X,
-  Image as ImageIcon,
-} from "lucide-react";
+import { Loader2, X, Image as ImageIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
@@ -66,10 +61,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useCurrentUser } from "@/lib/queries/user";
-import { useGetCategories } from '@/lib/queries/category';
+import { useGetCategories } from "@/lib/queries/category";
 import { format } from "date-fns";
-import type { CombinedMediaData } from '@/types/media';
-
+import type { CombinedMediaData } from "@/types/media";
 
 // Get the API base URL from environment variables, remove trailing '/api' if present
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || "";
@@ -89,7 +83,6 @@ const getMediaId = (mediaField: Media | null | undefined): number | null => {
   return mediaField?.id ?? null;
 };
 
-
 const getTagValues: GetTagValuesFunction = (tagField) => {
   if (!tagField || !Array.isArray(tagField)) return [];
   return tagField.map((t) => t.tag_value).filter(Boolean) as string[];
@@ -98,68 +91,72 @@ const getTagValues: GetTagValuesFunction = (tagField) => {
 const formatStructuredData = (data: any): string | null => {
   if (typeof data === "string") {
     try {
-       JSON.parse(data);
-       return data;
+      JSON.parse(data);
+      return data;
     } catch {
-       // If parsing fails but it's a non-empty string, return it as is, assuming it might be pre-formatted or a simple string keyword.
-       // If it's an empty string, fall back to default.
-       return data.trim() !== '' ? data : '{ "@context": "https://schema.org", "@type": "Article" }';
+      // If parsing fails but it's a non-empty string, return it as is, assuming it might be pre-formatted or a simple string keyword.
+      // If it's an empty string, fall back to default.
+      return data.trim() !== ""
+        ? data
+        : '{ "@context": "https://schema.org", "@type": "Article" }';
     }
   } else if (typeof data === "object" && data !== null) {
     try {
-       return JSON.stringify(data, null, 2);
+      return JSON.stringify(data, null, 2);
     } catch {
-        return '{ "@context": "https://schema.org", "@type": "Article" }';
+      return '{ "@context": "https://schema.org", "@type": "Article" }';
     }
   }
   // Default for null, undefined, or unparseable objects
   return '{ "@context": "https://schema.org", "@type": "Article" }';
 };
 
-
 const defaultFormValues: BlogFormValues = {
-    title: "",
-    excerpt: "",
-    slug: "",
-    content: "<p></p>",
-    image: null,
-    categories: null,
-    author: null,
-    tags: "",
-    view: 0,
-    Blog_status: "draft",
-    seo_blog: { // Ensure this matches SeoBlogPayload structure for defaults
-        metaTitle: "",
-        metaDescription: "",
-        metaImage: null,
-        openGraph: {
-            ogTitle: "",
-            ogDescription: "",
-            ogImage: null,
-            ogUrl: null,
-            ogType: "article",
-        },
-        keywords: null,
-        metaRobots: "index, follow",
-        metaViewport: "width=device-width, initial-scale=1.0",
-        canonicalURL: null,
-        structuredData: '{ "@context": "https://schema.org", "@type": "Article" }',
+  title: "",
+  excerpt: "",
+  slug: "",
+  content: "<p></p>",
+  image: null,
+  categories: null,
+  author: null,
+  tags: "",
+  view: 0,
+  Blog_status: "draft",
+  seo_blog: {
+    // Ensure this matches SeoBlogPayload structure for defaults
+    metaTitle: "",
+    metaDescription: "",
+    metaImage: null,
+    openGraph: {
+      ogTitle: "",
+      ogDescription: "",
+      ogImage: null,
+      ogUrl: null,
+      ogType: "article",
     },
-    tenent_id: '',
+    keywords: null,
+    metaRobots: "index, follow",
+    metaViewport: "width=device-width, initial-scale=1.0",
+    canonicalURL: null,
+    structuredData: '{ "@context": "https://schema.org", "@type": "Article" }',
+  },
+  tenent_id: "",
 };
-
 
 export default function BlogFormPage() {
   const params = useParams();
-  const blogDocumentIdFromUrl = params?.id as string | undefined; 
+  const blogDocumentIdFromUrl = params?.id as string | undefined;
   const isEditing = blogDocumentIdFromUrl && blogDocumentIdFromUrl !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
 
-  const { data: fetchedCategories, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories(userTenentId);
-
+  const {
+    data: fetchedCategories,
+    isLoading: isLoadingCategories,
+    isError: isCategoriesError,
+  } = useGetCategories(userTenentId);
 
   const [isLoadingComponent, setIsLoadingComponent] = useState(true); // Renamed from isLoading to avoid conflict
   const [tags, setTags] = useState<string[]>([]);
@@ -169,14 +166,14 @@ export default function BlogFormPage() {
     "image" | "seo_blog.metaImage" | "seo_blog.openGraph.ogImage" | null
   >(null);
   const [imagePreviews, setImagePreviews] = useState<{
-        featured: string | null;
-        meta: string | null;
-        og: string | null;
-    }>({
-        featured: null,
-        meta: null,
-        og: null,
-    });
+    featured: string | null;
+    meta: string | null;
+    og: string | null;
+  }>({
+    featured: null,
+    meta: null,
+    og: null,
+  });
   const [submissionPayloadJson, setSubmissionPayloadJson] = useState<
     string | null
   >(null);
@@ -192,17 +189,11 @@ export default function BlogFormPage() {
   const updateMutation = useUpdateBlog();
 
   const form = useForm<BlogFormValues>({
-      resolver: zodResolver(blogFormSchema),
-      defaultValues: defaultFormValues,
+    resolver: zodResolver(blogFormSchema),
+    defaultValues: defaultFormValues,
   });
 
-  const {
-    control,
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-  } = form;
+  const { control, handleSubmit, reset, setValue, watch } = form;
 
   const watchedTitle = watch("title", "");
   const watchedExcerpt = watch("excerpt", "");
@@ -211,83 +202,108 @@ export default function BlogFormPage() {
   const watchedOgTitle = watch("seo_blog.openGraph.ogTitle", "");
   const watchedOgDesc = watch("seo_blog.openGraph.ogDescription", "");
 
-
   useEffect(() => {
     if (isLoadingUser) return;
 
     let initialValues = { ...defaultFormValues };
 
     if (userTenentId) {
-         initialValues.tenent_id = userTenentId;
+      initialValues.tenent_id = userTenentId;
     } else if (!isEditing) {
-         console.error("User tenent_id is missing. Cannot create a new blog post.");
+      console.error(
+        "User tenent_id is missing. Cannot create a new blog post."
+      );
     }
 
+    if (isEditing && blogData && (fetchedCategories || !isCategoriesError)) {
+      setIsLoadingComponent(true);
+      if (blogData.tenent_id !== userTenentId) {
+        toast({
+          variant: "destructive",
+          title: "Authorization Error",
+          description: "You are not authorized to edit this blog post.",
+        });
+        router.push("/dashboard/blog");
+        setIsLoadingComponent(false);
+        return;
+      }
 
-    if (isEditing && blogData && (fetchedCategories || !isCategoriesError)) { 
-        setIsLoadingComponent(true);
-        if (blogData.tenent_id !== userTenentId) {
-            toast({ variant: "destructive", title: "Authorization Error", description: "You are not authorized to edit this blog post." });
-            router.push('/dashboard/blog');
-            setIsLoadingComponent(false);
-            return;
-        }
-
-        const fetchedTags = getTagValues(blogData.tags);
-        setTags(fetchedTags);
-
+      const fetchedTags = getTagValues(blogData.tags);
+      setTags(fetchedTags);
+      if (defaultFormValues.seo_blog) {
         initialValues = {
-            ...initialValues,
-            title: blogData.title || "",
-            excerpt: blogData.excerpt || "",
-            slug: blogData.slug || "",
-            content: blogData.content || "<p></p>",
-            image: getMediaId(blogData.image as Media | null),
-            categories: blogData.categories?.id ?? null, 
-            author: blogData.author || null, 
-            tags: fetchedTags.join(", "),
-            view: blogData.view ?? 0,
-            Blog_status: blogData.Blog_status || "draft",
-            seo_blog: blogData.seo_blog ? {
+          ...initialValues,
+          title: blogData.title || "",
+          excerpt: blogData.excerpt || "",
+          slug: blogData.slug || "",
+          content: blogData.content || "<p></p>",
+          image: getMediaId(blogData.image as Media | null),
+          categories: blogData.categories?.id ?? null,
+          author: blogData.author || null,
+          tags: fetchedTags.join(", "),
+          view: blogData.view ?? 0,
+          Blog_status: blogData.Blog_status || "draft",
+          seo_blog: blogData.seo_blog
+            ? {
                 metaTitle: blogData.seo_blog.metaTitle || "",
                 metaDescription: blogData.seo_blog.metaDescription || "",
-                metaImage: getMediaId(blogData.seo_blog?.metaImage as Media | null),
-                openGraph: blogData.seo_blog.openGraph ? {
-                    ogTitle: blogData.seo_blog.openGraph.ogTitle || "",
-                    ogDescription: blogData.seo_blog.openGraph.ogDescription || "",
-                    ogImage: getMediaId(blogData.seo_blog.openGraph.ogImage as Media | null),
-                    ogUrl: blogData.seo_blog.openGraph.ogUrl || null,
-                    ogType: blogData.seo_blog.openGraph.ogType || "article",
-                } : defaultFormValues.seo_blog.openGraph,
+                metaImage: getMediaId(
+                  blogData.seo_blog?.metaImage as Media | null
+                ),
+                openGraph: blogData.seo_blog.openGraph
+                  ? {
+                      ogTitle: blogData.seo_blog.openGraph.ogTitle || "",
+                      ogDescription:
+                        blogData.seo_blog.openGraph.ogDescription || "",
+                      ogImage: getMediaId(
+                        blogData.seo_blog.openGraph.ogImage as Media | null
+                      ),
+                      ogUrl: blogData.seo_blog.openGraph.ogUrl || null,
+                      ogType: blogData.seo_blog.openGraph.ogType || "article",
+                    }
+                  : defaultFormValues.seo_blog.openGraph,
                 keywords: blogData.seo_blog.keywords || null,
                 metaRobots: blogData.seo_blog.metaRobots || "index, follow",
-                metaViewport: blogData.seo_blog.metaViewport || "width=device-width, initial-scale=1.0",
+                metaViewport:
+                  blogData.seo_blog.metaViewport ||
+                  "width=device-width, initial-scale=1.0",
                 canonicalURL: blogData.seo_blog.canonicalURL || null,
-                structuredData: formatStructuredData(blogData.seo_blog.structuredData),
-            } : defaultFormValues.seo_blog,
-            tenent_id: blogData.tenent_id || userTenentId || '',
+                structuredData: formatStructuredData(
+                  blogData.seo_blog.structuredData
+                ),
+              }
+            : defaultFormValues.seo_blog,
+          tenent_id: blogData.tenent_id || userTenentId || "",
         };
+      }
 
-        setImagePreviews({
-            featured: getMediaUrl(blogData.image as Media | null),
-            meta: getMediaUrl(blogData.seo_blog?.metaImage as Media | null),
-            og: getMediaUrl(blogData.seo_blog?.openGraph?.ogImage as Media | null),
-        });
-
+      setImagePreviews({
+        featured: getMediaUrl(blogData.image as Media | null),
+        meta: getMediaUrl(blogData.seo_blog?.metaImage as Media | null),
+        og: getMediaUrl(blogData.seo_blog?.openGraph?.ogImage as Media | null),
+      });
     } else if (!isEditing) {
-        setImagePreviews({ featured: null, meta: null, og: null });
-        setTags([]);
-         // For new posts, ensure tenent_id is set if available from current user
-        if (userTenentId) {
-            initialValues.tenent_id = userTenentId;
-        }
+      setImagePreviews({ featured: null, meta: null, og: null });
+      setTags([]);
+      // For new posts, ensure tenent_id is set if available from current user
+      if (userTenentId) {
+        initialValues.tenent_id = userTenentId;
+      }
     }
 
     reset(initialValues);
     setIsLoadingComponent(false);
-
-  }, [isEditing, blogData, fetchedCategories, reset, isLoadingUser, userTenentId, router, toast, isCategoriesError]);
-
+  }, [
+    isEditing,
+    blogData,
+    fetchedCategories,
+    reset,
+    isLoadingUser,
+    userTenentId,
+    router,
+    toast,
+    isCategoriesError,
+  ]);
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTagInput(e.target.value);
@@ -332,25 +348,45 @@ export default function BlogFormPage() {
 
   const handleMediaSelect = useCallback(
     (selectedMedia: CombinedMediaData) => {
-      if (!currentMediaTarget || !selectedMedia || typeof selectedMedia.fileId !== 'number') { 
-        toast({ variant: "destructive", title: "Error", description: "Media target or selected media ID missing or invalid." });
+      if (
+        !currentMediaTarget ||
+        !selectedMedia ||
+        typeof selectedMedia.fileId !== "number"
+      ) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Media target or selected media ID missing or invalid.",
+        });
         setIsMediaSelectorOpen(false);
         return;
       }
 
-      const fileIdToSet = selectedMedia.fileId; 
+      const fileIdToSet = selectedMedia.fileId;
       const previewUrl = selectedMedia.thumbnailUrl || selectedMedia.fileUrl;
 
       if (selectedMedia.mime?.startsWith("image/")) {
         const targetFieldName = currentMediaTarget;
-        const previewTarget = targetFieldName === "image" ? "featured" : targetFieldName === "seo_blog.metaImage" ? "meta" : "og";
+        const previewTarget =
+          targetFieldName === "image"
+            ? "featured"
+            : targetFieldName === "seo_blog.metaImage"
+            ? "meta"
+            : "og";
 
         setValue(targetFieldName, fileIdToSet, { shouldValidate: true });
         setImagePreviews((prev) => ({ ...prev, [previewTarget]: previewUrl }));
 
-        toast({ title: "Image Selected", description: `Set ${targetFieldName} to image ID: ${fileIdToSet}` });
+        toast({
+          title: "Image Selected",
+          description: `Set ${targetFieldName} to image ID: ${fileIdToSet}`,
+        });
       } else {
-        toast({ variant: "destructive", title: "Invalid File Type", description: "Please select an image file for this field." });
+        toast({
+          variant: "destructive",
+          title: "Invalid File Type",
+          description: "Please select an image file for this field.",
+        });
       }
 
       setIsMediaSelectorOpen(false);
@@ -362,60 +398,93 @@ export default function BlogFormPage() {
   const removeSelectedImage = (
     target: "image" | "seo_blog.metaImage" | "seo_blog.openGraph.ogImage"
   ) => {
-    const previewTarget = target === "image" ? "featured" : target === "seo_blog.metaImage" ? "meta" : "og";
+    const previewTarget =
+      target === "image"
+        ? "featured"
+        : target === "seo_blog.metaImage"
+        ? "meta"
+        : "og";
     setValue(target, null, { shouldValidate: true });
     setImagePreviews((prev) => ({ ...prev, [previewTarget]: null }));
   };
 
   const onSubmit: SubmitHandler<BlogFormValues> = async (data) => {
     if (!userTenentId) {
-        toast({ variant: "destructive", title: "Error", description: "User tenent_id is missing. Cannot submit." });
-        return;
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "User tenent_id is missing. Cannot submit.",
+      });
+      return;
     }
 
     const mutationOptions = {
       onSuccess: () => {
-        toast({ title: "Success", description: `Blog post ${isEditing ? "updated" : "created"} successfully` });
+        toast({
+          title: "Success",
+          description: `Blog post ${
+            isEditing ? "updated" : "created"
+          } successfully`,
+        });
         router.push("/dashboard/blog");
       },
       onError: (err: any) => {
-        setSubmissionPayloadJson(`Error: ${err.message}\n\n${JSON.stringify(err.response?.data || err, null, 2)}`);
+        setSubmissionPayloadJson(
+          `Error: ${err.message}\n\n${JSON.stringify(
+            err.response?.data || err,
+            null,
+            2
+          )}`
+        );
       },
     };
 
     const tagsPayload: OtherTag[] = data.tags
-      ? data.tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tagVal) => ({ tag_value: tagVal }))
+      ? data.tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+          .map((tagVal) => ({ tag_value: tagVal }))
       : [];
-    
+
     const { author: formAuthor, ...restOfData } = data;
 
     const payload: CreateBlogPayload = {
       ...restOfData,
       tags: tagsPayload,
       tenent_id: userTenentId,
-      categories: data.categories, 
-      seo_blog: data.seo_blog ? {
-          ...data.seo_blog,
-          openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}) ,
-      } : undefined,
+      categories: data.categories,
+      seo_blog: data.seo_blog
+        ? {
+            ...data.seo_blog,
+            openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}),
+          }
+        : undefined,
       author: formAuthor, // Use the destructured formAuthor (singular)
     };
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
 
-    if (isEditing && blogData?.id && blogData.documentId) { 
-      updateMutation.mutate({ 
-        id: blogData.documentId, // Numeric ID for the API path for update
-        blog: payload,
-        documentIdForInvalidation: blogData.documentId // String documentId for cache invalidation
-      }, mutationOptions);
+    if (isEditing && blogData?.id && blogData.documentId) {
+      updateMutation.mutate(
+        {
+          id: blogData.documentId, // Numeric ID for the API path for update
+          blog: payload,
+          documentIdForInvalidation: blogData.documentId, // String documentId for cache invalidation
+        },
+        mutationOptions
+      );
     } else {
       createMutation.mutate(payload, mutationOptions);
     }
   };
 
   const isSubmittingForm = createMutation.isPending || updateMutation.isPending;
-  const isPageLoading = isLoadingComponent || isLoadingUser || (isEditing && isLoadingBlog) || isLoadingCategories;
+  const isPageLoading =
+    isLoadingComponent ||
+    isLoadingUser ||
+    (isEditing && isLoadingBlog) ||
+    isLoadingCategories;
 
   if (isPageLoading) {
     return <BlogFormSkeleton isEditing={!!isEditing} />;
@@ -429,7 +498,8 @@ export default function BlogFormPage() {
         <Card>
           <CardContent className="p-6">
             <p className="text-destructive">
-              Failed to load blog post data. Please try again. DocumentID: {blogDocumentIdFromUrl}
+              Failed to load blog post data. Please try again. DocumentID:{" "}
+              {blogDocumentIdFromUrl}
             </p>
             <pre className="mt-2 text-xs text-muted-foreground bg-muted p-2 rounded">
               Error: {errorBlog?.message}
@@ -439,23 +509,26 @@ export default function BlogFormPage() {
       </div>
     );
   }
-   if (!userTenentId && !isLoadingUser) {
-       return (
-           <div className="flex flex-col space-y-6 items-center justify-center h-full">
-                <h1 className="text-2xl font-bold tracking-tight text-destructive">
-                    User Tenent ID Missing
-                </h1>
-                <Card className="w-full max-w-md">
-                    <CardContent className="p-6 text-center">
-                        <p className="text-destructive">
-                            Could not retrieve your user tenent_id. Cannot create or edit blog posts.
-                        </p>
-                        <Button onClick={() => router.refresh()} className="mt-4">Refresh</Button>
-                    </CardContent>
-                </Card>
-            </div>
-        );
-   }
+  if (!userTenentId && !isLoadingUser) {
+    return (
+      <div className="flex flex-col space-y-6 items-center justify-center h-full">
+        <h1 className="text-2xl font-bold tracking-tight text-destructive">
+          User Tenent ID Missing
+        </h1>
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 text-center">
+            <p className="text-destructive">
+              Could not retrieve your user tenent_id. Cannot create or edit blog
+              posts.
+            </p>
+            <Button onClick={() => router.refresh()} className="mt-4">
+              Refresh
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const ImageSelectorButton = ({
     target,
@@ -527,7 +600,9 @@ export default function BlogFormPage() {
                 {isEditing ? "Edit Your Blog Post" : "Create a New Blog Post"}
               </CardTitle>
               <CardDescription>
-                {isEditing ? "Modify the details." : "Fill out the form."} Fields marked with <span className="text-destructive">*</span> are required.
+                {isEditing ? "Modify the details." : "Fill out the form."}{" "}
+                Fields marked with <span className="text-destructive">*</span>{" "}
+                are required.
               </CardDescription>
             </CardHeader>
 
@@ -645,134 +720,159 @@ export default function BlogFormPage() {
               />
 
               <div className="">
-              <FormField
-                control={control}
-                name="content"
-                render={({ field }) => (
-                  <FormItem className="flex-1 flex flex-col min-h-[400px]">
-                    <FormLabel htmlFor="content">Content</FormLabel>
-                    <FormControl>
-                      <TipTapEditor
-                        key={`blog-editor-${blogDocumentIdFromUrl || "new"}`}
-                        content={field.value || "<p></p>"}
-                        onContentChange={field.onChange}
-                        className="flex-1 min-h-full border border-input rounded-md"
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Main blog content. Optional.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={control}
+                  name="content"
+                  render={({ field }) => (
+                    <FormItem className="flex-1 flex flex-col min-h-[400px]">
+                      <FormLabel htmlFor="content">Content</FormLabel>
+                      <FormControl>
+                        <TipTapEditor
+                          key={`blog-editor-${blogDocumentIdFromUrl || "new"}`}
+                          content={field.value || "<p></p>"}
+                          onContentChange={field.onChange}
+                          className="flex-1 min-h-full border border-input rounded-md"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Main blog content. Optional.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <div className="">
-              <FormField
-                control={control}
-                name="tags"
-                render={() => (
-                  <FormItem>
-                    <FormLabel htmlFor="tags-input">Tags</FormLabel>
-                    <FormControl>
-                       <div>
-                        <div className="flex flex-wrap items-center gap-2 p-2 border border-input rounded-md min-h-[40px]">
-                          {tags.map((tag) => (
-                            <Badge
-                              key={tag}
-                              variant="secondary"
-                              className="flex items-center gap-1"
-                            >
-                              {tag}
-                              <button
-                                type="button"
-                                onClick={() => removeTag(tag)}
-                                className="ml-1 rounded-full outline-none focus:ring-1 focus:ring-ring"
+                <FormField
+                  control={control}
+                  name="tags"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel htmlFor="tags-input">Tags</FormLabel>
+                      <FormControl>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 p-2 border border-input rounded-md min-h-[40px]">
+                            {tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="secondary"
+                                className="flex items-center gap-1"
                               >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                          <input
-                            id="tags-input"
-                            type="text"
-                            value={tagInput}
-                            onChange={handleTagInputChange}
-                            onKeyDown={handleTagInputKeyDown}
-                            placeholder={
-                              tags.length === 0
-                                ? "Add tags (comma/Enter)..."
-                                : ""
-                            }
-                            className="flex-1 bg-transparent outline-none text-sm min-w-[150px]"
-                            disabled={isSubmittingForm || tags.length >= 15}
+                                {tag}
+                                <button
+                                  type="button"
+                                  onClick={() => removeTag(tag)}
+                                  className="ml-1 rounded-full outline-none focus:ring-1 focus:ring-ring"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                            <input
+                              id="tags-input"
+                              type="text"
+                              value={tagInput}
+                              onChange={handleTagInputChange}
+                              onKeyDown={handleTagInputKeyDown}
+                              placeholder={
+                                tags.length === 0
+                                  ? "Add tags (comma/Enter)..."
+                                  : ""
+                              }
+                              className="flex-1 bg-transparent outline-none text-sm min-w-[150px]"
+                              disabled={isSubmittingForm || tags.length >= 15}
+                            />
+                          </div>
+                          <Controller
+                            name="tags"
+                            control={control}
+                            render={({ field }) => (
+                              <input
+                                type="hidden"
+                                {...field}
+                                value={tags.join(", ")}
+                              />
+                            )}
                           />
                         </div>
-                        <Controller
-                          name="tags"
-                          control={control}
-                          render={({ field }) => (
-                            <input
-                              type="hidden"
-                              {...field}
-                              value={tags.join(", ")}
-                            />
-                          )}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormDescription>Max 15 allowed. Optional.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      </FormControl>
+                      <FormDescription>
+                        Max 15 allowed. Optional.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                 <FormField
                   control={control}
-                  name="author" 
+                  name="author"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Author</FormLabel>
                       <FormControl>
                         <Input
-                            placeholder="Author Name"
-                            {...field}
-                            value={field.value || ""}
-                            disabled={isSubmittingForm}
+                          type="text"
+                          placeholder="Author Name"
+                          {...field}
+                          value={
+                            typeof field.value === "string" ? field.value : ""
+                          }
+                          disabled={isSubmittingForm}
                         />
                       </FormControl>
-                      <FormDescription>Optional. Enter author's name.</FormDescription>
+                      <FormDescription>
+                        Optional. Enter author's name.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                 <FormField
-                    control={control}
-                    name="categories"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Category</FormLabel>
-                        <Select
-                          onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
-                          value={field.value?.toString() ?? ""}
-                          disabled={isLoadingCategories || (fetchedCategories && fetchedCategories.length === 0) || isSubmittingForm || isCategoriesError}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue
-                                placeholder={
-                                  isLoadingCategories ? "Loading..." :
-                                  isCategoriesError ? "Error loading" :
-                                  (fetchedCategories && fetchedCategories.length === 0) ? "No categories" :
-                                  "Select category"
-                                }
-                              />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {fetchedCategories && fetchedCategories.map((category: Categorie) => (
+                <FormField
+                  control={control}
+                  name="categories"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select
+                        onValueChange={(value) =>
+                          field.onChange(value ? parseInt(value) : null)
+                        }
+                        value={
+                          typeof field.value === "string" ||
+                          typeof field.value === "number"
+                            ? field.value.toString()
+                            : ""
+                        }
+                        disabled={
+                          isLoadingCategories ||
+                          (fetchedCategories &&
+                            fetchedCategories.length === 0) ||
+                          isSubmittingForm ||
+                          isCategoriesError
+                        }
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                isLoadingCategories
+                                  ? "Loading..."
+                                  : isCategoriesError
+                                  ? "Error loading"
+                                  : fetchedCategories &&
+                                    fetchedCategories.length === 0
+                                  ? "No categories"
+                                  : "Select category"
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {fetchedCategories &&
+                            fetchedCategories.map((category: Categorie) => (
                               <SelectItem
                                 key={category.id}
                                 value={category.id!.toString()}
@@ -780,14 +880,18 @@ export default function BlogFormPage() {
                                 {category.name}
                               </SelectItem>
                             ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>Optional.</FormDescription>
-                        <FormMessage />
-                         {isCategoriesError && <p className="text-xs text-destructive mt-1">Failed to load categories.</p>}
-                      </FormItem>
-                    )}
-                  />
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Optional.</FormDescription>
+                      <FormMessage />
+                      {isCategoriesError && (
+                        <p className="text-xs text-destructive mt-1">
+                          Failed to load categories.
+                        </p>
+                      )}
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={control}
                   name="Blog_status"
@@ -944,7 +1048,7 @@ export default function BlogFormPage() {
                         </FormItem>
                       )}
                     />
-                     <FormField
+                    <FormField
                       control={control}
                       name="seo_blog.canonicalURL"
                       render={({ field }) => (
@@ -959,7 +1063,8 @@ export default function BlogFormPage() {
                             />
                           </FormControl>
                           <FormDescription>
-                            Optional. If this content is copied from another source.
+                            Optional. If this content is copied from another
+                            source.
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -974,10 +1079,7 @@ export default function BlogFormPage() {
                           <FormControl>
                             <Input
                               {...field}
-                              value={
-                                field.value ??
-                                "index, follow"
-                              }
+                              value={field.value ?? "index, follow"}
                               placeholder="index, follow"
                               disabled={isSubmittingForm}
                             />
@@ -1007,7 +1109,8 @@ export default function BlogFormPage() {
                             />
                           </FormControl>
                           <FormDescription>
-                            Optional. Defines viewport settings for mobile devices.
+                            Optional. Defines viewport settings for mobile
+                            devices.
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -1029,7 +1132,8 @@ export default function BlogFormPage() {
                             />
                           </FormControl>
                           <FormDescription>
-                            Optional. Must be valid JSON. Helps search engines understand content.
+                            Optional. Must be valid JSON. Helps search engines
+                            understand content.
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -1038,159 +1142,160 @@ export default function BlogFormPage() {
                   </CardContent>
                 </Card>
 
-                 {form.watch("seo_blog") && (
-                     <Card className="bg-muted/50">
-                         <CardHeader>
-                             <CardTitle className="text-lg">
-                                 Open Graph (Social Sharing)
-                             </CardTitle>
-                             <CardDescription>
-                                 Customize how content appears on social media.
-                             </CardDescription>
-                         </CardHeader>
-                         <CardContent className="space-y-4">
-                              <FormField
-                                  control={control}
-                                  name="seo_blog.openGraph.ogTitle"
-                                  render={({ field }) => (
-                                      <FormItem>
-                                          <FormLabel>
-                                              OG Title <span className="text-destructive">*</span>
-                                          </FormLabel>
-                                          <FormControl>
-                                              <Input
-                                                  {...field}
-                                                  value={field.value ?? ""}
-                                                  placeholder="Title for social (max 70 chars)"
-                                                  disabled={isSubmittingForm}
-                                              />
-                                          </FormControl>
-                                          <div className="flex justify-between items-center">
-                                              <FormDescription>
-                                                  Max 70 chars. Required.
-                                              </FormDescription>
-                                              <span
-                                                  className={cn(
-                                                      "text-xs",
-                                                      (watchedOgTitle?.length ?? 0) === 0 ||
-                                                      (watchedOgTitle?.length ?? 0) > 70
-                                                          ? "text-destructive"
-                                                          : "text-muted-foreground"
-                                                  )}
-                                              >
-                                                  {watchedOgTitle?.length ?? 0}/70
-                                              </span>
-                                          </div>
-                                          <FormMessage />
-                                      </FormItem>
-                                  )}
+                {form.watch("seo_blog") && (
+                  <Card className="bg-muted/50">
+                    <CardHeader>
+                      <CardTitle className="text-lg">
+                        Open Graph (Social Sharing)
+                      </CardTitle>
+                      <CardDescription>
+                        Customize how content appears on social media.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <FormField
+                        control={control}
+                        name="seo_blog.openGraph.ogTitle"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              OG Title{" "}
+                              <span className="text-destructive">*</span>
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value ?? ""}
+                                placeholder="Title for social (max 70 chars)"
+                                disabled={isSubmittingForm}
                               />
-                              <FormField
-                                  control={control}
-                                  name="seo_blog.openGraph.ogDescription"
-                                  render={({ field }) => (
-                                      <FormItem>
-                                          <FormLabel>
-                                              OG Description <span className="text-destructive">*</span>
-                                          </FormLabel>
-                                          <FormControl>
-                                              <Textarea
-                                                  {...field}
-                                                  value={field.value ?? ""}
-                                                  placeholder="Description for social (max 200 chars)"
-                                                  rows={2}
-                                                  disabled={isSubmittingForm}
-                                              />
-                                          </FormControl>
-                                          <div className="flex justify-between items-center">
-                                              <FormDescription>
-                                                  Max 200 chars. Required.
-                                              </FormDescription>
-                                              <span
-                                                  className={cn(
-                                                      "text-xs",
-                                                      (watchedOgDesc?.length ?? 0) === 0 ||
-                                                      (watchedOgDesc?.length ?? 0) > 200
-                                                          ? "text-destructive"
-                                                          : "text-muted-foreground"
-                                                  )}
-                                              >
-                                                  {watchedOgDesc?.length ?? 0}/200
-                                              </span>
-                                          </div>
-                                          <FormMessage />
-                                      </FormItem>
-                                  )}
+                            </FormControl>
+                            <div className="flex justify-between items-center">
+                              <FormDescription>
+                                Max 70 chars. Required.
+                              </FormDescription>
+                              <span
+                                className={cn(
+                                  "text-xs",
+                                  (watchedOgTitle?.length ?? 0) === 0 ||
+                                    (watchedOgTitle?.length ?? 0) > 70
+                                    ? "text-destructive"
+                                    : "text-muted-foreground"
+                                )}
+                              >
+                                {watchedOgTitle?.length ?? 0}/70
+                              </span>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name="seo_blog.openGraph.ogDescription"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              OG Description{" "}
+                              <span className="text-destructive">*</span>
+                            </FormLabel>
+                            <FormControl>
+                              <Textarea
+                                {...field}
+                                value={field.value ?? ""}
+                                placeholder="Description for social (max 200 chars)"
+                                rows={2}
+                                disabled={isSubmittingForm}
                               />
-                              <FormField
-                                  control={control}
-                                  name="seo_blog.openGraph.ogImage"
-                                  render={({ field }) => (
-                                      <FormItem>
-                                          <FormLabel>OG Image</FormLabel>
-                                          <FormControl>
-                                              <ImageSelectorButton target="seo_blog.openGraph.ogImage" />
-                                          </FormControl>
-                                          <FormDescription>
-                                              Optional. Recommended size: 1200x630px.
-                                          </FormDescription>
-                                          <FormMessage />
-                                      </FormItem>
-                                  )}
+                            </FormControl>
+                            <div className="flex justify-between items-center">
+                              <FormDescription>
+                                Max 200 chars. Required.
+                              </FormDescription>
+                              <span
+                                className={cn(
+                                  "text-xs",
+                                  (watchedOgDesc?.length ?? 0) === 0 ||
+                                    (watchedOgDesc?.length ?? 0) > 200
+                                    ? "text-destructive"
+                                    : "text-muted-foreground"
+                                )}
+                              >
+                                {watchedOgDesc?.length ?? 0}/200
+                              </span>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name="seo_blog.openGraph.ogImage"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>OG Image</FormLabel>
+                            <FormControl>
+                              <ImageSelectorButton target="seo_blog.openGraph.ogImage" />
+                            </FormControl>
+                            <FormDescription>
+                              Optional. Recommended size: 1200x630px.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name="seo_blog.openGraph.ogUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>OG URL</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value ?? ""}
+                                placeholder="URL for social sharing (e.g., blog post URL)"
+                                disabled={isSubmittingForm}
                               />
-                              <FormField
-                                  control={control}
-                                  name="seo_blog.openGraph.ogUrl"
-                                  render={({ field }) => (
-                                      <FormItem>
-                                          <FormLabel>OG URL</FormLabel>
-                                          <FormControl>
-                                              <Input
-                                                  {...field}
-                                                  value={field.value ?? ""}
-                                                  placeholder="URL for social sharing (e.g., blog post URL)"
-                                                  disabled={isSubmittingForm}
-                                              />
-                                          </FormControl>
-                                          <FormDescription>Optional.</FormDescription>
-                                          <FormMessage />
-                                      </FormItem>
-                                  )}
-                              />
-                             <FormField
-                                  control={control}
-                                  name="seo_blog.openGraph.ogType"
-                                  render={({ field }) => (
-                                      <FormItem>
-                                          <FormLabel>OG Type</FormLabel>
-                                          <Select
-                                              onValueChange={field.onChange}
-                                              value={field.value ?? "article"}
-                                              disabled={isSubmittingForm}
-                                          >
-                                              <FormControl>
-                                                  <SelectTrigger>
-                                                      <SelectValue placeholder="Select OG type" />
-                                                  </SelectTrigger>
-                                              </FormControl>
-                                              <SelectContent>
-                                                  <SelectItem value="article">Article</SelectItem>
-                                                  <SelectItem value="website">Website</SelectItem>
-                                                  <SelectItem value="book">Book</SelectItem>
-                                                  <SelectItem value="profile">Profile</SelectItem>
-                                              </SelectContent>
-                                          </Select>
-                                          <FormDescription>
-                                              Optional. Usually 'article' for blog posts.
-                                          </FormDescription>
-                                          <FormMessage />
-                                      </FormItem>
-                                  )}
-                              />
-                         </CardContent>
-                     </Card>
-                 )}
-
+                            </FormControl>
+                            <FormDescription>Optional.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name="seo_blog.openGraph.ogType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>OG Type</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value ?? "article"}
+                              disabled={isSubmittingForm}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select OG type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="article">Article</SelectItem>
+                                <SelectItem value="website">Website</SelectItem>
+                                <SelectItem value="book">Book</SelectItem>
+                                <SelectItem value="profile">Profile</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              Optional. Usually 'article' for blog posts.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </CardContent>
 
@@ -1313,18 +1418,18 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
               </CardContent>
             </Card>
             <Card className="bg-muted/50">
-               <CardHeader>
-                 <Skeleton className="h-6 w-1/3 mb-2" />
-                 <Skeleton className="h-4 w-2/3" />
-               </CardHeader>
-               <CardContent className="space-y-4">
-                 <Skeleton className="h-10 w-full" />
-                 <Skeleton className="h-16 w-full" />
-                 <Skeleton className="h-10 w-32" />
-                 <Skeleton className="h-10 w-full" />
-                 <Skeleton className="h-10 w-full" />
-               </CardContent>
-             </Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-1/3 mb-2" />
+                <Skeleton className="h-4 w-2/3" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </CardContent>
+            </Card>
           </div>
         </CardContent>
         <CardFooter className="flex justify-end space-x-2 p-4 border-t flex-shrink-0 bg-background sticky bottom-0">
