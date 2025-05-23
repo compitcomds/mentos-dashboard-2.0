@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -119,6 +120,7 @@ const defaultFormValues: BlogFormValues = {
   image: null,
   categories: null,
   author: null,
+  sub_category: "",
   tags: "",
   view: 0,
   Blog_status: "draft",
@@ -215,7 +217,7 @@ export default function BlogFormPage() {
       );
     }
 
-    if (isEditing && blogData && (fetchedCategories || !isCategoriesError)) {
+    if (isEditing && blogData && !isLoadingBlog && (fetchedCategories || !isCategoriesError)) {
       setIsLoadingComponent(true);
       if (blogData.tenent_id !== userTenentId) {
         toast({
@@ -240,6 +242,7 @@ export default function BlogFormPage() {
           image: getMediaId(blogData.image as Media | null),
           categories: blogData.categories?.id ?? null,
           author: blogData.author || null,
+          sub_category: blogData.sub_category || "",
           tags: fetchedTags.join(", "),
           view: blogData.view ?? 0,
           Blog_status: blogData.Blog_status || "draft",
@@ -296,6 +299,7 @@ export default function BlogFormPage() {
   }, [
     isEditing,
     blogData,
+    isLoadingBlog,
     fetchedCategories,
     reset,
     isLoadingUser,
@@ -446,21 +450,25 @@ export default function BlogFormPage() {
           .filter(Boolean)
           .map((tagVal) => ({ tag_value: tagVal }))
       : [];
-
+    
+    // Destructure 'author' from data and use it for the 'author' field in payload.
+    // The rest of 'data' (which excludes 'author' if it was named differently in formValues) is spread.
     const { author: formAuthor, ...restOfData } = data;
+
 
     const payload: CreateBlogPayload = {
       ...restOfData,
       tags: tagsPayload,
       tenent_id: userTenentId,
-      categories: data.categories,
+      categories: data.categories, // This is already the single category ID from form
       seo_blog: data.seo_blog
         ? {
             ...data.seo_blog,
             openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}),
           }
         : undefined,
-      author: formAuthor, // Use the destructured formAuthor (singular)
+      author: formAuthor, // Map the form field 'author' to the API field 'author'
+      sub_category: data.sub_category || null,
     };
 
     setSubmissionPayloadJson(JSON.stringify(payload, null, 2));
@@ -468,9 +476,9 @@ export default function BlogFormPage() {
     if (isEditing && blogData?.id && blogData.documentId) {
       updateMutation.mutate(
         {
-          id: blogData.documentId, // Numeric ID for the API path for update
+          id: blogData.id, // Numeric ID for the API path for update
           blog: payload,
-          documentIdForInvalidation: blogData.documentId, // String documentId for cache invalidation
+          numericId: blogData.documentId, // String documentId for cache invalidation
         },
         mutationOptions
       );
@@ -742,6 +750,26 @@ export default function BlogFormPage() {
                   )}
                 />
               </div>
+              
+               <FormField
+                control={control}
+                name="sub_category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sub Category</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Enter sub category"
+                        {...field}
+                        value={field.value ?? ""}
+                        disabled={isSubmittingForm}
+                      />
+                    </FormControl>
+                    <FormDescription>Optional.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <div className="">
                 <FormField
@@ -817,9 +845,7 @@ export default function BlogFormPage() {
                           type="text"
                           placeholder="Author Name"
                           {...field}
-                          value={
-                            typeof field.value === "string" ? field.value : ""
-                          }
+                          value={field.value ?? ""}
                           disabled={isSubmittingForm}
                         />
                       </FormControl>
@@ -1379,6 +1405,11 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
           <div className="space-y-1.5 flex-1 flex flex-col min-h-[400px]">
             <Skeleton className="h-4 w-1/6 mb-1" />
             <Skeleton className="h-full w-full flex-1 rounded-md" />
+          </div>
+          {/* Skeleton for Sub Category */}
+          <div className="space-y-1.5">
+            <Skeleton className="h-4 w-1/4 mb-1" />
+            <Skeleton className="h-10 w-full" />
           </div>
           <div className="space-y-1.5">
             <Skeleton className="h-4 w-1/6 mb-1" />

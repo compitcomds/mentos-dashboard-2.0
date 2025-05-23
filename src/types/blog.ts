@@ -1,6 +1,6 @@
 
 import type { Media } from './media';
-import type { Categorie } from './category';
+import type { Categorie } from './category'; // Changed from BlogSet to Categorie
 import type { User } from './auth';
 import type { OtherTag } from './common';
 import { z } from 'zod';
@@ -92,6 +92,7 @@ export const blogFormSchema = z.object({
     image: z.number().nullable().optional(), // Media ID
     categories: z.number().nullable().optional(), // Category ID (single selection in form)
     author: z.string().nullable().optional(), // Author Name (string, as per new Blog type)
+    sub_category: z.string().optional().nullable(), // New sub_category field
     tags: z.string().optional().default('')
         .refine((val) => {
             const tagCount = val ? val.split(',').map(tag => tag.trim()).filter(Boolean).length : 0;
@@ -100,7 +101,7 @@ export const blogFormSchema = z.object({
     view: z.number().int().nonnegative().optional().default(0),
     Blog_status: z.enum(["draft", "published", "archived"]).optional().default("draft"),
     seo_blog: seoBlogSchema.optional(),
-    tenent_id: z.string().optional(), // Changed from key, populated by system
+    tenent_id: z.string().optional(),
 });
 export type BlogFormValues = z.infer<typeof blogFormSchema>;
 
@@ -116,12 +117,12 @@ export type CreateBlogPayload = {
     image?: number | null; // Media ID
     categories?: number | null; // Single Category ID for oneToOne relation
     author?: string | null; // Author name as string
+    sub_category?: string | null; // New sub_category field
     tags?: OtherTag[]; // Array of { tag_value: string }
     view?: number;
     Blog_status?: "draft" | "published" | "archived";
     seo_blog?: SeoBlogPayload | null; // Payload uses Zod-derived type
     tenent_id: string;
-    sub_category?: string | null;
     related_blogs?: number[] | null; // Array of Blog IDs for relations
     user?: number | null; // User ID for relation
 };
@@ -145,7 +146,7 @@ export type Blog = {
   author?: string;
   image?: Media | null;
   tenent_id: string;
-  sub_category?: string;
+  sub_category?: string | null;
   seo_blog?: SharedSeo | null;
   categories?: Categorie | null; // Changed to single Categorie for oneToOne relation
   related_blogs?: Blog[] | null;
