@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useForm, FormProvider, Controller, FieldValues } from 'react-hook-form';
+import { useForm, FormProvider, Controller, FieldValues, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useGetMetaFormat } from '@/lib/queries/meta-format';
@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon, PlusCircle, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import type { FormFormatComponent, MetaFormat } from '@/types/meta-format';
 import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog';
@@ -28,7 +28,8 @@ import { useCurrentUser } from '@/lib/queries/user';
 import type { CreateMetaDataPayload } from '@/types/meta-data';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import ArrayFieldRenderer from '../_components/array-field-renderer'; // Corrected import path
+import ArrayFieldRenderer from '@/app/dashboard/extra-content/_components/array-field-renderer'; // Corrected import path
+
 
 // Helper to generate a unique field name for RHF
 const getFieldName = (component: FormFormatComponent): string => {
@@ -55,11 +56,12 @@ const getDefaultValueForComponent = (componentType: string, component?: FormForm
     case 'dynamic-component.date-field':
       return component?.default ? new Date(component.default) : null;
     case 'dynamic-component.boolean-field':
-      return component?.default === 'true' || component?.default === true;
+      return component?.default === 'true' || component?.default === true || false; 
     default:
       return null;
   }
 };
+
 
 // Function to generate Zod schema and default values dynamically
 const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined) => {
@@ -75,71 +77,69 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
     let fieldSchema: z.ZodTypeAny;
     let componentDefaultValue = getDefaultValueForComponent(component.__component, component);
 
+    let baseSchema: z.ZodTypeAny;
+
     switch (component.__component) {
       case 'dynamic-component.text-field':
-        let textSchemaCore = z.string();
-        if (component.required) textSchemaCore = textSchemaCore.min(1, { message: `${component.label || 'Field'} is required.` });
-        else textSchemaCore = textSchemaCore.optional().nullable();
-        if (component.min && typeof component.min === 'number') textSchemaCore = textSchemaCore.min(component.min);
-        if (component.max && typeof component.max === 'number') textSchemaCore = textSchemaCore.max(component.max);
-        if (component.inputType === 'email') textSchemaCore = textSchemaCore.email({ message: "Invalid email address."});
-        
-        fieldSchema = component.is_array ? z.array(textSchemaCore).optional().default([]) : textSchemaCore;
-        defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
+        baseSchema = z.string();
+        if (component.required) baseSchema = baseSchema.min(1, { message: `${component.label || 'Field'} is required.` });
+        else baseSchema = baseSchema.optional().nullable();
+        if (component.min && typeof component.min === 'number') baseSchema = baseSchema.min(component.min);
+        if (component.max && typeof component.max === 'number') baseSchema = baseSchema.max(component.max);
+        if (component.inputType === 'email') baseSchema = baseSchema.email({ message: "Invalid email address."});
+        componentDefaultValue = componentDefaultValue ?? '';
         break;
       case 'dynamic-component.number-field':
-        let numSchemaCore = z.preprocess(
+        baseSchema = z.preprocess(
           (val) => (val === "" || val === null || val === undefined ? null : Number(val)),
           z.number().nullable()
         );
         if (component.required) {
-          numSchemaCore = z.preprocess((val) => Number(val), z.number({ required_error: `${component.label || 'Field'} is required.` }));
+          baseSchema = z.preprocess((val) => Number(val), z.number({ required_error: `${component.label || 'Field'} is required.` }));
         }
-        if (component.min !== null && component.min !== undefined) (numSchemaCore as z.ZodNumber) = (numSchemaCore as z.ZodNumber).min(component.min);
-        if (component.max !== null && component.max !== undefined) (numSchemaCore as z.ZodNumber) = (numSchemaCore as z.ZodNumber).max(component.max);
-        
-        fieldSchema = component.is_array ? z.array(numSchemaCore).optional().default([]) : numSchemaCore;
-        defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
+        if (component.min !== null && component.min !== undefined) (baseSchema as z.ZodNumber) = (baseSchema as z.ZodNumber).min(component.min);
+        if (component.max !== null && component.max !== undefined) (baseSchema as z.ZodNumber) = (baseSchema as z.ZodNumber).max(component.max);
+        componentDefaultValue = componentDefaultValue ?? null;
         break;
       case 'dynamic-component.media-field':
-        let mediaSchemaCore = z.string().nullable(); // Stores string documentId
-        if (component.required) mediaSchemaCore = z.string({ required_error: `${component.label || 'Media'} is required.` }).min(1, `${component.label || 'Media'} is required.`);
-        
-        fieldSchema = component.is_array ? z.array(mediaSchemaCore).optional().default([]) : mediaSchemaCore;
-        defaultValues[fieldName] = component.is_array ? [] : null;
+        baseSchema = z.string().nullable(); // Stores string documentId
+        if (component.required) baseSchema = z.string({ required_error: `${component.label || 'Media'} is required.` }).min(1, `${component.label || 'Media'} is required.`);
+        componentDefaultValue = null;
         break;
       case 'dynamic-component.enum-field':
-        let enumSchemaCore = z.string().optional().nullable();
-        if (component.required) enumSchemaCore = z.string().min(1, `${component.label || 'Field'} is required.`);
-        if (component.type === 'multi-select') {
-            fieldSchema = component.is_array ? z.array(z.array(z.string()).optional().default([])).optional().default([]) : z.array(z.string()).optional().default([]);
-            if (component.required && !component.is_array) fieldSchema = z.array(z.string()).nonempty({ message: `${component.label || 'Field'} requires at least one selection.` });
-            if (component.required && component.is_array) fieldSchema = z.array(z.array(z.string()).nonempty({ message: `${component.label || 'Field'} item requires at least one selection.` })).nonempty({message: `${component.label || 'Field'} is required.`});
-
-            defaultValues[fieldName] = component.is_array ? [] : (component.default ? component.default.split(',').map(s => s.trim()).filter(Boolean) : []);
+        baseSchema = z.string().optional().nullable();
+        if (component.required) baseSchema = z.string().min(1, `${component.label || 'Field'} is required.`);
+        if (component.type === 'multi-select' && !component.is_array) {
+            // For single multi-select, store as array of strings
+             baseSchema = z.array(z.string()).optional().default([]);
+             if(component.required) baseSchema = z.array(z.string()).nonempty({ message: `${component.label || 'Field'} requires at least one selection.` });
+            componentDefaultValue = component.default ? component.default.split(',').map(s => s.trim()).filter(Boolean) : [];
         } else {
-            fieldSchema = component.is_array ? z.array(enumSchemaCore).optional().default([]) : enumSchemaCore;
-            defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
+            componentDefaultValue = componentDefaultValue ?? null;
         }
         break;
       case 'dynamic-component.date-field':
-        let dateSchemaCore = z.date().nullable();
-        if (component.required) dateSchemaCore = z.date({ required_error: `${component.label || 'Date'} is required.` });
-        
-        fieldSchema = component.is_array ? z.array(dateSchemaCore).optional().default([]) : dateSchemaCore;
-        defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
+        baseSchema = z.date().nullable();
+        if (component.required) baseSchema = z.date({ required_error: `${component.label || 'Date'} is required.` });
+        componentDefaultValue = componentDefaultValue ?? null;
         break;
       case 'dynamic-component.boolean-field':
-        let boolSchemaCore = z.boolean().optional();
-        if (component.required) boolSchemaCore = z.boolean({ required_error: `${component.label || 'Field'} is required.`});
-
-        fieldSchema = component.is_array ? z.array(boolSchemaCore).optional().default([]) : boolSchemaCore;
-        defaultValues[fieldName] = component.is_array ? [] : componentDefaultValue;
+        baseSchema = z.boolean().optional();
+        if (component.required) baseSchema = z.boolean({ required_error: `${component.label || 'Field'} is required.`});
+        componentDefaultValue = componentDefaultValue ?? false;
         break;
       default:
         console.warn(`Unsupported component type in MetaFormat: ${component.__component}`);
-        fieldSchema = z.any().optional(); // Fallback for unsupported types
-        defaultValues[fieldName] = component.is_array ? [] : null;
+        baseSchema = z.any().optional();
+        componentDefaultValue = null;
+    }
+
+    if (component.is_array) {
+        fieldSchema = z.array(baseSchema).optional().default([]);
+        defaultValues[fieldName] = [];
+    } else {
+        fieldSchema = baseSchema;
+        defaultValues[fieldName] = componentDefaultValue;
     }
     schemaShape[fieldName] = fieldSchema;
   });
@@ -156,14 +156,12 @@ export default function RenderExtraContentPage() {
 
   const metaFormatDocumentId = params.documentId as string;
   const action = searchParams.get('action') || 'create'; 
-  const metaDataEntryDocumentId = searchParams.get('entry');
+  const metaDataEntryDocumentId = action === 'edit' ? searchParams.get('entry') : null;
 
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const { data: metaFormat, isLoading: isLoadingMetaFormat, isError: isErrorMetaFormat, error: errorMetaFormat } = useGetMetaFormat(metaFormatDocumentId);
   
-  const { data: metaDataEntry, isLoading: isLoadingMetaDataEntry, isError: isErrorMetaDataEntry, error: errorMetaDataEntry } = useGetMetaDataEntry(
-    action === 'edit' && metaDataEntryDocumentId ? metaDataEntryDocumentId : null
-  );
+  const { data: metaDataEntry, isLoading: isLoadingMetaDataEntry, isError: isErrorMetaDataEntry, error: errorMetaDataEntry } = useGetMetaDataEntry(metaDataEntryDocumentId);
 
   const createMetaDataMutation = useCreateMetaDataEntry();
   const updateMetaDataMutation = useUpdateMetaDataEntry();
@@ -179,39 +177,43 @@ export default function RenderExtraContentPage() {
   });
 
   React.useEffect(() => {
-    if (metaFormat && (action === 'create' || (action === 'edit' && (metaDataEntry || !metaDataEntryDocumentId || isErrorMetaDataEntry)))) {
-      const { schema, defaultValues: generatedDefaults } = generateFormSchemaAndDefaults(metaFormat);
-      setFormSchema(schema);
-      setFormDefaultValues(generatedDefaults);
+    if (metaFormat && !isLoadingMetaFormat) {
+      if (action === 'create' || (action === 'edit' && (metaDataEntry || !metaDataEntryDocumentId || isErrorMetaDataEntry))) {
+        const { schema, defaultValues: generatedDefaults } = generateFormSchemaAndDefaults(metaFormat);
+        setFormSchema(schema);
+        
+        let initialValues = { ...generatedDefaults };
 
-      let initialValues = { ...generatedDefaults };
+        if (action === 'edit' && metaDataEntry && !isLoadingMetaDataEntry) {
+          metaFormat.from_formate?.forEach(component => {
+            const fieldName = getFieldName(component);
+            const entryValue = metaDataEntry.meta_data?.[fieldName];
 
-      if (action === 'edit' && metaDataEntry) {
-        metaFormat.from_formate?.forEach(component => {
-          const fieldName = getFieldName(component);
-          const entryValue = metaDataEntry.meta_data?.[fieldName];
-
-          if (entryValue !== undefined) {
-            if (component.is_array) {
-              initialValues[fieldName] = Array.isArray(entryValue) ? entryValue : (entryValue !== null ? [entryValue] : []);
-              if (component.__component === 'dynamic-component.date-field' && Array.isArray(initialValues[fieldName])) {
-                  initialValues[fieldName] = initialValues[fieldName].map((dateStr: string | Date) => dateStr ? new Date(dateStr) : null).filter(Boolean);
+            if (entryValue !== undefined) {
+              if (component.is_array) {
+                initialValues[fieldName] = Array.isArray(entryValue) ? entryValue : (entryValue !== null ? [entryValue] : []);
+                if (component.__component === 'dynamic-component.date-field' && Array.isArray(initialValues[fieldName])) {
+                    initialValues[fieldName] = initialValues[fieldName].map((dateStr: string | Date) => dateStr ? new Date(dateStr) : null).filter(Boolean);
+                }
+              } else if (component.__component === 'dynamic-component.date-field' && entryValue) {
+                initialValues[fieldName] = new Date(entryValue);
+              } else {
+                initialValues[fieldName] = entryValue;
               }
-            } else if (component.__component === 'dynamic-component.date-field' && entryValue) {
-              initialValues[fieldName] = new Date(entryValue);
-            } else {
-              initialValues[fieldName] = entryValue;
+            } else if (component.is_array) { 
+              initialValues[fieldName] = [];
             }
-          }
-        });
-        console.log("[RenderExtraContentPage] EDIT Mode: Resetting form with MetaDataEntry values:", initialValues);
-      } else if (action === 'create') {
-        console.log("[RenderExtraContentPage] CREATE Mode: Resetting form with MetaFormat defaults:", generatedDefaults);
+          });
+          console.log("[RenderExtraContentPage] EDIT Mode: Resetting form with MetaDataEntry values:", initialValues);
+        } else if (action === 'create') {
+          console.log("[RenderExtraContentPage] CREATE Mode: Resetting form with MetaFormat defaults:", generatedDefaults);
+        }
+        methods.reset(initialValues);
+        setFormDefaultValues(initialValues); // Also set this for consistency if needed elsewhere
+        setIsFormInitialized(true);
       }
-      methods.reset(initialValues);
-      setIsFormInitialized(true);
     }
-  }, [metaFormat, action, metaDataEntry, metaDataEntryDocumentId, methods, isErrorMetaDataEntry]);
+  }, [metaFormat, isLoadingMetaFormat, action, metaDataEntry, isLoadingMetaDataEntry, metaDataEntryDocumentId, methods, isErrorMetaDataEntry]);
 
 
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = React.useState(false);
@@ -258,10 +260,10 @@ export default function RenderExtraContentPage() {
             if (error?.type === 'invalid_type' && Array.isArray(data[fieldName])) {
               console.error(`  ↳ Error for field '${fieldName}' which is an array. Check individual item errors or array-level validation.`);
             } else if (Array.isArray(error)) { 
-               error.forEach((itemError, index) => {
+               error.forEach((itemError, i) => {
                  if (itemError) {
                    Object.entries(itemError).forEach(([subFieldName, subError] : [string, any]) => {
-                     console.error(`  ↳ Validation Error - ${fieldName}[${index}].${subFieldName}:`, subError?.message, 'Item Value:', data[fieldName]?.[index]);
+                     console.error(`  ↳ Validation Error - ${fieldName}[${i}].${subFieldName}:`, subError?.message, 'Item Value:', data[fieldName]?.[i]);
                    });
                  }
                });
@@ -278,9 +280,7 @@ export default function RenderExtraContentPage() {
     const processedData = { ...data };
     metaFormat?.from_formate?.forEach(component => {
         const fieldName = getFieldName(component);
-        if (component.is_array && !Array.isArray(data[fieldName]) && data[fieldName] !== undefined && data[fieldName] !== null) {
-            processedData[fieldName] = [data[fieldName]]; 
-        } else if (component.is_array && data[fieldName] === undefined) {
+         if (component.is_array && (processedData[fieldName] === undefined || processedData[fieldName] === null)) {
             processedData[fieldName] = [];
         }
          if (component.__component === 'dynamic-component.date-field') {
@@ -296,7 +296,7 @@ export default function RenderExtraContentPage() {
     if (action === 'create') {
       const payload: CreateMetaDataPayload = {
         tenent_id: currentUser.tenent_id,
-        meta_format: metaFormatDocumentId,
+        meta_format: metaFormatDocumentId, // This is the documentId of the MetaFormat schema
         user: currentUser.id,
         meta_data: processedData,
         publishedAt: new Date().toISOString(), 
@@ -367,8 +367,8 @@ export default function RenderExtraContentPage() {
     return (
       <div className="p-6">
         <Alert>
-          <AlertTitle>Extra Content Format Not Found</AlertTitle>
-          <AlertDescription>The requested extra content format definition could not be found.</AlertDescription>
+          <AlertTitle>Extra Content Definition Not Found</AlertTitle>
+          <AlertDescription>The requested extra content definition could not be found.</AlertDescription>
         </Alert>
       </div>
     );
@@ -393,7 +393,7 @@ export default function RenderExtraContentPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Button variant="outline" onClick={() => router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`)}>
-        &larr; Back to Entries for {metaFormat.name}
+        &larr; Back to Entries for {metaFormat.name || 'this Extra Content'}
       </Button>
       <FormProvider {...methods}>
         <form onSubmit={methods.handleSubmit(onSubmit)}>
@@ -406,15 +406,12 @@ export default function RenderExtraContentPage() {
               {metaFormat.from_formate && metaFormat.from_formate.length > 0 ? (
                 metaFormat.from_formate.map((component) => {
                   const fieldName = getFieldName(component);
-                  const label = component.label || fieldName;
-                  const placeholder = component.placeholder || '';
-                  const isRequired = component.required || false;
-
+                  
                   if (component.is_array) {
                     return (
                       <ArrayFieldRenderer
                         key={fieldName}
-                        fieldName={fieldName}
+                        fieldName={fieldName as any} 
                         componentDefinition={component}
                         control={methods.control}
                         methods={methods}
@@ -424,11 +421,16 @@ export default function RenderExtraContentPage() {
                       />
                     );
                   }
+
+                  const label = component.label || fieldName;
+                  const placeholder = component.placeholder || '';
+                  const isRequired = component.required || false;
+
                   return (
                     <FormField
                       key={fieldName}
                       control={methods.control}
-                      name={fieldName}
+                      name={fieldName as any} 
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{label} {isRequired && <span className="text-destructive">*</span>}</FormLabel>
@@ -582,5 +584,6 @@ export default function RenderExtraContentPage() {
   );
 }
       
-
+    
+    
     
