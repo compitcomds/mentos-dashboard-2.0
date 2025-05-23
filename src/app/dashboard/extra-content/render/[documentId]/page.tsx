@@ -201,7 +201,7 @@ export default function RenderExtraContentPage() { // Renamed component
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Button variant="outline" onClick={() => router.back()}>
-        &larr; Back to Extra Content Management {/* Renamed */}
+        &larr; Back to Content Management {/* Renamed */}
       </Button>
       <FormProvider {...methods}>
         <form onSubmit={handleSubmit(onSubmit)}>

@@ -98,7 +98,7 @@ export default function ExtraContentPage() {
             <CardHeader>
               <CardTitle>Available Extra Content Formats</CardTitle>
               <CardDescription>
-                Select a format to open and render its dynamic form.
+                Select a format to open its data entries.
                 {isFetching && <Loader2 className="ml-2 h-4 w-4 animate-spin inline-block" />}
               </CardDescription>
             </CardHeader>
@@ -129,9 +129,9 @@ export default function ExtraContentPage() {
                       <TableCell className="text-right">
                         <Button asChild variant="outline" size="sm" disabled={!format.documentId}>
                           {format.documentId ? (
-                            <Link href={`/dashboard/extra-content/render/${format.documentId}`}>Open</Link>
+                            <Link href={`/dashboard/extra-content/data/${format.documentId}`}>Manage Data</Link>
                           ) : (
-                            <span>Open</span> 
+                            <span>Manage Data</span> 
                           )}
                         </Button>
                       </TableCell>
