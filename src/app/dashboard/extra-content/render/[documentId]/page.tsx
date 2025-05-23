@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon, PlusCircle, Trash2 } from 'lucide-react';
+import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import type { FormFormatComponent, MetaFormat } from '@/types/meta-format';
 import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog';
@@ -34,7 +34,6 @@ import ArrayFieldRenderer from '@/app/dashboard/extra-content/_components/array-
 // Helper to generate a unique field name for RHF
 const getFieldName = (component: FormFormatComponent): string => {
   if (component.id) {
-    // Ensure component.id is a valid string or number before using it in template literal
     const idPart = typeof component.id === 'number' || typeof component.id === 'string' ? component.id : Math.random().toString(36).substring(7);
     return `component_${component.__component.replace('dynamic-component.', '')}_${idPart}`;
   }
@@ -56,7 +55,7 @@ const getDefaultValueForComponent = (componentType: string, component?: FormForm
     case 'dynamic-component.date-field':
       return component?.default ? new Date(component.default) : null;
     case 'dynamic-component.boolean-field':
-      return component?.default === 'true' || component?.default === true || false; 
+      return component?.default === 'true' || component?.default === true || false;
     default:
       return null;
   }
@@ -110,7 +109,6 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
         baseSchema = z.string().optional().nullable();
         if (component.required) baseSchema = z.string().min(1, `${component.label || 'Field'} is required.`);
         if (component.type === 'multi-select' && !component.is_array) {
-            // For single multi-select, store as array of strings
              baseSchema = z.array(z.string()).optional().default([]);
              if(component.required) baseSchema = z.array(z.string()).nonempty({ message: `${component.label || 'Field'} requires at least one selection.` });
             componentDefaultValue = component.default ? component.default.split(',').map(s => s.trim()).filter(Boolean) : [];
@@ -135,11 +133,20 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
     }
 
     if (component.is_array) {
+      if (component.__component === 'dynamic-component.enum-field' && component.type === 'multi-select') {
+        // For array of multi-select, each item in the array would be an array of strings
+        // This case might need special handling if a field can be an array of multi-selects itself.
+        // For now, assuming is_array on a multi-select enum means an array of single string selections from that enum.
+        // If it means an array of *sets* of selections, the Zod schema needs to be z.array(z.array(z.string()))
+        // Sticking to z.array(baseSchema) for now.
         fieldSchema = z.array(baseSchema).optional().default([]);
-        defaultValues[fieldName] = [];
+      } else {
+        fieldSchema = z.array(baseSchema).optional().default([]);
+      }
+      defaultValues[fieldName] = [];
     } else {
-        fieldSchema = baseSchema;
-        defaultValues[fieldName] = componentDefaultValue;
+      fieldSchema = baseSchema;
+      defaultValues[fieldName] = componentDefaultValue;
     }
     schemaShape[fieldName] = fieldSchema;
   });
@@ -155,12 +162,12 @@ export default function RenderExtraContentPage() {
   const { toast } = useToast();
 
   const metaFormatDocumentId = params.documentId as string;
-  const action = searchParams.get('action') || 'create'; 
+  const action = searchParams.get('action') || 'create';
   const metaDataEntryDocumentId = action === 'edit' ? searchParams.get('entry') : null;
 
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const { data: metaFormat, isLoading: isLoadingMetaFormat, isError: isErrorMetaFormat, error: errorMetaFormat } = useGetMetaFormat(metaFormatDocumentId);
-  
+
   const { data: metaDataEntry, isLoading: isLoadingMetaDataEntry, isError: isErrorMetaDataEntry, error: errorMetaDataEntry } = useGetMetaDataEntry(metaDataEntryDocumentId);
 
   const createMetaDataMutation = useCreateMetaDataEntry();
@@ -178,38 +185,50 @@ export default function RenderExtraContentPage() {
 
   React.useEffect(() => {
     if (metaFormat && !isLoadingMetaFormat) {
-      if (action === 'create' || (action === 'edit' && (metaDataEntry || !metaDataEntryDocumentId || isErrorMetaDataEntry))) {
+      // Initialize only if creating OR if editing and (entry is loaded OR there's an error loading it, to show defaults)
+      if (action === 'create' || (action === 'edit' && (metaDataEntry !== undefined || isErrorMetaDataEntry))) {
         const { schema, defaultValues: generatedDefaults } = generateFormSchemaAndDefaults(metaFormat);
         setFormSchema(schema);
-        
+
         let initialValues = { ...generatedDefaults };
 
         if (action === 'edit' && metaDataEntry && !isLoadingMetaDataEntry) {
+          console.log("[RenderExtraContentPage] EDIT Mode: Preparing to reset form with MetaDataEntry values. Raw entry:", metaDataEntry);
           metaFormat.from_formate?.forEach(component => {
             const fieldName = getFieldName(component);
             const entryValue = metaDataEntry.meta_data?.[fieldName];
 
-            if (entryValue !== undefined) {
+            if (entryValue !== undefined && entryValue !== null) { // Process if value exists
               if (component.is_array) {
-                initialValues[fieldName] = Array.isArray(entryValue) ? entryValue : (entryValue !== null ? [entryValue] : []);
+                initialValues[fieldName] = Array.isArray(entryValue) ? entryValue : [entryValue]; // Ensure it's an array
                 if (component.__component === 'dynamic-component.date-field' && Array.isArray(initialValues[fieldName])) {
                     initialValues[fieldName] = initialValues[fieldName].map((dateStr: string | Date) => dateStr ? new Date(dateStr) : null).filter(Boolean);
+                } else if (component.__component === 'dynamic-component.media-field' && Array.isArray(initialValues[fieldName])) {
+                    initialValues[fieldName] = initialValues[fieldName].map((val: any) => typeof val === 'number' ? String(val) : val);
                 }
               } else if (component.__component === 'dynamic-component.date-field' && entryValue) {
                 initialValues[fieldName] = new Date(entryValue);
+              } else if (component.__component === 'dynamic-component.media-field') {
+                if (typeof entryValue === 'number') {
+                  console.warn(`Media field '${fieldName}' in existing data (document ID: ${metaDataEntryDocumentId}) had a numeric ID ${entryValue}. Converting to string. Please ensure data consistency for media fields.`);
+                  initialValues[fieldName] = String(entryValue);
+                } else {
+                  initialValues[fieldName] = entryValue; // Expects string documentId or null
+                }
               } else {
                 initialValues[fieldName] = entryValue;
               }
-            } else if (component.is_array) { 
+            } else if (component.is_array) { // If entryValue is undefined/null and it's an array field, default to empty array
               initialValues[fieldName] = [];
             }
+            // If not an array and entryValue is undefined/null, it will use the componentDefaultValue from generatedDefaults
           });
-          console.log("[RenderExtraContentPage] EDIT Mode: Resetting form with MetaDataEntry values:", initialValues);
+          console.log("[RenderExtraContentPage] EDIT Mode: Values after processing metaDataEntry:", initialValues);
         } else if (action === 'create') {
-          console.log("[RenderExtraContentPage] CREATE Mode: Resetting form with MetaFormat defaults:", generatedDefaults);
+          console.log("[RenderExtraContentPage] CREATE Mode: Using MetaFormat defaults:", generatedDefaults);
         }
         methods.reset(initialValues);
-        setFormDefaultValues(initialValues); // Also set this for consistency if needed elsewhere
+        setFormDefaultValues(initialValues);
         setIsFormInitialized(true);
       }
     }
@@ -221,12 +240,13 @@ export default function RenderExtraContentPage() {
 
 
   const handleMediaSelect = (selectedMedia: { fileId: string | null; thumbnailUrl: string | null }) => {
+    console.log("[RenderExtraContentPage] handleMediaSelect received:", selectedMedia);
     if (!currentMediaFieldTarget || selectedMedia.fileId === null) {
         toast({ variant: "destructive", title: "Error", description: "Media target or selected media document ID missing." });
         setIsMediaSelectorOpen(false);
         return;
     }
-    const mediaDocumentId = selectedMedia.fileId; 
+    const mediaDocumentId = selectedMedia.fileId; // This is now the string documentId
 
     if (typeof currentMediaFieldTarget === 'string') {
       methods.setValue(currentMediaFieldTarget, mediaDocumentId, { shouldValidate: true });
@@ -237,7 +257,7 @@ export default function RenderExtraContentPage() {
     setIsMediaSelectorOpen(false);
     setCurrentMediaFieldTarget(null);
   };
-  
+
   const openMediaSelector = (target: string | { fieldName: string; index: number }) => {
     setCurrentMediaFieldTarget(target);
     setIsMediaSelectorOpen(true);
@@ -259,7 +279,7 @@ export default function RenderExtraContentPage() {
             console.error(`Validation Error - ${fieldName}:`, error?.message, 'Field Value:', data[fieldName]);
             if (error?.type === 'invalid_type' && Array.isArray(data[fieldName])) {
               console.error(`  ↳ Error for field '${fieldName}' which is an array. Check individual item errors or array-level validation.`);
-            } else if (Array.isArray(error)) { 
+            } else if (Array.isArray(error)) {
                error.forEach((itemError, i) => {
                  if (itemError) {
                    Object.entries(itemError).forEach(([subFieldName, subError] : [string, any]) => {
@@ -269,7 +289,7 @@ export default function RenderExtraContentPage() {
                });
             }
         });
-        return; 
+        return;
     }
 
     if (!currentUser || !currentUser.tenent_id || currentUser.id === undefined) {
@@ -281,7 +301,7 @@ export default function RenderExtraContentPage() {
     metaFormat?.from_formate?.forEach(component => {
         const fieldName = getFieldName(component);
          if (component.is_array && (processedData[fieldName] === undefined || processedData[fieldName] === null)) {
-            processedData[fieldName] = [];
+            processedData[fieldName] = []; // Ensure array fields are at least an empty array if not provided
         }
          if (component.__component === 'dynamic-component.date-field') {
            if (component.is_array && Array.isArray(processedData[fieldName])) {
@@ -296,10 +316,10 @@ export default function RenderExtraContentPage() {
     if (action === 'create') {
       const payload: CreateMetaDataPayload = {
         tenent_id: currentUser.tenent_id,
-        meta_format: metaFormatDocumentId, // This is the documentId of the MetaFormat schema
+        meta_format: metaFormatDocumentId,
         user: currentUser.id,
         meta_data: processedData,
-        publishedAt: new Date().toISOString(), 
+        publishedAt: new Date().toISOString(),
       };
       console.log("Submitting CREATE payload:", payload);
       createMetaDataMutation.mutate(payload, {
@@ -311,7 +331,7 @@ export default function RenderExtraContentPage() {
     } else if (action === 'edit' && metaDataEntryDocumentId) {
         const updatePayload: Partial<Omit<CreateMetaDataPayload, 'meta_format' | 'tenent_id'>> = {
             meta_data: processedData,
-            user: currentUser.id, 
+            user: currentUser.id,
         };
         console.log("Submitting UPDATE payload:", updatePayload, "for documentId:", metaDataEntryDocumentId);
         updateMetaDataMutation.mutate({ documentId: metaDataEntryDocumentId, payload: updatePayload }, {
@@ -323,14 +343,14 @@ export default function RenderExtraContentPage() {
     }
   };
 
-  const isLoading = isLoadingUser || isLoadingMetaFormat || (action === 'edit' && isLoadingMetaDataEntry) || (!isFormInitialized && !isErrorMetaFormat);
-  const isError = isErrorMetaFormat || (action === 'edit' && isErrorMetaDataEntry);
-  const error = errorMetaFormat || (action === 'edit' ? errorMetaDataEntry : null);
+  const isLoadingPage = isLoadingUser || isLoadingMetaFormat || (action === 'edit' && isLoadingMetaDataEntry) || (!isFormInitialized && !isErrorMetaFormat);
+  const isErrorPage = isErrorMetaFormat || (action === 'edit' && isErrorMetaDataEntry);
+  const pageError = errorMetaFormat || (action === 'edit' ? errorMetaDataEntry : null);
 
   const isSubmitting = createMetaDataMutation.isPending || updateMetaDataMutation.isPending || methods.formState.isSubmitting;
 
 
-  if (isLoading) {
+  if (isLoadingPage) {
     return (
       <div className="p-6 space-y-4">
         <Skeleton className="h-8 w-1/4 mb-2" />
@@ -351,13 +371,13 @@ export default function RenderExtraContentPage() {
     );
   }
 
-  if (isError) {
+  if (isErrorPage) {
     return (
       <div className="p-6">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>{(error as Error)?.message || 'Could not load required data for the form.'}</AlertDescription>
+          <AlertDescription>{(pageError as Error)?.message || 'Could not load required data for the form.'}</AlertDescription>
         </Alert>
       </div>
     );
@@ -368,7 +388,7 @@ export default function RenderExtraContentPage() {
       <div className="p-6">
         <Alert>
           <AlertTitle>Extra Content Definition Not Found</AlertTitle>
-          <AlertDescription>The requested extra content definition could not be found.</AlertDescription>
+          <AlertDescription>The requested extra content definition (ID: {metaFormatDocumentId}) could not be found.</AlertDescription>
         </Alert>
       </div>
     );
@@ -406,12 +426,12 @@ export default function RenderExtraContentPage() {
               {metaFormat.from_formate && metaFormat.from_formate.length > 0 ? (
                 metaFormat.from_formate.map((component) => {
                   const fieldName = getFieldName(component);
-                  
+
                   if (component.is_array) {
                     return (
                       <ArrayFieldRenderer
                         key={fieldName}
-                        fieldName={fieldName as any} 
+                        fieldName={fieldName as any}
                         componentDefinition={component}
                         control={methods.control}
                         methods={methods}
@@ -430,7 +450,7 @@ export default function RenderExtraContentPage() {
                     <FormField
                       key={fieldName}
                       control={methods.control}
-                      name={fieldName as any} 
+                      name={fieldName as any}
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{label} {isRequired && <span className="text-destructive">*</span>}</FormLabel>
@@ -469,7 +489,7 @@ export default function RenderExtraContentPage() {
                                   );
                                 case 'dynamic-component.enum-field':
                                   const options = component.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
-                                  if (component.type === 'multi-select') { 
+                                  if (component.type === 'multi-select') {
                                     return (
                                       <div className="space-y-2 p-2 border rounded-md">
                                         {options.map(option => (
@@ -507,7 +527,7 @@ export default function RenderExtraContentPage() {
                                       <PopoverTrigger asChild>
                                         <Button
                                           variant={"outline"}
-                                          className={cn("w-[280px] justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                                          className={cn("w-full md:w-[280px] justify-start text-left font-normal", !field.value && "text-muted-foreground")}
                                           disabled={isSubmitting}
                                         >
                                           <CalendarIcon className="mr-2 h-4 w-4" />
@@ -518,7 +538,7 @@ export default function RenderExtraContentPage() {
                                         <Calendar
                                           mode="single"
                                           selected={field.value ? new Date(field.value) : undefined}
-                                          onSelect={field.onChange}
+                                          onSelect={(date) => field.onChange(date || null)} // Ensure null is passed if date is undefined
                                           initialFocus
                                           disabled={isSubmitting}
                                         />
@@ -577,13 +597,10 @@ export default function RenderExtraContentPage() {
       <MediaSelectorDialog
         isOpen={isMediaSelectorOpen}
         onOpenChange={setIsMediaSelectorOpen}
-        onMediaSelect={handleMediaSelect as any} 
-        returnType="id" 
+        onMediaSelect={handleMediaSelect as any}
+        returnType="id"
       />
     </div>
   );
 }
-      
-    
-    
     
