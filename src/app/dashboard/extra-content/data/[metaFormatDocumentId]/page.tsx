@@ -15,9 +15,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription as DialogDescriptionForJson, // Renamed to avoid conflict
   DialogFooter,
   DialogClose,
-} from '@/components/ui/dialog'; // Removed DialogDescription as it's not used here directly for JSON dialog
+} from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   AlertDialog,
@@ -27,10 +28,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogDescription, // Keep this import
+  AlertDialogDescription,
 } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, Eye, Loader2, FileJson as FileJsonIcon } from 'lucide-react'; // Removed unused media icons like ImageIcon, Video, FileText
+import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, Eye, Loader2, FileJson as FileJsonIcon, ImageIcon, Video as VideoIcon, FileText as FileTextIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import type { MetaData } from '@/types/meta-data';
 import type { FormFormatComponent } from '@/types/meta-format';
@@ -41,7 +42,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from './_components/media-renderer'; // Import the new MediaRenderer
+import MediaRenderer from '../_components/media-renderer'; // Corrected import path
 
 // Helper to generate a unique field name for RHF from MetaFormat component
 const getFieldName = (component: FormFormatComponent): string => {
@@ -111,8 +112,10 @@ export default function MetaDataListingPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...Array(3)].map((_, i) => (
                  <Card key={i} className="flex flex-col">
-                    <CardHeader className="pb-2">
-                        <Skeleton className="h-32 w-full mb-2" /> {/* Placeholder for media */}
+                    <CardContent className="p-4 pb-0">
+                        <Skeleton className="w-full h-32 rounded-md" />
+                    </CardContent>
+                    <CardHeader className="pb-2 pt-3">
                         <Skeleton className="h-5 w-3/4" /> {/* Title */}
                         <Skeleton className="h-4 w-1/2 mt-1" /> {/* Dates */}
                     </CardHeader>
@@ -171,11 +174,34 @@ export default function MetaDataListingPage() {
         </Button>
       </div>
 
-    {(!metaDataEntries || metaDataEntries.length === 0) && !isFetchingMetaData ? (
-         <p className="text-muted-foreground text-center py-8">No data entries found for this format yet.</p>
-      ) : (
+    {(isFetchingMetaData && (!metaDataEntries || metaDataEntries.length === 0)) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {metaDataEntries?.map((entry) => {
+             {[...Array(3)].map((_, i) => (
+                 <Card key={`skeleton-${i}`} className="flex flex-col">
+                     <CardContent className="p-4 pb-0">
+                         <Skeleton className="w-full h-32 rounded-md" />
+                     </CardContent>
+                     <CardHeader className="pb-2 pt-3">
+                         <Skeleton className="h-5 w-3/4" />
+                         <Skeleton className="h-4 w-1/2 mt-1" />
+                     </CardHeader>
+                     <CardContent className="space-y-2 flex-1 pt-2">
+                         <Skeleton className="h-4 w-full" />
+                         <Skeleton className="h-4 w-5/6" />
+                     </CardContent>
+                     <CardFooter className="border-t pt-3"><Skeleton className="h-8 w-20 ml-auto" /></CardFooter>
+                 </Card>
+             ))}
+        </div>
+    )}
+
+    {(!metaDataEntries || metaDataEntries.length === 0) && !isFetchingMetaData && (
+         <p className="text-muted-foreground text-center py-8">No data entries found for this format yet.</p>
+      ) }
+
+      {metaDataEntries && metaDataEntries.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {metaDataEntries.map((entry) => {
                 const entryMediaDocumentIds: string[] = [];
                 const otherFields: { label: string | null; value: any }[] = [];
 
@@ -191,7 +217,7 @@ export default function MetaDataListingPage() {
                         } else if (typeof value === 'string' && value.trim() !== '') {
                             entryMediaDocumentIds.push(value);
                         }
-                    } else if (value !== null && value !== undefined && value !== '') {
+                    } else if (value !== null && value !== undefined && String(value).trim() !== '') {
                         let displayValue = String(value);
                         if (typeof value === 'object' && !Array.isArray(value)) displayValue = '[Object]';
                         else if (Array.isArray(value)) displayValue = value.join(', ');
@@ -207,22 +233,22 @@ export default function MetaDataListingPage() {
                 return (
                     <Card key={entry.documentId || entry.id} className="flex flex-col">
                         {entryMediaDocumentIds.length > 0 && (
-                            <CardContent className="p-4 pb-0"> {/* Media display at the top */}
+                            <CardContent className="p-4 pb-0">
                                 {entryMediaDocumentIds.length === 1 ? (
-                                    <MediaRenderer mediaDocumentId={entryMediaDocumentIds[0]} />
+                                    <MediaRenderer mediaDocumentId={entryMediaDocumentIds[0]} className="rounded-md border" />
                                 ) : (
-                                    <Carousel className="w-full" opts={{ loop: entryMediaDocumentIds.length > 1 }}>
+                                    <Carousel className="w-full rounded-md border" opts={{ loop: entryMediaDocumentIds.length > 1 }}>
                                         <CarouselContent>
                                             {entryMediaDocumentIds.map((docId, index) => (
                                                 <CarouselItem key={`${entry.documentId}-media-${index}`}>
-                                                    <div className="p-1">
+                                                    <div className="p-1"> {/* Padding for carousel item content */}
                                                          <MediaRenderer mediaDocumentId={docId} />
                                                     </div>
                                                 </CarouselItem>
                                             ))}
                                         </CarouselContent>
-                                        {entryMediaDocumentIds.length > 1 && <CarouselPrevious className="left-2" />}
-                                        {entryMediaDocumentIds.length > 1 && <CarouselNext className="right-2"/>}
+                                        {entryMediaDocumentIds.length > 1 && <CarouselPrevious className="left-2 disabled:opacity-30" />}
+                                        {entryMediaDocumentIds.length > 1 && <CarouselNext className="right-2 disabled:opacity-30"/>}
                                     </Carousel>
                                 )}
                             </CardContent>
@@ -238,7 +264,7 @@ export default function MetaDataListingPage() {
                              {otherFields.length > 0 && (
                                  <div className="space-y-1">
                                      <h4 className="text-sm font-medium mt-2 border-t pt-2">Other Data:</h4>
-                                     {otherFields.slice(0, 3).map((field, index) => ( // Show first 3 other fields
+                                     {otherFields.slice(0, 3).map((field, index) => (
                                          <p key={index} className="text-xs text-muted-foreground truncate">
                                              <span className="font-semibold text-foreground">{field.label || 'Field'}:</span> {field.value}
                                          </p>
@@ -320,9 +346,9 @@ export default function MetaDataListingPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Raw JSON Data for Entry: {selectedEntryIdForJson}</DialogTitle>
-            <DialogDescription> {/* Added DialogDescription back as it's used */}
+            <DialogDescriptionForJson> {/* Uses renamed import */}
               This is the raw JSON data stored for this entry.
-            </DialogDescription>
+            </DialogDescriptionForJson>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] mt-4 border rounded-md">
             <pre className="p-4 text-xs whitespace-pre-wrap break-all">
@@ -340,3 +366,4 @@ export default function MetaDataListingPage() {
     </div>
   );
 }
+
