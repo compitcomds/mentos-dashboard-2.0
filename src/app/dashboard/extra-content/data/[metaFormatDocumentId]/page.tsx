@@ -15,7 +15,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription as DialogDescriptionForJson, // Renamed to avoid conflict
+  DialogDescription as DialogDescriptionForJson,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -25,7 +25,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogDescription,
@@ -42,16 +41,19 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from '@/app/dashboard/extra-content/data/_components/media-renderer'; // Corrected import path
+import MediaRenderer from '../_components/media-renderer'; // Corrected import path
 
-// Helper to generate a unique field name for RHF from MetaFormat component
+
+// Helper to generate field names, consistent with form rendering
 const getFieldName = (component: FormFormatComponent): string => {
-  if (component.id) {
-    const idPart = typeof component.id === 'number' || typeof component.id === 'string' ? component.id : Math.random().toString(36).substring(7);
-    return `component_${component.__component.replace('dynamic-component.', '')}_${idPart}`;
+  if (component.label && component.label.trim() !== '') {
+    const slugifiedLabel = component.label
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '');
+    return `${slugifiedLabel}_${component.id}`;
   }
-  const label = component.label || component.__component.split('.').pop() || 'unknown_field';
-  return label.toLowerCase().replace(/\s+/g, '_') + `_${Math.random().toString(36).substring(7)}`;
+  return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
 };
 
 
@@ -116,8 +118,8 @@ export default function MetaDataListingPage() {
                         <Skeleton className="w-full h-32 rounded-md" />
                     </CardContent>
                     <CardHeader className="pb-2 pt-3">
-                        <Skeleton className="h-5 w-3/4" /> {/* Title */}
-                        <Skeleton className="h-4 w-1/2 mt-1" /> {/* Dates */}
+                        <Skeleton className="h-5 w-3/4" />
+                        <Skeleton className="h-4 w-1/2 mt-1" />
                     </CardHeader>
                     <CardContent className="space-y-2 flex-1 pt-2">
                         <Skeleton className="h-4 w-full" />
@@ -202,7 +204,7 @@ export default function MetaDataListingPage() {
       {metaDataEntries && metaDataEntries.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {metaDataEntries.map((entry) => {
-                const entryMediaIds: number[] = [];
+                const entryMediaIds: number[] = []; // Still storing numeric media IDs for MediaRenderer
                 const otherFields: { label: string | null; value: any }[] = [];
 
                 metaFormat.from_formate?.forEach(component => {
@@ -212,10 +214,23 @@ export default function MetaDataListingPage() {
                     if (component.__component === 'dynamic-component.media-field' && value) {
                         if (component.is_array && Array.isArray(value)) {
                             value.forEach(mediaId => {
-                                if (typeof mediaId === 'number') entryMediaIds.push(mediaId);
+                                // Value is now string documentId from form, MediaRenderer expects numeric id.
+                                // This part needs alignment if MediaRenderer depends on numeric media.id
+                                // For now, if value is a string, attempt to parse as number, otherwise use as is if already number
+                                const numericMediaId = typeof mediaId === 'string' ? parseInt(mediaId, 10) : typeof mediaId === 'number' ? mediaId : null;
+                                if (numericMediaId !== null && !isNaN(numericMediaId)) {
+                                     entryMediaIds.push(numericMediaId);
+                                } else if (typeof mediaId === 'number') { // Fallback for old numeric data
+                                     entryMediaIds.push(mediaId);
+                                }
                             });
-                        } else if (typeof value === 'number') {
-                            entryMediaIds.push(value);
+                        } else {
+                             const numericMediaId = typeof value === 'string' ? parseInt(value, 10) : typeof value === 'number' ? value : null;
+                             if (numericMediaId !== null && !isNaN(numericMediaId)) {
+                                 entryMediaIds.push(numericMediaId);
+                             } else if (typeof value === 'number') {
+                                 entryMediaIds.push(value);
+                             }
                         }
                     } else if (value !== null && value !== undefined && String(value).trim() !== '') {
                         let displayValue = String(value);
@@ -254,7 +269,7 @@ export default function MetaDataListingPage() {
                             </CardContent>
                         )}
                         <CardHeader className={entryMediaIds.length > 0 ? "pt-3 pb-2" : "pb-2"}>
-                            <CardTitle className="text-base">Entry ID: <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{entry.documentId || 'N/A'}</span></CardTitle>
+                            <CardTitle className="text-base">Data Entry ID: <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{entry.documentId || 'N/A'}</span></CardTitle>
                             <CardDescription className="text-xs">
                                 Created: {entry.createdAt ? format(new Date(entry.createdAt), 'PPp') : 'N/A'} <br/>
                                 Updated: {entry.updatedAt ? format(new Date(entry.updatedAt), 'PPp') : 'N/A'}
@@ -346,7 +361,7 @@ export default function MetaDataListingPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Raw JSON Data for Entry: {selectedEntryIdForJson}</DialogTitle>
-            <DialogDescriptionForJson> {/* Uses renamed import */}
+            <DialogDescriptionForJson>
               This is the raw JSON data stored for this entry.
             </DialogDescriptionForJson>
           </DialogHeader>

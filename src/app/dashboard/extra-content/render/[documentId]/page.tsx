@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useForm, FormProvider, Controller, FieldValues } from 'react-hook-form';
+import { useForm, FormProvider, Controller, FieldValues, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useGetMetaFormat } from '@/lib/queries/meta-format';
@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon, PlusCircle, Trash2 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import type { FormFormatComponent, MetaFormat } from '@/types/meta-format';
 import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog';
@@ -31,15 +31,21 @@ import { cn } from '@/lib/utils';
 import ArrayFieldRenderer from '@/app/dashboard/extra-content/_components/array-field-renderer';
 import type { CombinedMediaData } from '@/types/media';
 
-
+// Helper to generate a unique field name for RHF
 const getFieldName = (component: FormFormatComponent): string => {
-  if (component.id) {
-    const idPart = typeof component.id === 'number' || typeof component.id === 'string' ? component.id : Math.random().toString(36).substring(7);
-    return `component_${component.__component.replace('dynamic-component.', '')}_${idPart}`;
+  if (component.label && component.label.trim() !== '') {
+    // Slugify label: lowercase, replace spaces with underscores, remove non-alphanumeric (except underscore)
+    const slugifiedLabel = component.label
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '');
+    // Append component's unique ID to ensure RHF field name uniqueness
+    return `${slugifiedLabel}_${component.id}`;
   }
-  const label = component.label || component.__component.split('.').pop() || 'unknown_field';
-  return label.toLowerCase().replace(/\s+/g, '_') + `_${Math.random().toString(36).substring(7)}`;
+  // Fallback if label is missing or empty
+  return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
 };
+
 
 const getDefaultValueForComponent = (componentType: string, component?: FormFormatComponent): any => {
   switch (componentType) {
@@ -48,9 +54,9 @@ const getDefaultValueForComponent = (componentType: string, component?: FormForm
     case 'dynamic-component.number-field':
       return component?.default !== undefined && component.default !== null && component.default !== '' ? Number(component.default) : null;
     case 'dynamic-component.media-field':
-      return null; 
+      return null; // Media field stores string documentId
     case 'dynamic-component.enum-field':
-      if (component?.type === 'multi-select' && component.is_array) return [];
+      if (component?.type === 'multi-select') return []; // Default for multi-select is empty array
       return component?.default || null;
     case 'dynamic-component.date-field':
       return component?.default ? new Date(component.default) : null;
@@ -97,12 +103,12 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
         componentDefaultValue = componentDefaultValue ?? null;
         break;
       case 'dynamic-component.media-field':
-        baseSchema = z.number().nullable().optional(); // Stores numeric Media ID
-        if (component.required) baseSchema = z.number({ required_error: `${component.label || 'Media'} is required.` });
+        baseSchema = z.string().nullable().optional(); // Stores string documentId
+        if (component.required) baseSchema = z.string({ required_error: `${component.label || 'Media'} is required.` }).min(1);
         componentDefaultValue = null;
         break;
       case 'dynamic-component.enum-field':
-        if (component.type === 'multi-select' && !component.is_array) { // single multi-select, not array of multi-selects
+        if (component.type === 'multi-select') {
              baseSchema = z.array(z.string()).optional().default([]);
              if(component.required) baseSchema = z.array(z.string()).nonempty({ message: `${component.label || 'Field'} requires at least one selection.` });
             componentDefaultValue = component.default ? component.default.split(',').map(s => s.trim()).filter(Boolean) : [];
@@ -113,7 +119,7 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
         }
         break;
       case 'dynamic-component.date-field':
-        baseSchema = z.date().nullable().optional(); // Allow null for optional dates
+        baseSchema = z.date().nullable().optional();
         if (component.required) baseSchema = z.date({ required_error: `${component.label || 'Date'} is required.` });
         componentDefaultValue = componentDefaultValue ?? null;
         break;
@@ -148,12 +154,12 @@ export default function RenderExtraContentPage() {
 
   const metaFormatDocumentId = params.documentId as string;
   const action = searchParams.get('action') || 'create';
-  const metaDataEntryDocumentId = action === 'edit' ? searchParams.get('entry') : null;
+  const metaDataEntryDocumentIdParam = searchParams.get('entry');
 
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const { data: metaFormat, isLoading: isLoadingMetaFormat, isError: isErrorMetaFormat, error: errorMetaFormat } = useGetMetaFormat(metaFormatDocumentId);
 
-  const { data: metaDataEntry, isLoading: isLoadingMetaDataEntry, isError: isErrorMetaDataEntry, error: errorMetaDataEntry } = useGetMetaDataEntry(metaDataEntryDocumentId);
+  const { data: metaDataEntry, isLoading: isLoadingMetaDataEntry, isError: isErrorMetaDataEntry, error: errorMetaDataEntry } = useGetMetaDataEntry(metaDataEntryDocumentIdParam);
 
   const createMetaDataMutation = useCreateMetaDataEntry();
   const updateMetaDataMutation = useUpdateMetaDataEntry();
@@ -179,7 +185,7 @@ export default function RenderExtraContentPage() {
         if (action === 'edit' && metaDataEntry && !isLoadingMetaDataEntry) {
           metaFormat.from_formate?.forEach(component => {
             const fieldName = getFieldName(component);
-            const entryValue = metaDataEntry.meta_data?.[fieldName];
+            let entryValue = metaDataEntry.meta_data?.[fieldName];
 
             if (entryValue !== undefined && entryValue !== null) {
               if (component.is_array) {
@@ -189,20 +195,20 @@ export default function RenderExtraContentPage() {
                        if (!dateStr) return null;
                        const parsedDate = parseISO(String(dateStr));
                        return isValid(parsedDate) ? parsedDate : null;
-                    }).filter(Boolean);
+                    }).filter((d: Date | null) => d !== null);
                 } else if (component.__component === 'dynamic-component.media-field' && Array.isArray(initialValues[fieldName])) {
-                    initialValues[fieldName] = initialValues[fieldName].map((val: any) => 
-                        typeof val === 'string' ? Number(val) : // Convert string to number if old data
-                        typeof val === 'number' ? val : null      // Keep number if already number
-                    ).filter((v: any) => v !== null);
+                    initialValues[fieldName] = initialValues[fieldName].map((val: any) =>
+                        typeof val === 'number' ? String(val) :
+                        typeof val === 'string' ? val : null
+                    ).filter((v: string | null) => v !== null);
                 }
               } else if (component.__component === 'dynamic-component.date-field' && entryValue) {
                 const parsedDate = parseISO(String(entryValue));
                 initialValues[fieldName] = isValid(parsedDate) ? parsedDate : null;
               } else if (component.__component === 'dynamic-component.media-field') {
-                 if (typeof entryValue === 'string') {
-                   initialValues[fieldName] = Number(entryValue) || null;
-                 } else if (typeof entryValue === 'number') {
+                 if (typeof entryValue === 'number') {
+                   initialValues[fieldName] = String(entryValue);
+                 } else if (typeof entryValue === 'string') {
                    initialValues[fieldName] = entryValue;
                  } else {
                    initialValues[fieldName] = null;
@@ -216,11 +222,11 @@ export default function RenderExtraContentPage() {
           });
         }
         methods.reset(initialValues);
-        setFormDefaultValues(initialValues); // Also set this for re-initialization context
+        setFormDefaultValues(initialValues);
         setIsFormInitialized(true);
       }
     }
-  }, [metaFormat, isLoadingMetaFormat, action, metaDataEntry, isLoadingMetaDataEntry, metaDataEntryDocumentId, methods, isErrorMetaDataEntry, isFormInitialized]);
+  }, [metaFormat, isLoadingMetaFormat, action, metaDataEntry, isLoadingMetaDataEntry, metaDataEntryDocumentIdParam, methods, isErrorMetaDataEntry, isFormInitialized]);
 
 
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = React.useState(false);
@@ -228,25 +234,26 @@ export default function RenderExtraContentPage() {
   const [currentMediaFieldDefinition, setCurrentMediaFieldDefinition] = React.useState<FormFormatComponent | null>(null);
 
 
-  const handleMediaSelect = (selectedMedia: { fileId: number | null; thumbnailUrl: string | null; mimeType: string | null; altText: string | null }) => {
-    const mediaIdToSet = selectedMedia.fileId;
+  const handleMediaSelect = (selectedMedia: CombinedMediaData) => {
+    const mediaDocumentIdToSet = selectedMedia.fileDocumentId; // This should be the string documentId
 
-    if (!currentMediaFieldTarget || mediaIdToSet === null) {
-        toast({ variant: "destructive", title: "Error", description: "Media target or selected media ID missing." });
+    if (!currentMediaFieldTarget || mediaDocumentIdToSet === null || mediaDocumentIdToSet === undefined) {
+        toast({ variant: "destructive", title: "Error", description: "Media target or selected media document ID missing." });
         setIsMediaSelectorOpen(false);
         return;
     }
-     if (typeof mediaIdToSet !== 'number') {
-        toast({ variant: "destructive", title: "Error", description: "Media ID is not a number." });
+     if (typeof mediaDocumentIdToSet !== 'string') {
+        toast({ variant: "destructive", title: "Error", description: "Selected Media Document ID is not a string." });
+        console.error("MediaSelector returned non-string document ID:", mediaDocumentIdToSet, "Full selectedMedia:", selectedMedia);
         setIsMediaSelectorOpen(false);
         return;
      }
 
     if (typeof currentMediaFieldTarget === 'string') {
-      methods.setValue(currentMediaFieldTarget, mediaIdToSet, { shouldValidate: true });
+      methods.setValue(currentMediaFieldTarget, mediaDocumentIdToSet, { shouldValidate: true });
     } else if (typeof currentMediaFieldTarget === 'object' && currentMediaFieldTarget.fieldName && currentMediaFieldTarget.index !== undefined) {
       const { fieldName, index } = currentMediaFieldTarget;
-      methods.setValue(`${fieldName}.${index}`, mediaIdToSet, { shouldValidate: true });
+      methods.setValue(`${fieldName}.${index}`, mediaDocumentIdToSet, { shouldValidate: true });
     }
     setIsMediaSelectorOpen(false);
     setCurrentMediaFieldTarget(null);
@@ -262,7 +269,7 @@ export default function RenderExtraContentPage() {
 
   const onSubmit = (data: FieldValues) => {
     console.log("Dynamic Form onSubmit triggered. Action:", action);
-    console.log("Form Data:", JSON.stringify(data, null, 2));
+    console.log("Form Data (using label-based keys):", JSON.stringify(data, null, 2));
     console.log("Form Errors:", JSON.stringify(methods.formState.errors, null, 2));
 
     if (Object.keys(methods.formState.errors).length > 0) {
@@ -275,7 +282,7 @@ export default function RenderExtraContentPage() {
             console.error(`Validation Error - ${fieldName}:`, error?.message, 'Field Value:', data[fieldName]);
             if (error?.type === 'invalid_type' && Array.isArray(data[fieldName])) {
               console.error(`  ↳ Error for field '${fieldName}' which is an array. Check individual item errors or array-level validation.`);
-            } else if (Array.isArray(error)) { // For field array errors
+            } else if (Array.isArray(error)) {
                error.forEach((itemError, i) => {
                  if (itemError) {
                    Object.entries(itemError).forEach(([subFieldName, subError] : [string, any]) => {
@@ -312,7 +319,7 @@ export default function RenderExtraContentPage() {
     if (action === 'create') {
       const payload: CreateMetaDataPayload = {
         tenent_id: currentUser.tenent_id,
-        meta_format: metaFormatDocumentId, // This is the documentId of the MetaFormat
+        meta_format: metaFormatDocumentId,
         user: currentUser.id,
         meta_data: processedData,
         publishedAt: new Date().toISOString(),
@@ -323,12 +330,12 @@ export default function RenderExtraContentPage() {
           router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`);
         },
       });
-    } else if (action === 'edit' && metaDataEntryDocumentId) {
+    } else if (action === 'edit' && metaDataEntryDocumentIdParam) {
         const updatePayload: Partial<Omit<CreateMetaDataPayload, 'meta_format' | 'tenent_id'>> = {
             meta_data: processedData,
-            user: currentUser.id, // Or keep user from original entry if not changing
+            user: currentUser.id,
         };
-        updateMetaDataMutation.mutate({ documentId: metaDataEntryDocumentId, payload: updatePayload }, {
+        updateMetaDataMutation.mutate({ documentId: metaDataEntryDocumentIdParam, payload: updatePayload }, {
             onSuccess: () => {
                 toast({ title: "Success", description: "Data entry updated." });
                 router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`);
@@ -386,13 +393,13 @@ export default function RenderExtraContentPage() {
       </div>
     );
   }
-   if (action === 'edit' && !metaDataEntry && !isLoadingMetaDataEntry && metaDataEntryDocumentId) {
+   if (action === 'edit' && !metaDataEntry && !isLoadingMetaDataEntry && metaDataEntryDocumentIdParam) {
      return (
        <div className="p-6">
          <Alert variant="destructive">
            <AlertTitle>Error: Data Entry Not Found</AlertTitle>
            <AlertDescription>
-             The specific data entry you are trying to edit (ID: {metaDataEntryDocumentId}) could not be found.
+             The specific data entry you are trying to edit (ID: {metaDataEntryDocumentIdParam}) could not be found.
              It may have been deleted or you may not have permission to access it.
            </AlertDescription>
            <Button variant="outline" onClick={() => router.back()} className="mt-4">
@@ -404,25 +411,26 @@ export default function RenderExtraContentPage() {
    }
 
   const getExpectedMediaTypesForField = (componentDef: FormFormatComponent): string[] => {
-    if (componentDef.__component === 'dynamic-component.media-field') {
+    if (componentDef.__component === 'dynamic-component.media-field' && componentDef.type) {
         switch (componentDef.type) {
             case 'image': return ['image'];
             case 'video': return ['video'];
             case 'pdf': return ['application/pdf'];
-            default: return []; // 'media' or 'other' means no client-side filter
+            default: return [];
         }
     }
     return [];
   };
 
-  const getCurrentSelectionForMediaField = (fieldName: string, isArrayField: boolean, itemIndex?: number): (number | null)[] => {
+  // Helper to get current selection (string documentIds) for a media field
+  const getCurrentSelectionDocumentIds = (fieldName: string, isArrayField: boolean, itemIndex?: number): (string | null)[] => {
     const formValues = methods.getValues();
     if (isArrayField && itemIndex !== undefined) {
         const arrayValue = formValues[fieldName]?.[itemIndex];
-        return arrayValue ? [Number(arrayValue)].filter(id => !isNaN(id)) : [];
+        return arrayValue ? [String(arrayValue)].filter(id => id !== 'null' && id !== 'undefined') : [];
     }
     const singleValue = formValues[fieldName];
-    return singleValue ? [Number(singleValue)].filter(id => !isNaN(id)) : [];
+    return singleValue ? [String(singleValue)].filter(id => id !== 'null' && id !== 'undefined') : [];
   };
 
 
@@ -487,7 +495,7 @@ export default function RenderExtraContentPage() {
                                 case 'dynamic-component.number-field':
                                   return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={component.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
                                 case 'dynamic-component.media-field':
-                                  const currentMediaId = field.value as number | null;
+                                  const currentMediaDocumentId = field.value as string | null;
                                   return (
                                     <div className="flex items-center gap-2">
                                       <Button
@@ -497,9 +505,9 @@ export default function RenderExtraContentPage() {
                                         disabled={isSubmitting}
                                       >
                                          <ImageIcon className="mr-2 h-4 w-4" />
-                                        {currentMediaId ? `Media ID: ${currentMediaId} (Change)` : placeholder || `Select Media`}
+                                        {currentMediaDocumentId ? `DocID: ${currentMediaDocumentId.substring(0,10)}... (Change)` : placeholder || `Select Media`}
                                       </Button>
-                                       {currentMediaId && <p className="text-xs text-muted-foreground">Media ID: {currentMediaId}</p>}
+                                       {currentMediaDocumentId && <p className="text-xs text-muted-foreground">DocID: {currentMediaDocumentId}</p>}
                                     </div>
                                   );
                                 case 'dynamic-component.enum-field':
@@ -566,7 +574,7 @@ export default function RenderExtraContentPage() {
                                                     onChange={(e) => {
                                                         const [hours, minutes] = e.target.value.split(':').map(Number);
                                                         const newDate = field.value && isValid(field.value) ? new Date(field.value) : new Date();
-                                                        if (isNaN(newDate.getTime())) { 
+                                                        if (isNaN(newDate.getTime())) {
                                                             const todayWithTime = new Date();
                                                             todayWithTime.setHours(hours, minutes, 0, 0);
                                                             field.onChange(todayWithTime);
@@ -618,19 +626,26 @@ export default function RenderExtraContentPage() {
       <MediaSelectorDialog
         isOpen={isMediaSelectorOpen}
         onOpenChange={setIsMediaSelectorOpen}
-        onMediaSelect={handleMediaSelect as any}
-        returnType="id"
+        onMediaSelect={handleMediaSelect} // Corrected type
+        returnType="id" // This means it returns CombinedMediaData, from which we extract fileDocumentId
         expectedMediaTypes={currentMediaFieldDefinition ? getExpectedMediaTypesForField(currentMediaFieldDefinition) : []}
+        // currentSelectionIds in MediaSelectorDialog expects numeric IDs for its own internal "is this item already selected?" logic.
+        // Our form now stores string documentIds.
+        // For this prop, we'll pass an empty array or convert if possible, but it's mainly for UI hint in dialog.
         currentSelectionIds={
-            currentMediaFieldDefinition && currentMediaFieldTarget ? 
-            getCurrentSelectionForMediaField(
+            currentMediaFieldTarget && currentMediaFieldDefinition ?
+            getCurrentSelectionDocumentIds(
                 typeof currentMediaFieldTarget === 'string' ? currentMediaFieldTarget : currentMediaFieldTarget.fieldName,
                 typeof currentMediaFieldTarget !== 'string', // isArrayField
                 typeof currentMediaFieldTarget !== 'string' ? currentMediaFieldTarget.index : undefined
-            ) : []
+            ).map(docId => {
+                // Attempt to find a matching numeric ID if dialog strictly needs numbers for its internal check.
+                // This is a placeholder for a more robust mapping if needed by MediaSelectorDialog's internal logic.
+                // For now, this will likely result in no pre-selection highlight in the dialog based on form values.
+                const numId = parseInt(docId || ''); return isNaN(numId) ? null : numId;
+            }).filter(id => id !== null) as number[] : []
         }
       />
     </div>
   );
 }
-

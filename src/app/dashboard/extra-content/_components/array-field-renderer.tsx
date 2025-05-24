@@ -13,11 +13,29 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ImageIcon, PlusCircle, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { CalendarIcon, ImageIcon, PlusCircle, Trash2, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { FormFormatComponent } from '@/types/meta-format';
 import TipTapEditor from '@/components/ui/tiptap';
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface ArrayFieldRendererProps<TFieldValues extends FieldValues = FieldValues> {
   fieldName: FieldPath<TFieldValues>;
@@ -29,82 +47,83 @@ interface ArrayFieldRendererProps<TFieldValues extends FieldValues = FieldValues
   getDefaultValueForComponent: (componentType: string, component?: FormFormatComponent) => any;
 }
 
-export default function ArrayFieldRenderer<TFieldValues extends FieldValues = FieldValues>({
+// SortableItem sub-component
+function SortableItem<TFieldValues extends FieldValues = FieldValues>({
+  id, // This 'id' is from RHF useFieldArray, used by dnd-kit
+  index,
   fieldName,
   componentDefinition,
   control,
   methods,
   isSubmitting,
   openMediaSelector,
-  getDefaultValueForComponent,
-}: ArrayFieldRendererProps<TFieldValues>) {
-  const { fields, append, remove, move } = useFieldArray({
-    control,
-    name: fieldName,
-  });
+  remove,
+  move,
+  totalItems,
+}: {
+  id: string;
+  index: number;
+  fieldName: FieldPath<TFieldValues>;
+  componentDefinition: FormFormatComponent;
+  control: Control<TFieldValues>;
+  methods: UseFormReturn<TFieldValues>;
+  isSubmitting: boolean;
+  openMediaSelector: (target: string | { fieldName: string; index: number }, componentDef: FormFormatComponent) => void;
+  remove: (index: number) => void;
+  move: (from: number, to: number) => void;
+  totalItems: number;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    opacity: isDragging ? 0.8 : 1,
+  };
 
   const label = componentDefinition.label || fieldName;
-  const isRequired = componentDefinition.required || false;
 
   return (
-    <FormItem>
-      <FormLabel>{label} {isRequired && <span className="text-destructive">*</span>} (Multiple entries allowed)</FormLabel>
-      <div className="space-y-3">
-        {fields.map((item, index) => (
-          <Card key={item.id} className="p-4 bg-muted/50 relative">
-             <div className="absolute top-2 right-2 flex space-x-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => move(index, index - 1)}
-                  disabled={isSubmitting || index === 0}
-                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                  aria-label={`Move ${label} item ${index + 1} up`}
-                >
-                  <ArrowUp className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => move(index, index + 1)}
-                  disabled={isSubmitting || index === fields.length - 1}
-                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                  aria-label={`Move ${label} item ${index + 1} down`}
-                >
-                  <ArrowDown className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => remove(index)}
-                  disabled={isSubmitting}
-                  className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  aria-label={`Remove ${label} item ${index + 1}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-            </div>
-            
-            <FormField
-              control={control}
-              name={`${fieldName}.${index}` as any}
-              render={({ field }) => (
-                <FormItem className="mt-2 pt-8"> {/* Added padding-top to avoid overlap with buttons */}
-                  <FormLabel className="sr-only">{label} Item {index + 1}</FormLabel>
-                  <FormControl>
-                    {(() => {
-                      const placeholder = componentDefinition.placeholder || '';
-                      switch (componentDefinition.__component) {
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className="p-4 bg-muted/50 relative mb-3"
+    >
+      <div className="flex items-start">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab p-1 mr-2 flex-shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label={`Drag to reorder ${label} item ${index + 1}`}
+        >
+          <GripVertical className="h-5 w-5" />
+        </div>
+        <div className="flex-grow">
+          <FormField
+            control={control}
+            name={`${fieldName}.${index}` as any}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="sr-only">{label} Item {index + 1}</FormLabel>
+                <FormControl>
+                  {(() => {
+                    const placeholder = componentDefinition.placeholder || '';
+                    switch (componentDefinition.__component) {
                         case 'dynamic-component.text-field':
                           if (componentDefinition.inputType === 'tip-tap') {
                             return (
                               <TipTapEditor
                                 content={field.value || componentDefinition.default || ''}
                                 onContentChange={(html) => methods.setValue(`${fieldName}.${index}` as any, html, { shouldValidate: true })}
-                                className="min-h-[150px]"
+                                className="min-h-[100px]"
                               />
                             );
                           }
@@ -112,25 +131,24 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                         case 'dynamic-component.number-field':
                           return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={componentDefinition.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
                         case 'dynamic-component.media-field':
-                           const currentMediaId = field.value as number | null;
+                           const currentMediaDocumentId = field.value as string | null;
                           return (
                             <div className="flex items-center gap-2">
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => openMediaSelector({ fieldName, index }, componentDefinition)}
+                                onClick={() => openMediaSelector({ fieldName, index }, componentDefinition)} // Pass index
                                 disabled={isSubmitting}
                               >
                                 <ImageIcon className="mr-2 h-4 w-4" />
-                                {currentMediaId ? `Media ID: ${currentMediaId} (Change)` : placeholder || `Select Media`}
+                                {currentMediaDocumentId ? `DocID: ${currentMediaDocumentId.substring(0,8)}...` : placeholder || `Select Media`}
                               </Button>
-                              {currentMediaId && <p className="text-xs text-muted-foreground">Media ID: {currentMediaId}</p>}
+                              {currentMediaDocumentId && <p className="text-xs text-muted-foreground">DocID: {currentMediaDocumentId}</p>}
                             </div>
                           );
                         case 'dynamic-component.enum-field':
                           const options = componentDefinition.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
                           if (componentDefinition.type === 'multi-select') {
-                            // For multi-select within an array, each "item" is an array of selected strings
                             return (
                                 <div className="space-y-2 p-2 border rounded-md">
                                 {options.map(option => (
@@ -168,7 +186,7 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                               <PopoverTrigger asChild>
                                 <Button
                                   variant={"outline"}
-                                  className={cn("w-full md:w-[280px] justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                                  className={cn("w-full md:w-[240px] justify-start text-left font-normal", !field.value && "text-muted-foreground")}
                                   disabled={isSubmitting}
                                 >
                                   <CalendarIcon className="mr-2 h-4 w-4" />
@@ -192,7 +210,7 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                                             onChange={(e) => {
                                                 const [hours, minutes] = e.target.value.split(':').map(Number);
                                                 const newDate = field.value && isValid(new Date(field.value)) ? new Date(field.value) : new Date();
-                                                if (isNaN(newDate.getTime())) { 
+                                                if (isNaN(newDate.getTime())) {
                                                     const todayWithTime = new Date();
                                                     todayWithTime.setHours(hours, minutes, 0, 0);
                                                     field.onChange(todayWithTime);
@@ -215,30 +233,135 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                               <FormLabel htmlFor={`${fieldName}.${index}`} className="text-sm font-normal">{placeholder || 'Enable'}</FormLabel>
                             </div>
                           );
-                        default:
-                          return <Input placeholder={`Unsupported: ${componentDefinition.__component}`} {...field} value={field.value ?? ''} disabled />;
-                      }
-                    })()}
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </Card>
-        ))}
+                      default:
+                        return <Input placeholder={`Unsupported: ${componentDefinition.__component}`} {...field} value={field.value ?? ''} disabled />;
+                    }
+                  })()}
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <div className="flex flex-col space-y-1 ml-2 flex-shrink-0">
+           <Button
+             type="button"
+             variant="ghost"
+             size="icon"
+             onClick={() => move(index, index - 1)}
+             disabled={isSubmitting || index === 0}
+             className="h-7 w-7 text-muted-foreground hover:text-foreground"
+             aria-label={`Move ${label} item ${index + 1} up`}
+           >
+             <ArrowUp className="h-4 w-4" />
+           </Button>
+           <Button
+             type="button"
+             variant="ghost"
+             size="icon"
+             onClick={() => move(index, index + 1)}
+             disabled={isSubmitting || index === totalItems - 1}
+             className="h-7 w-7 text-muted-foreground hover:text-foreground"
+             aria-label={`Move ${label} item ${index + 1} down`}
+           >
+             <ArrowDown className="h-4 w-4" />
+           </Button>
+           <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => remove(index)}
+            disabled={isSubmitting}
+            className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+            aria-label={`Remove ${label} item ${index + 1}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+
+export default function ArrayFieldRenderer<TFieldValues extends FieldValues = FieldValues>({
+  fieldName,
+  componentDefinition,
+  control,
+  methods,
+  isSubmitting,
+  openMediaSelector,
+  getDefaultValueForComponent,
+}: ArrayFieldRendererProps<TFieldValues>) {
+  const { fields, append, remove, move } = useFieldArray({
+    control,
+    name: fieldName,
+  });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = fields.findIndex((item) => item.id === active.id);
+      const newIndex = fields.findIndex((item) => item.id === over.id);
+      move(oldIndex, newIndex);
+    }
+  }
+
+  const label = componentDefinition.label || fieldName;
+  const isRequired = componentDefinition.required || false;
+
+  return (
+    <FormItem>
+      <FormLabel>{label} {isRequired && <span className="text-destructive">*</span>} (Multiple entries allowed)</FormLabel>
+      <div className="space-y-0"> {/* Reduced space-y from 3 to 0 or 1 if needed */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={fields.map(item => item.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {fields.map((item, index) => (
+              <SortableItem
+                key={item.id}
+                id={item.id}
+                index={index}
+                fieldName={fieldName}
+                componentDefinition={componentDefinition}
+                control={control}
+                methods={methods}
+                isSubmitting={isSubmitting}
+                openMediaSelector={openMediaSelector}
+                remove={remove}
+                move={move}
+                totalItems={fields.length}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={() => append(getDefaultValueForComponent(componentDefinition.__component, componentDefinition))}
           disabled={isSubmitting}
+          className="mt-2" // Added margin top to separate from array items
         >
           <PlusCircle className="mr-2 h-4 w-4" /> Add {componentDefinition.label || 'Item'}
         </Button>
       </div>
-      {componentDefinition.description && <FormDescription>{componentDefinition.description}</FormDescription>}
-      <FormMessage /> 
+      {componentDefinition.description && <FormDescription className="mt-2">{componentDefinition.description}</FormDescription>}
+      <FormMessage />
     </FormItem>
   );
 }
-
