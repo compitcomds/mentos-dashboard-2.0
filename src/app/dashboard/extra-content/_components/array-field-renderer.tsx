@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, ImageIcon, PlusCircle, Trash2, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
-import { format, isValid } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { FormFormatComponent } from '@/types/meta-format';
 import TipTapEditor from '@/components/ui/tiptap';
@@ -90,6 +90,9 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
   };
 
   const label = componentDefinition.label || fieldName;
+  const placeholder = componentDefinition.placeholder || '';
+  const itemFieldName = `${fieldName}.${index}` as FieldPath<TFieldValues>;
+
 
   return (
     <Card
@@ -109,20 +112,19 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
         <div className="flex-grow">
           <FormField
             control={control}
-            name={`${fieldName}.${index}` as any}
+            name={itemFieldName}
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="sr-only">{label} Item {index + 1}</FormLabel>
                 <FormControl>
                   {(() => {
-                    const placeholder = componentDefinition.placeholder || '';
                     switch (componentDefinition.__component) {
                         case 'dynamic-component.text-field':
                           if (componentDefinition.inputType === 'tip-tap') {
                             return (
                               <TipTapEditor
                                 content={field.value || componentDefinition.default || ''}
-                                onContentChange={(html) => methods.setValue(`${fieldName}.${index}` as any, html, { shouldValidate: true })}
+                                onContentChange={(html) => methods.setValue(itemFieldName, html, { shouldValidate: true })}
                                 className="min-h-[100px]"
                               />
                             );
@@ -131,19 +133,24 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                         case 'dynamic-component.number-field':
                           return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={componentDefinition.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
                         case 'dynamic-component.media-field':
-                           const currentMediaDocumentId = field.value as string | null;
+                           const mediaFieldValueRaw = field.value;
+                           // Defensively convert to string or null for display purposes
+                           const currentMediaDocumentIdDisplay: string | null =
+                               mediaFieldValueRaw === null || mediaFieldValueRaw === undefined
+                                   ? null
+                                   : String(mediaFieldValueRaw);
                           return (
                             <div className="flex items-center gap-2">
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => openMediaSelector({ fieldName, index }, componentDefinition)} // Pass index
+                                onClick={() => openMediaSelector({ fieldName: fieldName as string, index }, componentDefinition)}
                                 disabled={isSubmitting}
                               >
                                 <ImageIcon className="mr-2 h-4 w-4" />
-                                {currentMediaDocumentId ? `DocID: ${currentMediaDocumentId.substring(0,8)}...` : placeholder || `Select Media`}
+                                {currentMediaDocumentIdDisplay ? `DocID: ${currentMediaDocumentIdDisplay.substring(0,8)}...` : placeholder || `Select Media`}
                               </Button>
-                              {currentMediaDocumentId && <p className="text-xs text-muted-foreground">DocID: {currentMediaDocumentId}</p>}
+                              {currentMediaDocumentIdDisplay && <p className="text-xs text-muted-foreground">DocID: {currentMediaDocumentIdDisplay}</p>}
                             </div>
                           );
                         case 'dynamic-component.enum-field':
@@ -161,7 +168,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                                           const newValues = checked
                                             ? [...currentValues, option]
                                             : currentValues.filter((v: string) => v !== option);
-                                          methods.setValue(`${fieldName}.${index}` as any, newValues, { shouldValidate: true });
+                                          methods.setValue(itemFieldName, newValues as any, { shouldValidate: true });
                                         }}
                                         disabled={isSubmitting}
                                       />
@@ -181,22 +188,23 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                             </Select>
                           );
                         case 'dynamic-component.date-field':
+                          const dateValue = field.value ? (typeof field.value === 'string' ? parseISO(field.value) : field.value) : null;
                           return (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <Button
                                   variant={"outline"}
-                                  className={cn("w-full md:w-[240px] justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                                  className={cn("w-full md:w-[240px] justify-start text-left font-normal", !dateValue && "text-muted-foreground")}
                                   disabled={isSubmitting}
                                 >
                                   <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {field.value && isValid(new Date(field.value)) ? format(new Date(field.value), (componentDefinition.type === 'time' ? 'HH:mm' : componentDefinition.type === 'data&time' || componentDefinition.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
+                                  {dateValue && isValid(dateValue) ? format(dateValue, (componentDefinition.type === 'time' ? 'HH:mm' : componentDefinition.type === 'data&time' || componentDefinition.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-auto p-0">
                                 <Calendar
                                   mode="single"
-                                  selected={field.value && isValid(new Date(field.value)) ? new Date(field.value) : undefined}
+                                  selected={dateValue && isValid(dateValue) ? dateValue : undefined}
                                   onSelect={(date) => field.onChange(date || null)}
                                   initialFocus
                                   disabled={isSubmitting}
@@ -206,18 +214,15 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                                         <FormLabel>Time (HH:mm)</FormLabel>
                                         <Input
                                             type="time"
-                                            value={field.value && isValid(new Date(field.value)) ? format(new Date(field.value), 'HH:mm') : ''}
+                                            value={dateValue && isValid(dateValue) ? format(dateValue, 'HH:mm') : ''}
                                             onChange={(e) => {
                                                 const [hours, minutes] = e.target.value.split(':').map(Number);
-                                                const newDate = field.value && isValid(new Date(field.value)) ? new Date(field.value) : new Date();
-                                                if (isNaN(newDate.getTime())) {
-                                                    const todayWithTime = new Date();
-                                                    todayWithTime.setHours(hours, minutes, 0, 0);
-                                                    field.onChange(todayWithTime);
-                                                } else {
-                                                    newDate.setHours(hours, minutes);
-                                                    field.onChange(newDate);
+                                                let newDate = dateValue && isValid(dateValue) ? new Date(dateValue) : new Date();
+                                                if (isNaN(newDate.getTime())) { // If dateValue was null/invalid, start with today
+                                                    newDate = new Date();
                                                 }
+                                                newDate.setHours(hours, minutes, 0, 0);
+                                                field.onChange(newDate);
                                             }}
                                             disabled={isSubmitting}
                                         />
@@ -229,8 +234,8 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                         case 'dynamic-component.boolean-field':
                           return (
                             <div className="flex items-center space-x-2 pt-2">
-                              <Switch id={`${fieldName}.${index}`} checked={field.value || false} onCheckedChange={field.onChange} disabled={isSubmitting} />
-                              <FormLabel htmlFor={`${fieldName}.${index}`} className="text-sm font-normal">{placeholder || 'Enable'}</FormLabel>
+                              <Switch id={itemFieldName} checked={field.value || false} onCheckedChange={field.onChange} disabled={isSubmitting} />
+                              <FormLabel htmlFor={itemFieldName} className="text-sm font-normal">{placeholder || 'Enable'}</FormLabel>
                             </div>
                           );
                       default:
@@ -365,3 +370,5 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
     </FormItem>
   );
 }
+
+    
