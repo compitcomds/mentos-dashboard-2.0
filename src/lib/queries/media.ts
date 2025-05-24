@@ -9,19 +9,21 @@ import {
     createWebMedia,
     updateWebMedia,
     deleteMediaAndFile,
+    getMediaFileDetailsByDocumentId, // Import new service
 } from '@/lib/services/media';
 import type {
     CombinedMediaData,
     UpdateWebMediaPayload,
     CreateWebMediaPayload,
     WebMedia,
-    Media, // Media type is imported but useDeleteMediaMutation below expects { webMediaDeleted: boolean; fileDeleted: boolean }
+    Media,
 } from '@/types/media';
 import { AxiosError } from 'axios';
 import { useCurrentUser } from './user';
 
 
 const MEDIA_QUERY_KEY = (userKey?: string) => ['mediaFiles', userKey || 'all'];
+const MEDIA_DETAIL_QUERY_KEY = (documentId: string) => ['mediaFileDetail', documentId]; // New query key
 
 export function useFetchMedia(userKey?: string) {
     const { isLoading: isLoadingUser } = useCurrentUser();
@@ -57,17 +59,17 @@ export function useUploadMediaMutation() {
 
             const uploadResponseArray = await uploadFile(formData);
 
-            if (!uploadResponseArray || uploadResponseArray.length === 0 || typeof uploadResponseArray[0].id !== 'number') { // Check if id is number
+            if (!uploadResponseArray || uploadResponseArray.length === 0 || typeof uploadResponseArray[0].id !== 'number') {
                 throw new Error('File upload response did not contain expected data (numeric ID) or failed.');
             }
 
-            const uploadedFile = uploadResponseArray[0]; 
+            const uploadedFile = uploadResponseArray[0];
 
              const createPayload: CreateWebMediaPayload = {
                 name: name || uploadedFile.name,
                 alt: alt || name || uploadedFile.name || null,
                 tenent_id: userKey,
-                media: uploadedFile.id, 
+                media: uploadedFile.id,
             };
 
             const webMediaResponse = await createWebMedia(createPayload);
@@ -132,7 +134,6 @@ export function useUpdateMediaMutation() {
 }
 
 
-// Updated to use numeric fileId
 export function useDeleteMediaMutation() {
     const queryClient = useQueryClient();
      const { data: currentUser } = useCurrentUser();
@@ -142,7 +143,7 @@ export function useDeleteMediaMutation() {
         mutationFn: ({ webMediaId, fileId }) => deleteMediaAndFile(webMediaId, fileId),
         onSuccess: (data, variables) => {
             let description = `Media entry (ID: ${variables.webMediaId}) deleted successfully.`;
-            if (variables.fileId !== null) { // Check if fileId was provided for deletion attempt
+            if (variables.fileId !== null) {
                  description += data.fileDeleted ? ` Associated file (ID: ${variables.fileId}) also deleted.` : ` Could not delete associated file (ID: ${variables.fileId}). Check server logs and permissions.`;
             } else {
                  description += " No associated file ID provided to attempt deletion.";
@@ -150,7 +151,7 @@ export function useDeleteMediaMutation() {
             toast({
                 title: 'Deletion Status',
                 description: description,
-                variant: (variables.fileId !== null && !data.fileDeleted) ? 'destructive' : 'default', // Make toast destructive if file deletion failed
+                variant: (variables.fileId !== null && !data.fileDeleted) ? 'destructive' : 'default',
             });
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
         },
@@ -170,6 +171,33 @@ export function useDeleteMediaMutation() {
                 title: 'Deletion Failed',
                 description: message,
             });
+        },
+    });
+}
+
+export function useGetMediaFileDetailsByDocumentId(documentId: string | null) {
+    const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser(); // Assuming you might need tenant_id for other reasons
+    return useQuery<Media | null, Error>({
+        queryKey: MEDIA_DETAIL_QUERY_KEY(documentId || 'null-doc-id'), // Ensure queryKey is always valid
+        queryFn: () => {
+            if (!documentId) {
+                console.warn("useGetMediaFileDetailsByDocumentId: documentId is null. Returning null.");
+                return Promise.resolve(null);
+            }
+            // We assume getMediaFileDetailsByDocumentId handles auth internally if needed.
+            // If it also requires userTenentId, it should be passed here.
+            return getMediaFileDetailsByDocumentId(documentId);
+        },
+        enabled: !!documentId && !isLoadingUser, // Only run if documentId is present and user is loaded
+        staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+        gcTime: 1000 * 60 * 30,
+        retry: (failureCount, error) => {
+            // Do not retry on 404 errors
+            if (error instanceof AxiosError && error.response?.status === 404) {
+                return false;
+            }
+            // Retry up to 2 times for other errors
+            return failureCount < 2;
         },
     });
 }
