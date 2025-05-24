@@ -15,7 +15,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription as DialogDescriptionForDialog, // Alias to avoid conflict
+  DialogDescription as DialogDescriptionForDialog, // Renamed to avoid conflict
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -33,7 +33,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from './_components/media-renderer';
+import MediaRenderer from '../_components/media-renderer'; // Corrected import path
 
 // Helper to generate a unique field name for RHF from MetaFormat component
 const getFieldName = (component: FormFormatComponent): string => {
@@ -42,7 +42,7 @@ const getFieldName = (component: FormFormatComponent): string => {
       .toLowerCase()
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
-    return slugifiedLabel; // Suffix removed
+    return slugifiedLabel; // ID suffix removed
   }
   // Fallback remains the same, using component ID for uniqueness if no label
   return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
@@ -63,6 +63,7 @@ export default function MetaDataListingPage() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [selectedEntryData, setSelectedEntryData] = React.useState<Record<string, any> | null>(null);
   const [selectedEntryIdForDialog, setSelectedEntryIdForDialog] = React.useState<string | null>(null);
+
 
   const handleDeleteConfirmation = (entry: MetaData) => {
     setMetaDataToDelete(entry);
@@ -148,6 +149,7 @@ export default function MetaDataListingPage() {
   }
 
   const createNewEntryLink = `/dashboard/extra-content/render/${metaFormatDocumentId}?action=create`;
+
   // The main return statement starts here. Any syntax errors before this point could cause the "Unexpected token div" error.
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -195,7 +197,7 @@ export default function MetaDataListingPage() {
       {metaDataEntries && metaDataEntries.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {metaDataEntries.map((entry) => {
-                const entryMediaIds: number[] = [];
+                const entryMediaIds: number[] = []; // Store numeric media IDs
                 const otherFields: { label: string | null; value: any }[] = [];
 
                 metaFormat.from_formate?.forEach(component => {
@@ -203,13 +205,13 @@ export default function MetaDataListingPage() {
                     const value = entry.meta_data?.[fieldName];
 
                     if (component.__component === 'dynamic-component.media-field' && value !== null && value !== undefined) {
-                        const idsToPush: (number | string)[] = component.is_array && Array.isArray(value) ? value : [value];
-                        idsToPush.forEach(mediaIdOrDocId => {
-                            // Assuming mediaIdOrDocId is the numeric ID for MediaRenderer
-                            const numericMediaId = typeof mediaIdOrDocId === 'string' ? parseInt(mediaIdOrDocId, 10) : typeof mediaIdOrDocId === 'number' ? mediaIdOrDocId : null;
-                            if (numericMediaId !== null && !isNaN(numericMediaId)) {
-                                entryMediaIds.push(numericMediaId);
-                            }
+                        const idsToCollect: (number | string)[] = component.is_array && Array.isArray(value) ? value : [value];
+                        idsToCollect.forEach(mediaIdOrDocId => {
+                           // This now assumes media fields store NUMERIC IDs as per latest prompt
+                           const numericMediaId = typeof mediaIdOrDocId === 'string' ? parseInt(mediaIdOrDocId, 10) : typeof mediaIdOrDocId === 'number' ? mediaIdOrDocId : null;
+                           if (numericMediaId !== null && !isNaN(numericMediaId)) {
+                               entryMediaIds.push(numericMediaId);
+                           }
                         });
                     } else if (value !== null && value !== undefined && (typeof value !== 'string' || String(value).trim() !== '')) {
                         let displayValue: any = value;
@@ -240,18 +242,19 @@ export default function MetaDataListingPage() {
                     <Card key={entry.documentId || entry.id} className="flex flex-col">
                         {entryMediaIds.length > 0 && (
                             <CardContent className="p-4 pb-0">
-                                {entryMediaIds.length === 1 && entryMediaIds[0] ? (
+                                {entryMediaIds.length === 1 && entryMediaIds[0] !== null && !isNaN(entryMediaIds[0]) ? (
                                     <MediaRenderer mediaId={entryMediaIds[0]} className="rounded-md border" />
                                 ) : entryMediaIds.length > 1 ? (
                                     <Carousel className="w-full rounded-md border" opts={{ loop: entryMediaIds.length > 1 }}>
                                         <CarouselContent>
                                             {entryMediaIds.map((mediaId, index) => (
-                                                mediaId !== null && !isNaN(mediaId) && // Ensure mediaId is a valid number
+                                                mediaId !== null && !isNaN(mediaId) && (
                                                 <CarouselItem key={`${entry.documentId}-media-${index}`}>
                                                     <div className="p-1">
                                                          <MediaRenderer mediaId={mediaId} />
                                                     </div>
                                                 </CarouselItem>
+                                                )
                                             ))}
                                         </CarouselContent>
                                         {entryMediaIds.length > 1 && <CarouselPrevious className="left-2 disabled:opacity-30" />}
@@ -279,7 +282,7 @@ export default function MetaDataListingPage() {
                                      {otherFields.length > 3 && <p className="text-xs text-muted-foreground">...and more.</p>}
                                  </div>
                              )}
-                             {entryMediaIds.length === 0 && otherFields.length === 0 && (
+                             {(entryMediaIds.length === 0 && otherFields.length === 0) && (
                                  <p className="text-xs text-muted-foreground text-center py-4">No displayable data in this entry.</p>
                              )}
                         </CardContent>
@@ -329,10 +332,10 @@ export default function MetaDataListingPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <DialogDescriptionForDialog>
               This action cannot be undone. This will permanently delete the data entry
               <span className="font-semibold"> "{metaDataToDelete?.documentId || 'this entry'}"</span>.
-            </AlertDialogDescription>
+            </DialogDescriptionForDialog>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteMetaDataMutation.isPending} onClick={() => setMetaDataToDelete(null)}>Cancel</AlertDialogCancel>
@@ -379,23 +382,17 @@ export default function MetaDataListingPage() {
                                     {component.__component === 'dynamic-component.media-field' ? (
                                     Array.isArray(value) ? (
                                         <div className="flex flex-wrap gap-2">
-                                        {value.map((mediaIdOrDocId, idx) => {
-                                            const numericMediaId = typeof mediaIdOrDocId === 'string' ? parseInt(mediaIdOrDocId, 10) : typeof mediaIdOrDocId === 'number' ? mediaIdOrDocId : null;
-                                            return numericMediaId !== null && !isNaN(numericMediaId) ? (
-                                                <MediaRenderer key={idx} mediaId={numericMediaId} className="w-24 h-24 object-contain" />
-                                            ) : (
-                                                <span key={idx} className="text-xs text-muted-foreground">(Invalid Media ID: {String(mediaIdOrDocId)})</span>
-                                            );
-                                        })}
+                                        {value.map((mediaId, idx) => (
+                                           typeof mediaId === 'number' ?
+                                            <MediaRenderer key={idx} mediaId={mediaId} className="w-24 h-24 object-contain" />
+                                            : <span key={idx} className="text-xs text-muted-foreground">(Invalid Media ID: {String(mediaId)})</span>
+                                        ))}
                                         </div>
-                                    ) : ( () => {
-                                            const numericMediaId = typeof value === 'string' ? parseInt(value, 10) : typeof value === 'number' ? value : null;
-                                            return numericMediaId !== null && !isNaN(numericMediaId) ? (
-                                                <MediaRenderer mediaId={numericMediaId} className="max-w-xs max-h-48 object-contain" />
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground">(Unsupported Media ID: {String(value)})</span>
-                                            );
-                                        } )()
+                                    ) : (
+                                       typeof value === 'number' ?
+                                        <MediaRenderer mediaId={value} className="max-w-xs max-h-48 object-contain" />
+                                        : <span className="text-xs text-muted-foreground">(Unsupported Media ID: {String(value)})</span>
+                                    )
                                     ) : component.__component === 'dynamic-component.date-field' ? (
                                         Array.isArray(value) ? (
                                             value.map((v: any) => {
@@ -436,5 +433,3 @@ export default function MetaDataListingPage() {
     </div>
   );
 }
-
-    
