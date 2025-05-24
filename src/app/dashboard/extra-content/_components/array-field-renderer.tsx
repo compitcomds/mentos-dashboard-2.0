@@ -13,11 +13,13 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ImageIcon, PlusCircle, Trash2, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
+import { CalendarIcon, ImageIcon, PlusCircle, Trash2, ArrowUp, ArrowDown, GripVertical, Loader2 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { FormFormatComponent } from '@/types/meta-format';
 import TipTapEditor from '@/components/ui/tiptap';
+import MediaRenderer from '@/app/dashboard/extra-content/data/_components/media-renderer'; // Import MediaRenderer
+import { useGetMediaFileDetailsById } from '@/lib/queries/media'; // Import hook to fetch media details
 
 import {
   DndContext,
@@ -46,6 +48,28 @@ interface ArrayFieldRendererProps<TFieldValues extends FieldValues = FieldValues
   openMediaSelector: (target: string | { fieldName: string; index: number }, componentDef: FormFormatComponent) => void;
   getDefaultValueForComponent: (componentType: string, component?: FormFormatComponent) => any;
 }
+
+// Internal component to display media details for an array item
+function MediaArrayItemDisplay({ mediaId }: { mediaId: number }) {
+  const { data: mediaDetails, isLoading, isError } = useGetMediaFileDetailsById(mediaId);
+
+  if (isLoading) {
+    return <div className="flex items-center text-xs text-muted-foreground"><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Loading media...</div>;
+  }
+  if (isError || !mediaDetails) {
+    return <p className="text-xs text-destructive">Error loading media (ID: {mediaId}) or media not found.</p>;
+  }
+
+  return (
+    <div className="space-y-2 mt-2 border p-2 rounded-md bg-background">
+      <MediaRenderer mediaId={mediaId} className="max-h-24 object-contain" />
+      <p className="text-xs font-semibold truncate" title={mediaDetails.name}>Name: {mediaDetails.name}</p>
+      <p className="text-xs text-muted-foreground">Type: {mediaDetails.mime}</p>
+      <p className="text-xs text-muted-foreground">ID: {mediaId}</p>
+    </div>
+  );
+}
+
 
 // SortableItem sub-component
 function SortableItem<TFieldValues extends FieldValues = FieldValues>({
@@ -133,14 +157,9 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                         case 'dynamic-component.number-field':
                           return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={componentDefinition.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
                         case 'dynamic-component.media-field':
-                           const mediaFieldValueRaw = field.value;
-                           // Defensively convert to string or null for display purposes
-                           const currentMediaDocumentIdDisplay: string | null =
-                               mediaFieldValueRaw === null || mediaFieldValueRaw === undefined
-                                   ? null
-                                   : String(mediaFieldValueRaw);
+                           const currentMediaId: number | null = typeof field.value === 'number' ? field.value : null;
                           return (
-                            <div className="flex items-center gap-2">
+                            <div>
                               <Button
                                 type="button"
                                 variant="outline"
@@ -148,9 +167,11 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                                 disabled={isSubmitting}
                               >
                                 <ImageIcon className="mr-2 h-4 w-4" />
-                                {currentMediaDocumentIdDisplay ? `DocID: ${currentMediaDocumentIdDisplay.substring(0,8)}...` : placeholder || `Select Media`}
+                                {currentMediaId ? `Change Media (ID: ${currentMediaId})` : placeholder || `Select Media`}
                               </Button>
-                              {currentMediaDocumentIdDisplay && <p className="text-xs text-muted-foreground">DocID: {currentMediaDocumentIdDisplay}</p>}
+                              {currentMediaId && (
+                                <MediaArrayItemDisplay mediaId={currentMediaId} />
+                              )}
                             </div>
                           );
                         case 'dynamic-component.enum-field':
@@ -325,7 +346,7 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
   return (
     <FormItem>
       <FormLabel>{label} {isRequired && <span className="text-destructive">*</span>} (Multiple entries allowed)</FormLabel>
-      <div className="space-y-0"> {/* Reduced space-y from 3 to 0 or 1 if needed */}
+      <div className="space-y-0">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -358,9 +379,9 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => append(getDefaultValueForComponent(componentDefinition.__component, componentDefinition))}
+          onClick={() => append(getDefaultValueForComponent(componentDefinition.__component, componentDefinition) as any)}
           disabled={isSubmitting}
-          className="mt-2" // Added margin top to separate from array items
+          className="mt-2"
         >
           <PlusCircle className="mr-2 h-4 w-4" /> Add {componentDefinition.label || 'Item'}
         </Button>
@@ -370,5 +391,4 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
     </FormItem>
   );
 }
-
     
