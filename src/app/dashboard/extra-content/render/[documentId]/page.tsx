@@ -19,16 +19,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import type { FormFormatComponent, MetaFormat } from '@/types/meta-format';
 import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog';
 import TipTapEditor from '@/components/ui/tiptap';
 import { useCreateMetaDataEntry, useGetMetaDataEntry, useUpdateMetaDataEntry } from '@/lib/queries/meta-data';
 import { useCurrentUser } from '@/lib/queries/user';
-import type { CreateMetaDataPayload } from '@/types/meta-data';
+import type { CreateMetaDataPayload, MetaData } from '@/types/meta-data';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import ArrayFieldRenderer from '@/app/dashboard/extra-content/_components/array-field-renderer'; // Corrected import path
+import ArrayFieldRenderer from '@/app/dashboard/extra-content/_components/array-field-renderer';
+import type { CombinedMediaData } from '@/types/media';
 
 
 // Helper to generate a unique field name for RHF
@@ -42,7 +43,7 @@ const getFieldName = (component: FormFormatComponent): string => {
 };
 
 // Helper to get appropriate default value for a component type
-const getDefaultValueForComponent = (componentType: string, component?: FormFormatComponent) => {
+const getDefaultValueForComponent = (componentType: string, component?: FormFormatComponent): any => {
   switch (componentType) {
     case 'dynamic-component.text-field':
       return component?.default || '';
@@ -106,13 +107,13 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
         componentDefaultValue = null;
         break;
       case 'dynamic-component.enum-field':
-        baseSchema = z.string().optional().nullable();
-        if (component.required) baseSchema = z.string().min(1, `${component.label || 'Field'} is required.`);
         if (component.type === 'multi-select' && !component.is_array) {
              baseSchema = z.array(z.string()).optional().default([]);
              if(component.required) baseSchema = z.array(z.string()).nonempty({ message: `${component.label || 'Field'} requires at least one selection.` });
             componentDefaultValue = component.default ? component.default.split(',').map(s => s.trim()).filter(Boolean) : [];
         } else {
+            baseSchema = z.string().optional().nullable();
+            if (component.required) baseSchema = z.string().min(1, `${component.label || 'Field'} is required.`);
             componentDefaultValue = componentDefaultValue ?? null;
         }
         break;
@@ -134,13 +135,13 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
 
     if (component.is_array) {
       if (component.__component === 'dynamic-component.enum-field' && component.type === 'multi-select') {
-        // For array of multi-select, each item in the array would be an array of strings
-        // This case might need special handling if a field can be an array of multi-selects itself.
-        // For now, assuming is_array on a multi-select enum means an array of single string selections from that enum.
-        // If it means an array of *sets* of selections, the Zod schema needs to be z.array(z.array(z.string()))
-        // Sticking to z.array(baseSchema) for now.
         fieldSchema = z.array(baseSchema).optional().default([]);
-      } else {
+      } else if (component.__component === 'dynamic-component.boolean-field'){
+        fieldSchema = z.array(z.boolean()).optional().default([]);
+      } else if (component.__component === 'dynamic-component.date-field'){
+        fieldSchema = z.array(z.date().nullable()).optional().default([]);
+      }
+      else {
         fieldSchema = z.array(baseSchema).optional().default([]);
       }
       defaultValues[fieldName] = [];
@@ -184,8 +185,7 @@ export default function RenderExtraContentPage() {
   });
 
   React.useEffect(() => {
-    if (metaFormat && !isLoadingMetaFormat) {
-      // Initialize only if creating OR if editing and (entry is loaded OR there's an error loading it, to show defaults)
+    if (metaFormat && !isLoadingMetaFormat && !isFormInitialized) {
       if (action === 'create' || (action === 'edit' && (metaDataEntry !== undefined || isErrorMetaDataEntry))) {
         const { schema, defaultValues: generatedDefaults } = generateFormSchemaAndDefaults(metaFormat);
         setFormSchema(schema);
@@ -198,61 +198,65 @@ export default function RenderExtraContentPage() {
             const fieldName = getFieldName(component);
             const entryValue = metaDataEntry.meta_data?.[fieldName];
 
-            if (entryValue !== undefined && entryValue !== null) { // Process if value exists
+            if (entryValue !== undefined && entryValue !== null) {
               if (component.is_array) {
-                initialValues[fieldName] = Array.isArray(entryValue) ? entryValue : [entryValue]; // Ensure it's an array
+                initialValues[fieldName] = Array.isArray(entryValue) ? entryValue : [entryValue];
                 if (component.__component === 'dynamic-component.date-field' && Array.isArray(initialValues[fieldName])) {
-                    initialValues[fieldName] = initialValues[fieldName].map((dateStr: string | Date) => dateStr ? new Date(dateStr) : null).filter(Boolean);
+                    initialValues[fieldName] = initialValues[fieldName].map((dateStr: string | Date) => {
+                       if (!dateStr) return null;
+                       const parsedDate = parseISO(String(dateStr));
+                       return isValid(parsedDate) ? parsedDate : null;
+                    }).filter(Boolean);
                 } else if (component.__component === 'dynamic-component.media-field' && Array.isArray(initialValues[fieldName])) {
                     initialValues[fieldName] = initialValues[fieldName].map((val: any) => typeof val === 'number' ? String(val) : val);
                 }
               } else if (component.__component === 'dynamic-component.date-field' && entryValue) {
-                initialValues[fieldName] = new Date(entryValue);
+                const parsedDate = parseISO(String(entryValue));
+                initialValues[fieldName] = isValid(parsedDate) ? parsedDate : null;
               } else if (component.__component === 'dynamic-component.media-field') {
                 if (typeof entryValue === 'number') {
-                  console.warn(`Media field '${fieldName}' in existing data (document ID: ${metaDataEntryDocumentId}) had a numeric ID ${entryValue}. Converting to string. Please ensure data consistency for media fields.`);
                   initialValues[fieldName] = String(entryValue);
                 } else {
-                  initialValues[fieldName] = entryValue; // Expects string documentId or null
+                  initialValues[fieldName] = entryValue; 
                 }
               } else {
                 initialValues[fieldName] = entryValue;
               }
-            } else if (component.is_array) { // If entryValue is undefined/null and it's an array field, default to empty array
+            } else if (component.is_array) {
               initialValues[fieldName] = [];
             }
-            // If not an array and entryValue is undefined/null, it will use the componentDefaultValue from generatedDefaults
           });
           console.log("[RenderExtraContentPage] EDIT Mode: Values after processing metaDataEntry:", initialValues);
         } else if (action === 'create') {
           console.log("[RenderExtraContentPage] CREATE Mode: Using MetaFormat defaults:", generatedDefaults);
         }
         methods.reset(initialValues);
-        setFormDefaultValues(initialValues);
+        setFormDefaultValues(initialValues); // Also update formDefaultValues to ensure resolver uses updated defaults on re-init
         setIsFormInitialized(true);
       }
     }
-  }, [metaFormat, isLoadingMetaFormat, action, metaDataEntry, isLoadingMetaDataEntry, metaDataEntryDocumentId, methods, isErrorMetaDataEntry]);
+  }, [metaFormat, isLoadingMetaFormat, action, metaDataEntry, isLoadingMetaDataEntry, metaDataEntryDocumentId, methods, isErrorMetaDataEntry, isFormInitialized]);
 
 
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = React.useState(false);
   const [currentMediaFieldTarget, setCurrentMediaFieldTarget] = React.useState<string | { fieldName: string; index: number } | null>(null);
 
 
-  const handleMediaSelect = (selectedMedia: { fileId: string | null; thumbnailUrl: string | null }) => {
+  const handleMediaSelect = (selectedMedia: CombinedMediaData) => {
     console.log("[RenderExtraContentPage] handleMediaSelect received:", selectedMedia);
-    if (!currentMediaFieldTarget || selectedMedia.fileId === null) {
+    const mediaDocumentIdToSet = selectedMedia.fileDocumentId; // Use fileDocumentId (string)
+
+    if (!currentMediaFieldTarget || mediaDocumentIdToSet === null || mediaDocumentIdToSet === undefined) {
         toast({ variant: "destructive", title: "Error", description: "Media target or selected media document ID missing." });
         setIsMediaSelectorOpen(false);
         return;
     }
-    const mediaDocumentId = selectedMedia.fileId; // This is now the string documentId
 
     if (typeof currentMediaFieldTarget === 'string') {
-      methods.setValue(currentMediaFieldTarget, mediaDocumentId, { shouldValidate: true });
+      methods.setValue(currentMediaFieldTarget, mediaDocumentIdToSet, { shouldValidate: true });
     } else if (typeof currentMediaFieldTarget === 'object' && currentMediaFieldTarget.fieldName && currentMediaFieldTarget.index !== undefined) {
       const { fieldName, index } = currentMediaFieldTarget;
-      methods.setValue(`${fieldName}.${index}`, mediaDocumentId, { shouldValidate: true });
+      methods.setValue(`${fieldName}.${index}`, mediaDocumentIdToSet, { shouldValidate: true });
     }
     setIsMediaSelectorOpen(false);
     setCurrentMediaFieldTarget(null);
@@ -266,8 +270,8 @@ export default function RenderExtraContentPage() {
 
   const onSubmit = (data: FieldValues) => {
     console.log("Dynamic Form onSubmit triggered. Action:", action);
-    console.log("Form Data:", data);
-    console.log("Form Errors:", methods.formState.errors);
+    console.log("Form Data:", JSON.stringify(data, null, 2));
+    console.log("Form Errors:", JSON.stringify(methods.formState.errors, null, 2));
 
     if (Object.keys(methods.formState.errors).length > 0) {
         toast({
@@ -301,7 +305,7 @@ export default function RenderExtraContentPage() {
     metaFormat?.from_formate?.forEach(component => {
         const fieldName = getFieldName(component);
          if (component.is_array && (processedData[fieldName] === undefined || processedData[fieldName] === null)) {
-            processedData[fieldName] = []; // Ensure array fields are at least an empty array if not provided
+            processedData[fieldName] = []; 
         }
          if (component.__component === 'dynamic-component.date-field') {
            if (component.is_array && Array.isArray(processedData[fieldName])) {
@@ -531,14 +535,14 @@ export default function RenderExtraContentPage() {
                                           disabled={isSubmitting}
                                         >
                                           <CalendarIcon className="mr-2 h-4 w-4" />
-                                          {field.value ? format(new Date(field.value), (component.type === 'time' ? 'HH:mm' : component.type === 'data&time' || component.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
+                                          {field.value && isValid(field.value) ? format(field.value, (component.type === 'time' ? 'HH:mm' : component.type === 'data&time' || component.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
                                         </Button>
                                       </PopoverTrigger>
                                       <PopoverContent className="w-auto p-0">
                                         <Calendar
                                           mode="single"
-                                          selected={field.value ? new Date(field.value) : undefined}
-                                          onSelect={(date) => field.onChange(date || null)} // Ensure null is passed if date is undefined
+                                          selected={field.value && isValid(field.value) ? field.value : undefined}
+                                          onSelect={(date) => field.onChange(date || null)} 
                                           initialFocus
                                           disabled={isSubmitting}
                                         />
@@ -547,12 +551,19 @@ export default function RenderExtraContentPage() {
                                                 <FormLabel>Time (HH:mm)</FormLabel>
                                                 <Input
                                                     type="time"
-                                                    value={field.value ? format(new Date(field.value), 'HH:mm') : ''}
+                                                    value={field.value && isValid(field.value) ? format(field.value, 'HH:mm') : ''}
                                                     onChange={(e) => {
                                                         const [hours, minutes] = e.target.value.split(':').map(Number);
-                                                        const newDate = field.value ? new Date(field.value) : new Date();
-                                                        newDate.setHours(hours, minutes);
-                                                        field.onChange(newDate);
+                                                        const newDate = field.value && isValid(field.value) ? new Date(field.value) : new Date();
+                                                        if (isNaN(newDate.getTime())) { // Check if newDate is invalid
+                                                            // If base date is invalid, create a new one from scratch today
+                                                            const todayWithTime = new Date();
+                                                            todayWithTime.setHours(hours, minutes, 0, 0);
+                                                            field.onChange(todayWithTime);
+                                                        } else {
+                                                            newDate.setHours(hours, minutes);
+                                                            field.onChange(newDate);
+                                                        }
                                                     }}
                                                     disabled={isSubmitting}
                                                 />
@@ -597,7 +608,7 @@ export default function RenderExtraContentPage() {
       <MediaSelectorDialog
         isOpen={isMediaSelectorOpen}
         onOpenChange={setIsMediaSelectorOpen}
-        onMediaSelect={handleMediaSelect as any}
+        onMediaSelect={handleMediaSelect as any} 
         returnType="id"
       />
     </div>
