@@ -15,7 +15,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription as DialogDescriptionForJson,
+  DialogDescription as DialogDescriptionForJson, // Aliased to avoid conflict
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -28,6 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogDescription,
+  AlertDialogFooter,
 } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, Eye, Loader2, FileJson as FileJsonIcon, ImageIcon, Video as VideoIcon, FileText as FileTextIcon } from 'lucide-react';
@@ -41,7 +42,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from '../_components/media-renderer'; // Corrected import path
+import MediaRenderer from '@/app/dashboard/extra-content/data/_components/media-renderer';
 
 
 // Helper to generate field names, consistent with form rendering
@@ -49,10 +50,13 @@ const getFieldName = (component: FormFormatComponent): string => {
   if (component.label && component.label.trim() !== '') {
     const slugifiedLabel = component.label
       .toLowerCase()
-      .replace(/\s+/g, '_')
-      .replace(/[^a-z0-9_]/g, '');
-    return `${slugifiedLabel}_${component.id}`;
+      .replace(/\s+/g, '_') // Replaces spaces with underscores
+      .replace(/[^a-z0-9_]/g, ''); // Removes special characters, keeps underscores
+    // Removed component.id suffix for cleaner keys
+    return slugifiedLabel;
   }
+  // Fallback if no label - this should be rare if MetaFormats are well-defined
+  // Still using component.id here to ensure fallback is unique if multiple unlabeled components of same type exist.
   return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
 };
 
@@ -204,7 +208,7 @@ export default function MetaDataListingPage() {
       {metaDataEntries && metaDataEntries.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {metaDataEntries.map((entry) => {
-                const entryMediaIds: number[] = []; // Still storing numeric media IDs for MediaRenderer
+                const entryMediaIds: number[] = [];
                 const otherFields: { label: string | null; value: any }[] = [];
 
                 metaFormat.from_formate?.forEach(component => {
@@ -214,22 +218,15 @@ export default function MetaDataListingPage() {
                     if (component.__component === 'dynamic-component.media-field' && value) {
                         if (component.is_array && Array.isArray(value)) {
                             value.forEach(mediaId => {
-                                // Value is now string documentId from form, MediaRenderer expects numeric id.
-                                // This part needs alignment if MediaRenderer depends on numeric media.id
-                                // For now, if value is a string, attempt to parse as number, otherwise use as is if already number
                                 const numericMediaId = typeof mediaId === 'string' ? parseInt(mediaId, 10) : typeof mediaId === 'number' ? mediaId : null;
                                 if (numericMediaId !== null && !isNaN(numericMediaId)) {
                                      entryMediaIds.push(numericMediaId);
-                                } else if (typeof mediaId === 'number') { // Fallback for old numeric data
-                                     entryMediaIds.push(mediaId);
                                 }
                             });
                         } else {
                              const numericMediaId = typeof value === 'string' ? parseInt(value, 10) : typeof value === 'number' ? value : null;
                              if (numericMediaId !== null && !isNaN(numericMediaId)) {
                                  entryMediaIds.push(numericMediaId);
-                             } else if (typeof value === 'number') {
-                                 entryMediaIds.push(value);
                              }
                         }
                     } else if (value !== null && value !== undefined && String(value).trim() !== '') {
@@ -381,3 +378,4 @@ export default function MetaDataListingPage() {
     </div>
   );
 }
+
