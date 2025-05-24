@@ -15,10 +15,21 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription as DialogDescriptionForDialog, // Renamed to avoid conflict
+  DialogDescription as DialogDescriptionForDialog,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,7 +44,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from '../_components/media-renderer'; // Corrected import path
+import MediaRenderer from '../_components/media-renderer';
 
 // Helper to generate a unique field name for RHF from MetaFormat component
 const getFieldName = (component: FormFormatComponent): string => {
@@ -150,7 +161,6 @@ export default function MetaDataListingPage() {
 
   const createNewEntryLink = `/dashboard/extra-content/render/${metaFormatDocumentId}?action=create`;
 
-  // The main return statement starts here. Any syntax errors before this point could cause the "Unexpected token div" error.
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Button variant="outline" onClick={() => router.push('/dashboard/extra-content')}>
@@ -197,7 +207,7 @@ export default function MetaDataListingPage() {
       {metaDataEntries && metaDataEntries.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {metaDataEntries.map((entry) => {
-                const entryMediaIds: number[] = []; // Store numeric media IDs
+                const entryMediaIds: number[] = [];
                 const otherFields: { label: string | null; value: any }[] = [];
 
                 metaFormat.from_formate?.forEach(component => {
@@ -206,9 +216,8 @@ export default function MetaDataListingPage() {
 
                     if (component.__component === 'dynamic-component.media-field' && value !== null && value !== undefined) {
                         const idsToCollect: (number | string)[] = component.is_array && Array.isArray(value) ? value : [value];
-                        idsToCollect.forEach(mediaIdOrDocId => {
-                           // This now assumes media fields store NUMERIC IDs as per latest prompt
-                           const numericMediaId = typeof mediaIdOrDocId === 'string' ? parseInt(mediaIdOrDocId, 10) : typeof mediaIdOrDocId === 'number' ? mediaIdOrDocId : null;
+                        idsToCollect.forEach(mediaIdValue => {
+                           const numericMediaId = typeof mediaIdValue === 'string' ? parseInt(mediaIdValue, 10) : typeof mediaIdValue === 'number' ? mediaIdValue : null;
                            if (numericMediaId !== null && !isNaN(numericMediaId)) {
                                entryMediaIds.push(numericMediaId);
                            }
@@ -332,10 +341,10 @@ export default function MetaDataListingPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <DialogDescriptionForDialog>
+            <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the data entry
               <span className="font-semibold"> "{metaDataToDelete?.documentId || 'this entry'}"</span>.
-            </DialogDescriptionForDialog>
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteMetaDataMutation.isPending} onClick={() => setMetaDataToDelete(null)}>Cancel</AlertDialogCancel>
@@ -382,7 +391,7 @@ export default function MetaDataListingPage() {
                                     {component.__component === 'dynamic-component.media-field' ? (
                                     Array.isArray(value) ? (
                                         <div className="flex flex-wrap gap-2">
-                                        {value.map((mediaId, idx) => (
+                                        {value.map((mediaId: string | number, idx: number) => ( // Assuming mediaId can be string or number for now
                                            typeof mediaId === 'number' ?
                                             <MediaRenderer key={idx} mediaId={mediaId} className="w-24 h-24 object-contain" />
                                             : <span key={idx} className="text-xs text-muted-foreground">(Invalid Media ID: {String(mediaId)})</span>
@@ -433,3 +442,5 @@ export default function MetaDataListingPage() {
     </div>
   );
 }
+
+    
