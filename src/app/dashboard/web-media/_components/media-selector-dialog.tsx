@@ -31,7 +31,7 @@ interface MediaSelectorDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     onMediaSelect: OnMediaSelectCallback;
-    returnType?: 'url' | 'id'; // New prop to control return value
+    returnType?: 'url' | 'id'; // Prop to control return value, 'id' now means CombinedMediaData object
 }
 
 const getFileTypeRenderIcon = (mime: string | null, className?: string): React.ReactElement => {
@@ -48,10 +48,10 @@ export default function MediaSelectorDialog({
     isOpen,
     onOpenChange,
     onMediaSelect,
-    returnType = 'url', // Default to returning URL
+    returnType = 'url',
 }: MediaSelectorDialogProps) {
     const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
-    const userKey = currentUser?.tenent_id; // Use tenent_id for consistency
+    const userKey = currentUser?.tenent_id;
 
     const { data: mediaData, isLoading: isLoadingMedia, isError, error, refetch, isFetching } = useFetchMedia(userKey);
     const [selectedMedia, setSelectedMedia] = React.useState<CombinedMediaData | null>(null);
@@ -71,7 +71,9 @@ export default function MediaSelectorDialog({
             } else {
                 console.warn("Selected media has no fileUrl.");
             }
-        } else {
+        } else { // returnType === 'id'
+            // Pass the entire CombinedMediaData object
+            // The consuming component will extract selectedMedia.fileId (numeric)
             (onMediaSelect as (selectedMedia: CombinedMediaData) => void)(selectedMedia);
         }
         onOpenChange(false);

@@ -85,8 +85,8 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
                 createdAt: item.createdAt!,
                 updatedAt: item.updatedAt!,
                 publishedAt: item.publishedAt || null,
-                fileId: mediaFile.id,
-                fileDocumentId: mediaFile.documentId || null,
+                fileId: mediaFile.id, // Numeric ID
+                fileDocumentId: mediaFile.documentId || null, // String document ID
                 fileUrl: constructUrl(mediaFile.url),
                 fileName: mediaFile.name ?? 'N/A',
                 mime: mediaFile.mime ?? null,
@@ -167,7 +167,7 @@ export async function uploadFile(formData: FormData): Promise<UploadFile[]> {
             } else {
                 detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
             }
-            if (status === 500) {
+             if (status === 500) {
                 detailedMessage = `Internal Server Error. This is an Internal Server Error from the API. Please check Strapi server logs for more details on why the upload was rejected (e.g., unsupported format, processing error). Original error: ${error.message}`;
             }
         } else if (error instanceof Error) {
@@ -365,46 +365,44 @@ export async function deleteMediaAndFile(webMediaId: number, fileId: number | nu
     return { webMediaDeleted, fileDeleted };
 }
 
-export async function getMediaFileDetailsByDocumentId(documentId: string): Promise<Media | null> {
-    if (!documentId) {
-        console.warn('[Service getMediaFileDetailsByDocumentId]: documentId is missing.');
+export async function getMediaFileDetailsById(id: number): Promise<Media | null> {
+    if (!id) {
+        console.warn('[Service getMediaFileDetailsById]: id is missing.');
         return null;
     }
-    const url = `/upload/files/${documentId}`;
-    console.log(`[getMediaFileDetailsByDocumentId] Fetching media details for documentId: ${documentId} from URL: ${url}`);
+    const url = `/upload/files/${id}`; // Use numeric ID
+    console.log(`[getMediaFileDetailsById] Fetching media details for ID: ${id} from URL: ${url}`);
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.get<Media>(url, { headers }); // Strapi /upload/files/:id directly returns the Media object, not wrapped in "data"
-
+        const response = await axiosInstance.get<Media>(url, { headers }); // Strapi /upload/files/:id directly returns the Media object
+        console.log(response)
         if (!response.data || typeof response.data !== 'object' || response.data === null) {
-            console.error(`[getMediaFileDetailsByDocumentId] Unexpected API response structure for media ${documentId}. Expected 'data' object, received:`, response.data);
+            console.error(`[getMediaFileDetailsById] Unexpected API response structure for media ${id}. Expected 'data' object, received:`, response.data);
             return null;
         }
-        // Strapi directly returns the media object, not FindOne<Media> for this specific endpoint
         const mediaData = { ...response.data, id: Number(response.data.id) };
-        console.log(`[getMediaFileDetailsByDocumentId] Fetched Media ${documentId} Data:`, mediaData);
+        console.log(`[getMediaFileDetailsById] Fetched Media ${id} Data:`, mediaData);
         return mediaData;
 
     } catch (error: unknown) {
-        let message = `Failed to fetch media details for documentId ${documentId}.`;
+        let message = `Failed to fetch media details for ID ${id}.`;
         if (error instanceof AxiosError) {
             const status = error.response?.status;
             if (status === 404) {
-                console.warn(`[getMediaFileDetailsByDocumentId] Media with documentId ${documentId} not found.`);
+                console.warn(`[getMediaFileDetailsById] Media with ID ${id} not found.`);
                 return null;
             }
             const errorData = error.response?.data || { message: error.message };
-            console.error(`[getMediaFileDetailsByDocumentId] Failed to fetch media ${documentId} (Status: ${status}):`, JSON.stringify(errorData, null, 2));
+            console.error(`[getMediaFileDetailsById] Failed to fetch media ${id} (Status: ${status}):`, JSON.stringify(errorData, null, 2));
             const strapiErrorMessage = (errorData as any)?.error?.message;
-            message = strapiErrorMessage || `Failed to fetch media ${documentId} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
+            message = strapiErrorMessage || `Failed to fetch media ${id} (${status}) - ${(errorData as any).message || 'Unknown API error'}`;
         } else if (error instanceof Error) {
-            console.error(`[getMediaFileDetailsByDocumentId] Generic Error for media ${documentId}:`, error.message);
+            console.error(`[getMediaFileDetailsById] Generic Error for media ${id}:`, error.message);
             message = error.message;
         } else {
-            console.error(`[getMediaFileDetailsByDocumentId] Unknown Error for media ${documentId}:`, error);
+            console.error(`[getMediaFileDetailsById] Unknown Error for media ${id}:`, error);
         }
-        // It's better to return null here for the query hook than to throw, as the UI can handle 'not found'
-        console.error(message); // Log the error
-        return null; // Return null to indicate failure to fetch or not found
+        console.error(message);
+        return null;
     }
 }

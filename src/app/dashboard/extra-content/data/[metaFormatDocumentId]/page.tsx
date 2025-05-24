@@ -42,7 +42,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from '../_components/media-renderer'; // Corrected import path
+import MediaRenderer from '@/app/dashboard/extra-content/data/_components/media-renderer'; // Corrected import path
 
 // Helper to generate a unique field name for RHF from MetaFormat component
 const getFieldName = (component: FormFormatComponent): string => {
@@ -153,7 +153,7 @@ export default function MetaDataListingPage() {
       </div>
     );
   }
-  
+
   const createNewEntryLink = `/dashboard/extra-content/render/${metaFormatDocumentId}?action=create`;
 
   return (
@@ -202,7 +202,7 @@ export default function MetaDataListingPage() {
       {metaDataEntries && metaDataEntries.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {metaDataEntries.map((entry) => {
-                const entryMediaDocumentIds: string[] = [];
+                const entryMediaIds: number[] = [];
                 const otherFields: { label: string | null; value: any }[] = [];
 
                 metaFormat.from_formate?.forEach(component => {
@@ -210,12 +210,12 @@ export default function MetaDataListingPage() {
                     const value = entry.meta_data?.[fieldName];
 
                     if (component.__component === 'dynamic-component.media-field' && value) {
-                        if (Array.isArray(value)) {
-                            value.forEach(docId => {
-                                if (typeof docId === 'string' && docId.trim() !== '') entryMediaDocumentIds.push(docId);
+                        if (component.is_array && Array.isArray(value)) {
+                            value.forEach(mediaId => {
+                                if (typeof mediaId === 'number') entryMediaIds.push(mediaId);
                             });
-                        } else if (typeof value === 'string' && value.trim() !== '') {
-                            entryMediaDocumentIds.push(value);
+                        } else if (typeof value === 'number') {
+                            entryMediaIds.push(value);
                         }
                     } else if (value !== null && value !== undefined && String(value).trim() !== '') {
                         let displayValue = String(value);
@@ -232,28 +232,28 @@ export default function MetaDataListingPage() {
 
                 return (
                     <Card key={entry.documentId || entry.id} className="flex flex-col">
-                        {entryMediaDocumentIds.length > 0 && (
+                        {entryMediaIds.length > 0 && (
                             <CardContent className="p-4 pb-0">
-                                {entryMediaDocumentIds.length === 1 ? (
-                                    <MediaRenderer mediaDocumentId={entryMediaDocumentIds[0]} className="rounded-md border" />
+                                {entryMediaIds.length === 1 ? (
+                                    <MediaRenderer mediaId={entryMediaIds[0]} className="rounded-md border" />
                                 ) : (
-                                    <Carousel className="w-full rounded-md border" opts={{ loop: entryMediaDocumentIds.length > 1 }}>
+                                    <Carousel className="w-full rounded-md border" opts={{ loop: entryMediaIds.length > 1 }}>
                                         <CarouselContent>
-                                            {entryMediaDocumentIds.map((docId, index) => (
+                                            {entryMediaIds.map((mediaId, index) => (
                                                 <CarouselItem key={`${entry.documentId}-media-${index}`}>
-                                                    <div className="p-1"> {/* Padding for carousel item content */}
-                                                         <MediaRenderer mediaDocumentId={docId} />
+                                                    <div className="p-1">
+                                                         <MediaRenderer mediaId={mediaId} />
                                                     </div>
                                                 </CarouselItem>
                                             ))}
                                         </CarouselContent>
-                                        {entryMediaDocumentIds.length > 1 && <CarouselPrevious className="left-2 disabled:opacity-30" />}
-                                        {entryMediaDocumentIds.length > 1 && <CarouselNext className="right-2 disabled:opacity-30"/>}
+                                        {entryMediaIds.length > 1 && <CarouselPrevious className="left-2 disabled:opacity-30" />}
+                                        {entryMediaIds.length > 1 && <CarouselNext className="right-2 disabled:opacity-30"/>}
                                     </Carousel>
                                 )}
                             </CardContent>
                         )}
-                        <CardHeader className={entryMediaDocumentIds.length > 0 ? "pt-3 pb-2" : "pb-2"}>
+                        <CardHeader className={entryMediaIds.length > 0 ? "pt-3 pb-2" : "pb-2"}>
                             <CardTitle className="text-base">Entry ID: <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{entry.documentId || 'N/A'}</span></CardTitle>
                             <CardDescription className="text-xs">
                                 Created: {entry.createdAt ? format(new Date(entry.createdAt), 'PPp') : 'N/A'} <br/>
@@ -272,7 +272,7 @@ export default function MetaDataListingPage() {
                                      {otherFields.length > 3 && <p className="text-xs text-muted-foreground">...and more.</p>}
                                  </div>
                              )}
-                             {entryMediaDocumentIds.length === 0 && otherFields.length === 0 && (
+                             {entryMediaIds.length === 0 && otherFields.length === 0 && (
                                  <p className="text-xs text-muted-foreground text-center py-4">No displayable data in this entry.</p>
                              )}
                         </CardContent>
@@ -366,4 +366,3 @@ export default function MetaDataListingPage() {
     </div>
   );
 }
-

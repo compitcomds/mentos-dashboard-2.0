@@ -9,7 +9,7 @@ import {
     createWebMedia,
     updateWebMedia,
     deleteMediaAndFile,
-    getMediaFileDetailsByDocumentId, // Import new service
+    getMediaFileDetailsById, // Changed from getMediaFileDetailsByDocumentId
 } from '@/lib/services/media';
 import type {
     CombinedMediaData,
@@ -23,7 +23,7 @@ import { useCurrentUser } from './user';
 
 
 const MEDIA_QUERY_KEY = (userKey?: string) => ['mediaFiles', userKey || 'all'];
-const MEDIA_DETAIL_QUERY_KEY = (documentId: string) => ['mediaFileDetail', documentId]; // New query key
+const MEDIA_DETAIL_QUERY_KEY = (id: number) => ['mediaFileDetail', id]; // Changed to use numeric id
 
 export function useFetchMedia(userKey?: string) {
     const { isLoading: isLoadingUser } = useCurrentUser();
@@ -69,7 +69,7 @@ export function useUploadMediaMutation() {
                 name: name || uploadedFile.name,
                 alt: alt || name || uploadedFile.name || null,
                 tenent_id: userKey,
-                media: uploadedFile.id,
+                media: uploadedFile.id, // This is the numeric Media ID
             };
 
             const webMediaResponse = await createWebMedia(createPayload);
@@ -175,28 +175,24 @@ export function useDeleteMediaMutation() {
     });
 }
 
-export function useGetMediaFileDetailsByDocumentId(documentId: string | null) {
-    const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser(); // Assuming you might need tenant_id for other reasons
+export function useGetMediaFileDetailsById(id: number | null) { // Changed parameter to number
+    const { isLoading: isLoadingUser } = useCurrentUser();
     return useQuery<Media | null, Error>({
-        queryKey: MEDIA_DETAIL_QUERY_KEY(documentId || 'null-doc-id'), // Ensure queryKey is always valid
+        queryKey: MEDIA_DETAIL_QUERY_KEY(id ?? 0), // Ensure queryKey is always valid, using 0 for null case if needed
         queryFn: () => {
-            if (!documentId) {
-                console.warn("useGetMediaFileDetailsByDocumentId: documentId is null. Returning null.");
+            if (id === null || id === undefined) {
+                console.warn("useGetMediaFileDetailsById: id is null or undefined. Returning null.");
                 return Promise.resolve(null);
             }
-            // We assume getMediaFileDetailsByDocumentId handles auth internally if needed.
-            // If it also requires userTenentId, it should be passed here.
-            return getMediaFileDetailsByDocumentId(documentId);
+            return getMediaFileDetailsById(id); // Call renamed service
         },
-        enabled: !!documentId && !isLoadingUser, // Only run if documentId is present and user is loaded
-        staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+        enabled: id !== null && id !== undefined && !isLoadingUser,
+        staleTime: 1000 * 60 * 10,
         gcTime: 1000 * 60 * 30,
         retry: (failureCount, error) => {
-            // Do not retry on 404 errors
             if (error instanceof AxiosError && error.response?.status === 404) {
                 return false;
             }
-            // Retry up to 2 times for other errors
             return failureCount < 2;
         },
     });

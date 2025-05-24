@@ -4,7 +4,7 @@
 
 import * as React from 'react';
 import NextImage from 'next/image'; // Renamed to NextImage to avoid conflict
-import { useGetMediaFileDetailsByDocumentId } from '@/lib/queries/media';
+import { useGetMediaFileDetailsById } from '@/lib/queries/media'; // Changed to useGetMediaFileDetailsById
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, FileText, Video as VideoIcon, ImageIcon as FileTypeIcon, FileQuestion, ExternalLink } from 'lucide-react';
@@ -12,13 +12,14 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface MediaRendererProps {
-  mediaDocumentId: string;
+  mediaId: number; // Changed from mediaDocumentId: string to mediaId: number
   className?: string;
 }
 
-export default function MediaRenderer({ mediaDocumentId, className }: MediaRendererProps) {
-  const { data: mediaDetails, isLoading, isError, error } = useGetMediaFileDetailsByDocumentId(mediaDocumentId);
-
+export default function MediaRenderer({ mediaId, className }: MediaRendererProps) {
+  // Use the renamed hook and pass the numeric mediaId
+  const { data: mediaDetails, isLoading, isError, error } = useGetMediaFileDetailsById(mediaId);
+  console.log(mediaDetails)
   if (isLoading) {
     return <Skeleton className={cn("w-full h-32 rounded-md", className)} />;
   }
@@ -29,7 +30,7 @@ export default function MediaRenderer({ mediaDocumentId, className }: MediaRende
         <AlertCircle className="h-5 w-5 mr-2" />
         <div className="text-xs">
             <p className="font-semibold">Media Error</p>
-            <p>{error?.message || `Could not load (ID: ${mediaDocumentId.substring(0, 8)}...).`}</p>
+            <p>{error?.message || `Could not load (ID: ${mediaId}).`}</p>
         </div>
       </div>
     );
@@ -43,8 +44,10 @@ export default function MediaRenderer({ mediaDocumentId, className }: MediaRende
   }
 
   if (mime?.startsWith('image/')) {
+    console.log(url)
     return (
       <div className={cn("relative w-full aspect-video overflow-hidden rounded-md border bg-muted", className)}>
+
         <NextImage
           src={url}
           alt={displayAlt}
