@@ -22,16 +22,13 @@ import { useCurrentUser } from '@/lib/queries/user';
 import type { CombinedMediaData } from '@/types/media';
 import { cn } from '@/lib/utils';
 
-type OnMediaSelectCallback =
-    | ((selectedMedia: { fileId: number | null; thumbnailUrl: string | null; mimeType: string | null; altText: string | null }) => void); // For returnType 'id'
-
 interface MediaSelectorDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    onMediaSelect: OnMediaSelectCallback;
-    returnType?: 'id'; // Only 'id' (numeric) is currently fully supported for selection payload
-    expectedMediaTypes?: string[]; // e.g., ['image'], ['video'], ['application/pdf']
-    currentSelectionIds?: (number | null)[]; // Numeric IDs of currently selected media
+    onMediaSelect: (selectedMedia: CombinedMediaData) => void;
+    returnType?: 'id'; // 'id' implies CombinedMediaData is returned, from which consumer extracts fileId (numeric)
+    expectedMediaTypes?: string[];
+    currentSelectionIds?: (number | null)[];
 }
 
 const getFileTypeRenderIcon = (mime: string | null, className?: string): React.ReactElement => {
@@ -49,8 +46,8 @@ export default function MediaSelectorDialog({
     onOpenChange,
     onMediaSelect,
     returnType = 'id',
-    expectedMediaTypes = [], // Default to empty array (no client-side filter)
-    currentSelectionIds = [], // Default to empty array
+    expectedMediaTypes = [],
+    currentSelectionIds = [],
 }: MediaSelectorDialogProps) {
     const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
     const userKey = currentUser?.tenent_id;
@@ -66,7 +63,18 @@ export default function MediaSelectorDialog({
 
         return allMediaData.filter(media => {
             if (!media.mime) return false;
-            return expectedMediaTypes.some(type => media.mime!.startsWith(type));
+            // Check if media.mime starts with any of the expectedMediaTypes
+            // e.g., expectedMediaTypes = ['image'] matches 'image/png', 'image/jpeg'
+            // e.g., expectedMediaTypes = ['video'] matches 'video/mp4'
+            // e.g., expectedMediaTypes = ['application/pdf'] matches 'application/pdf'
+            return expectedMediaTypes.some(type => {
+                if (type === 'image' && media.mime!.startsWith('image/')) return true;
+                if (type === 'video' && media.mime!.startsWith('video/')) return true;
+                if (type === 'pdf' && media.mime === 'application/pdf') return true;
+                // Add more specific checks if needed, or a general check:
+                if (media.mime!.startsWith(type)) return true; // For types like 'application/'
+                return false;
+            });
         });
     }, [allMediaData, expectedMediaTypes]);
 
@@ -74,14 +82,16 @@ export default function MediaSelectorDialog({
     const handleSelect = () => {
         if (!selectedMedia) return;
 
-        if (returnType === 'id') {
-            (onMediaSelect as (selectedMedia: { fileId: number | null; thumbnailUrl: string | null; mimeType: string | null; altText: string | null }) => void)({
-                fileId: selectedMedia.fileId, // This is numeric Media.id
-                thumbnailUrl: selectedMedia.thumbnailUrl,
-                mimeType: selectedMedia.mime,
-                altText: selectedMedia.alt || selectedMedia.name
-            });
+        // Ensure that if an item is selected, it has a valid fileId (numeric media ID)
+        if (selectedMedia.fileId === null || selectedMedia.fileId === undefined) {
+            // This case should ideally be prevented by disabling the button,
+            // but it's a good safeguard.
+            console.error("MediaSelectorDialog: Attempted to select media with null fileId.");
+            // Optionally show a toast here too, or let the consumer handle it.
+            return;
         }
+
+        onMediaSelect(selectedMedia); // Pass the full CombinedMediaData object
         onOpenChange(false);
     };
 
@@ -91,6 +101,8 @@ export default function MediaSelectorDialog({
             setSelectedMedia(null);
         }
     };
+
+    const canSelectMedia = selectedMedia !== null && selectedMedia.fileId !== null && selectedMedia.fileId !== undefined;
 
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -133,19 +145,28 @@ export default function MediaSelectorDialog({
                         {!isLoading && !isError && filteredMediaData && filteredMediaData.length > 0 && (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                 {filteredMediaData.map((media) => {
-                                    const isCurrentlySelected = media.fileId !== null && currentSelectionIds.includes(media.fileId);
+                                    // fileId is numeric Media ID
+                                    const isCurrentlySelectedInParentForm = media.fileId !== null && currentSelectionIds.includes(media.fileId);
                                     const isDialogSelected = selectedMedia?.webMediaId === media.webMediaId;
+                                    const hasValidFileId = media.fileId !== null && media.fileId !== undefined;
+
                                     return (
                                     <button
-                                        key={media.webMediaId}
-                                        onClick={() => setSelectedMedia(media)}
+                                        key={media.webMediaId} // Use numeric webMediaId as key
+                                        onClick={() => {
+                                            if (hasValidFileId) {
+                                                setSelectedMedia(media);
+                                            }
+                                        }}
+                                        disabled={!hasValidFileId} // Disable if no valid fileId
                                         className={cn(
                                             "relative group border rounded-md overflow-hidden aspect-square focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 flex flex-col items-center justify-center text-center",
                                             isDialogSelected ? 'ring-2 ring-primary ring-offset-2' : 'border-border',
-                                            isCurrentlySelected && !isDialogSelected && 'border-green-500 ring-1 ring-green-500', // Highlight for already selected items
-                                            'bg-muted hover:bg-muted/80 transition-colors'
+                                            isCurrentlySelectedInParentForm && !isDialogSelected && 'border-green-500 ring-1 ring-green-500',
+                                            !hasValidFileId && 'opacity-50 cursor-not-allowed bg-muted/50', // Style for disabled items
+                                            hasValidFileId && 'bg-muted hover:bg-muted/80 transition-colors'
                                         )}
-                                        aria-label={`Select ${media.name}`}
+                                        aria-label={`Select ${media.name}${!hasValidFileId ? ' (Invalid File ID)' : ''}`}
                                     >
                                          {media.mime?.startsWith('image/') && media.thumbnailUrl ? (
                                             <Image
@@ -164,12 +185,12 @@ export default function MediaSelectorDialog({
                                                 </span>
                                             </div>
                                         )}
-                                        {isDialogSelected && (
+                                        {isDialogSelected && hasValidFileId && (
                                             <div className="absolute inset-0 bg-primary/60 flex items-center justify-center">
                                                 <CheckCircle className="w-8 h-8 text-primary-foreground" />
                                             </div>
                                         )}
-                                        {isCurrentlySelected && !isDialogSelected && (
+                                        {isCurrentlySelectedInParentForm && !isDialogSelected && hasValidFileId && (
                                             <div className="absolute top-1 right-1 p-0.5 bg-green-500 rounded-full">
                                                 <CheckCircle className="w-3 h-3 text-white" />
                                             </div>
@@ -177,6 +198,11 @@ export default function MediaSelectorDialog({
                                         <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-gradient-to-t from-black/70 to-transparent">
                                             <p className="text-xs text-white truncate font-medium">{media.name}</p>
                                         </div>
+                                        {!hasValidFileId && (
+                                            <div className="absolute inset-0 bg-destructive/30 flex items-center justify-center p-1">
+                                                <span className="text-xs text-destructive-foreground font-semibold">No File ID</span>
+                                            </div>
+                                        )}
                                     </button>
                                 )})}
                             </div>
@@ -193,7 +219,7 @@ export default function MediaSelectorDialog({
                     <Button
                         type="button"
                         onClick={handleSelect}
-                        disabled={!selectedMedia}
+                        disabled={!canSelectMedia}
                     >
                         Select Media
                     </Button>
@@ -203,3 +229,4 @@ export default function MediaSelectorDialog({
     );
 }
 
+    
