@@ -13,8 +13,8 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ImageIcon, PlusCircle, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { CalendarIcon, ImageIcon, PlusCircle, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { format, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { FormFormatComponent } from '@/types/meta-format';
 import TipTapEditor from '@/components/ui/tiptap';
@@ -23,9 +23,9 @@ interface ArrayFieldRendererProps<TFieldValues extends FieldValues = FieldValues
   fieldName: FieldPath<TFieldValues>;
   componentDefinition: FormFormatComponent;
   control: Control<TFieldValues>;
-  methods: UseFormReturn<TFieldValues>; // Pass full methods for setValue, getValues etc.
+  methods: UseFormReturn<TFieldValues>;
   isSubmitting: boolean;
-  openMediaSelector: (target: string | { fieldName: string; index: number }) => void;
+  openMediaSelector: (target: string | { fieldName: string; index: number }, componentDef: FormFormatComponent) => void;
   getDefaultValueForComponent: (componentType: string, component?: FormFormatComponent) => any;
 }
 
@@ -38,7 +38,7 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
   openMediaSelector,
   getDefaultValueForComponent,
 }: ArrayFieldRendererProps<TFieldValues>) {
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, move } = useFieldArray({
     control,
     name: fieldName,
   });
@@ -52,23 +52,47 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
       <div className="space-y-3">
         {fields.map((item, index) => (
           <Card key={item.id} className="p-4 bg-muted/50 relative">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => remove(index)}
-              disabled={isSubmitting}
-              className="absolute top-2 right-2 h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-              aria-label={`Remove ${label} item ${index + 1}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+             <div className="absolute top-2 right-2 flex space-x-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => move(index, index - 1)}
+                  disabled={isSubmitting || index === 0}
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  aria-label={`Move ${label} item ${index + 1} up`}
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => move(index, index + 1)}
+                  disabled={isSubmitting || index === fields.length - 1}
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  aria-label={`Move ${label} item ${index + 1} down`}
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => remove(index)}
+                  disabled={isSubmitting}
+                  className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  aria-label={`Remove ${label} item ${index + 1}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+            </div>
             
             <FormField
               control={control}
-              name={`${fieldName}.${index}` as any} // RHF expects dot notation for array item paths
+              name={`${fieldName}.${index}` as any}
               render={({ field }) => (
-                <FormItem className="mt-2">
+                <FormItem className="mt-2 pt-8"> {/* Added padding-top to avoid overlap with buttons */}
                   <FormLabel className="sr-only">{label} Item {index + 1}</FormLabel>
                   <FormControl>
                     {(() => {
@@ -88,27 +112,27 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                         case 'dynamic-component.number-field':
                           return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={componentDefinition.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
                         case 'dynamic-component.media-field':
-                           const currentMediaDocId = field.value as string | null;
-                           const mediaTypeHint = componentDefinition.type ? `a ${componentDefinition.type}` : 'Media';
+                           const currentMediaId = field.value as number | null;
                           return (
                             <div className="flex items-center gap-2">
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => openMediaSelector({ fieldName, index })}
+                                onClick={() => openMediaSelector({ fieldName, index }, componentDefinition)}
                                 disabled={isSubmitting}
                               >
                                 <ImageIcon className="mr-2 h-4 w-4" />
-                                {currentMediaDocId ? `Media DocID: ${currentMediaDocId} (Change)` : placeholder || `Select ${mediaTypeHint}`}
+                                {currentMediaId ? `Media ID: ${currentMediaId} (Change)` : placeholder || `Select Media`}
                               </Button>
-                              {currentMediaDocId && <p className="text-xs text-muted-foreground">Document ID: {currentMediaDocId}</p>}
+                              {currentMediaId && <p className="text-xs text-muted-foreground">Media ID: {currentMediaId}</p>}
                             </div>
                           );
                         case 'dynamic-component.enum-field':
                           const options = componentDefinition.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
                           if (componentDefinition.type === 'multi-select') {
+                            // For multi-select within an array, each "item" is an array of selected strings
                             return (
-                              <div className="space-y-2 p-2 border rounded-md">
+                                <div className="space-y-2 p-2 border rounded-md">
                                 {options.map(option => (
                                   <FormItem key={option} className="flex flex-row items-center space-x-3 space-y-0">
                                     <FormControl>
@@ -144,18 +168,18 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                               <PopoverTrigger asChild>
                                 <Button
                                   variant={"outline"}
-                                  className={cn("w-[280px] justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                                  className={cn("w-full md:w-[280px] justify-start text-left font-normal", !field.value && "text-muted-foreground")}
                                   disabled={isSubmitting}
                                 >
                                   <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {field.value ? format(new Date(field.value), (componentDefinition.type === 'time' ? 'HH:mm' : componentDefinition.type === 'data&time' || componentDefinition.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
+                                  {field.value && isValid(new Date(field.value)) ? format(new Date(field.value), (componentDefinition.type === 'time' ? 'HH:mm' : componentDefinition.type === 'data&time' || componentDefinition.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-auto p-0">
                                 <Calendar
                                   mode="single"
-                                  selected={field.value ? new Date(field.value) : undefined}
-                                  onSelect={field.onChange}
+                                  selected={field.value && isValid(new Date(field.value)) ? new Date(field.value) : undefined}
+                                  onSelect={(date) => field.onChange(date || null)}
                                   initialFocus
                                   disabled={isSubmitting}
                                 />
@@ -164,12 +188,18 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                                         <FormLabel>Time (HH:mm)</FormLabel>
                                         <Input
                                             type="time"
-                                            value={field.value ? format(new Date(field.value), 'HH:mm') : ''}
+                                            value={field.value && isValid(new Date(field.value)) ? format(new Date(field.value), 'HH:mm') : ''}
                                             onChange={(e) => {
                                                 const [hours, minutes] = e.target.value.split(':').map(Number);
-                                                const newDate = field.value ? new Date(field.value) : new Date();
-                                                newDate.setHours(hours, minutes);
-                                                field.onChange(newDate);
+                                                const newDate = field.value && isValid(new Date(field.value)) ? new Date(field.value) : new Date();
+                                                if (isNaN(newDate.getTime())) { 
+                                                    const todayWithTime = new Date();
+                                                    todayWithTime.setHours(hours, minutes, 0, 0);
+                                                    field.onChange(todayWithTime);
+                                                } else {
+                                                    newDate.setHours(hours, minutes);
+                                                    field.onChange(newDate);
+                                                }
                                             }}
                                             disabled={isSubmitting}
                                         />
@@ -186,7 +216,7 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                             </div>
                           );
                         default:
-                          return <Input placeholder={`Unsupported component: ${componentDefinition.__component}`} {...field} value={field.value ?? ''} disabled />;
+                          return <Input placeholder={`Unsupported: ${componentDefinition.__component}`} {...field} value={field.value ?? ''} disabled />;
                       }
                     })()}
                   </FormControl>
