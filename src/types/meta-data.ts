@@ -13,6 +13,7 @@ export interface MetaData {
   meta_format?: MetaFormat | null; // Relation to MetaFormat
   user?: User | null;
   meta_data?: Record<string, any>; // The actual dynamic data as JSON
+  handle: string; // New required handle field
 }
 
 export interface CreateMetaDataPayload {
@@ -21,4 +22,5 @@ export interface CreateMetaDataPayload {
   user?: number | null; // User ID
   meta_data: Record<string, any>;
   publishedAt?: string | null; // For draft/publish functionality
+  handle: string; // New required handle field
 }

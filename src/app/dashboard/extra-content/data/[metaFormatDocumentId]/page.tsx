@@ -28,12 +28,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, Eye, Loader2, FileJson as FileJsonIcon, ImageIcon, Video as VideoIcon, FileText as FileTextIcon } from 'lucide-react';
+import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, FileJson as FileJsonIcon, Loader2 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import type { MetaData } from '@/types/meta-data';
 import type { FormFormatComponent } from '@/types/meta-format';
@@ -44,7 +43,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from '../_components/media-renderer';
+import MediaRenderer from '@/app/dashboard/extra-content/data/_components/media-renderer';
 
 // Helper to generate a unique field name for RHF from MetaFormat component
 const getFieldName = (component: FormFormatComponent): string => {
@@ -55,7 +54,7 @@ const getFieldName = (component: FormFormatComponent): string => {
       .replace(/[^a-z0-9_]/g, '');
     return slugifiedLabel; // ID suffix removed
   }
-  // Fallback remains the same, using component ID for uniqueness if no label
+  // Fallback if no label
   return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
 };
 
@@ -73,7 +72,7 @@ export default function MetaDataListingPage() {
 
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [selectedEntryData, setSelectedEntryData] = React.useState<Record<string, any> | null>(null);
-  const [selectedEntryIdForDialog, setSelectedEntryIdForDialog] = React.useState<string | null>(null);
+  const [selectedEntryForDialog, setSelectedEntryForDialog] = React.useState<MetaData | null>(null);
 
 
   const handleDeleteConfirmation = (entry: MetaData) => {
@@ -100,7 +99,7 @@ export default function MetaDataListingPage() {
 
   const handleViewData = (entry: MetaData) => {
     setSelectedEntryData(entry.meta_data || {});
-    setSelectedEntryIdForDialog(entry.documentId || entry.id?.toString() || 'N/A');
+    setSelectedEntryForDialog(entry);
     setIsDetailDialogOpen(true);
   };
 
@@ -161,6 +160,7 @@ export default function MetaDataListingPage() {
 
   const createNewEntryLink = `/dashboard/extra-content/render/${metaFormatDocumentId}?action=create`;
 
+  // The main return statement starts here. Any syntax errors before this point could cause the "Unexpected token div" error.
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Button variant="outline" onClick={() => router.push('/dashboard/extra-content')}>
@@ -210,42 +210,44 @@ export default function MetaDataListingPage() {
                 const entryMediaIds: number[] = [];
                 const otherFields: { label: string | null; value: any }[] = [];
 
-                metaFormat.from_formate?.forEach(component => {
-                    const fieldName = getFieldName(component);
-                    const value = entry.meta_data?.[fieldName];
+                if (metaFormat?.from_formate && entry.meta_data) {
+                  metaFormat.from_formate.forEach(component => {
+                      const fieldName = getFieldName(component);
+                      const value = entry.meta_data?.[fieldName];
 
-                    if (component.__component === 'dynamic-component.media-field' && value !== null && value !== undefined) {
-                        const idsToCollect: (number | string)[] = component.is_array && Array.isArray(value) ? value : [value];
-                        idsToCollect.forEach(mediaIdValue => {
-                           const numericMediaId = typeof mediaIdValue === 'string' ? parseInt(mediaIdValue, 10) : typeof mediaIdValue === 'number' ? mediaIdValue : null;
-                           if (numericMediaId !== null && !isNaN(numericMediaId)) {
-                               entryMediaIds.push(numericMediaId);
-                           }
-                        });
-                    } else if (value !== null && value !== undefined && (typeof value !== 'string' || String(value).trim() !== '')) {
-                        let displayValue: any = value;
-                        if (typeof value === 'object' && !Array.isArray(value)) displayValue = '[Object]';
-                        else if (Array.isArray(value) && component.__component !== 'dynamic-component.media-field') displayValue = value.join(', ');
-                        else if (typeof value === 'boolean') displayValue = value ? 'Yes' : 'No';
-                        else if (component.__component === 'dynamic-component.date-field' && value) {
-                           try {
-                             const parsedDate = parseISO(String(value));
-                             if (isValid(parsedDate)) {
-                               displayValue = format(parsedDate, (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP'));
-                             } else {
-                               displayValue = String(value);
+                      if (component.__component === 'dynamic-component.media-field' && value !== null && value !== undefined) {
+                          const idsToCollect: (number | string)[] = component.is_array && Array.isArray(value) ? value : [value];
+                          idsToCollect.forEach(mediaIdValue => {
+                             const numericMediaId = typeof mediaIdValue === 'string' && !isNaN(parseInt(mediaIdValue, 10)) ? parseInt(mediaIdValue, 10) : typeof mediaIdValue === 'number' ? mediaIdValue : null;
+                             if (numericMediaId !== null && !isNaN(numericMediaId)) {
+                                 entryMediaIds.push(numericMediaId);
                              }
-                           } catch { displayValue = String(value); }
-                        }
+                          });
+                      } else if (value !== null && value !== undefined && (typeof value !== 'string' || String(value).trim() !== '')) {
+                          let displayValue: any = value;
+                          if (typeof value === 'object' && !Array.isArray(value)) displayValue = '[Object]';
+                          else if (Array.isArray(value) && component.__component !== 'dynamic-component.media-field') displayValue = value.join(', ');
+                          else if (typeof value === 'boolean') displayValue = value ? 'Yes' : 'No';
+                          else if (component.__component === 'dynamic-component.date-field' && value) {
+                             try {
+                               const parsedDate = parseISO(String(value));
+                               if (isValid(parsedDate)) {
+                                 displayValue = format(parsedDate, (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP'));
+                               } else {
+                                 displayValue = String(value);
+                               }
+                             } catch { displayValue = String(value); }
+                          }
 
-                        if (typeof displayValue === 'string' && displayValue.length > 70) {
-                           displayValue = `${displayValue.substring(0, 67)}...`;
-                        }
-                        if (component.__component !== 'dynamic-component.media-field') {
-                            otherFields.push({ label: component.label, value: displayValue });
-                        }
-                    }
-                });
+                          if (typeof displayValue === 'string' && displayValue.length > 70) {
+                             displayValue = `${displayValue.substring(0, 67)}...`;
+                          }
+                          if (component.__component !== 'dynamic-component.media-field') {
+                              otherFields.push({ label: component.label, value: displayValue });
+                          }
+                      }
+                  });
+                }
 
                 return (
                     <Card key={entry.documentId || entry.id} className="flex flex-col">
@@ -273,10 +275,12 @@ export default function MetaDataListingPage() {
                             </CardContent>
                         )}
                         <CardHeader className={entryMediaIds.length > 0 ? "pt-3 pb-2" : "pb-2"}>
-                            <CardTitle className="text-base">Data Entry ID: <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{entry.documentId || 'N/A'}</span></CardTitle>
+                            <CardTitle className="text-base">
+                                Handle: <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{entry.handle || 'N/A'}</span>
+                            </CardTitle>
                             <CardDescription className="text-xs">
-                                Created: {entry.createdAt ? format(new Date(entry.createdAt), 'PPp') : 'N/A'} <br/>
-                                Updated: {entry.updatedAt ? format(new Date(entry.updatedAt), 'PPp') : 'N/A'}
+                                ID: {entry.documentId || 'N/A'} <br/>
+                                Created: {entry.createdAt ? format(new Date(entry.createdAt), 'PPp') : 'N/A'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="flex-1 space-y-2 pt-0">
@@ -342,8 +346,8 @@ export default function MetaDataListingPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the data entry
-              <span className="font-semibold"> "{metaDataToDelete?.documentId || 'this entry'}"</span>.
+              This action cannot be undone. This will permanently delete the data entry with handle
+              <span className="font-semibold"> "{metaDataToDelete?.handle || metaDataToDelete?.documentId || 'this entry'}"</span>.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -363,7 +367,7 @@ export default function MetaDataListingPage() {
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Details for Entry: {selectedEntryIdForDialog}</DialogTitle>
+            <DialogTitle>Details for Entry (Handle: {selectedEntryForDialog?.handle || selectedEntryForDialog?.documentId || 'N/A'})</DialogTitle>
             <DialogDescriptionForDialog>
               View formatted data or raw JSON.
             </DialogDescriptionForDialog>
@@ -376,51 +380,57 @@ export default function MetaDataListingPage() {
             <ScrollArea className="flex-1 mt-2 border rounded-md">
                 <TabsContent value="ui" className="p-4 space-y-3 text-sm">
                     {selectedEntryData && metaFormat?.from_formate ? (
-                        metaFormat.from_formate.map(component => {
-                        const fieldName = getFieldName(component);
-                        const value = selectedEntryData[fieldName];
+                       <>
+                        <div className="grid grid-cols-3 gap-2 items-start">
+                            <strong className="col-span-1 break-words">Handle:</strong>
+                            <div className="col-span-2 break-words">{selectedEntryForDialog?.handle || 'N/A'}</div>
+                        </div>
+                        {metaFormat.from_formate.map(component => {
+                            const fieldName = getFieldName(component);
+                            const value = selectedEntryData[fieldName];
 
-                        if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
-                            return null;
-                        }
+                            if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
+                                return null;
+                            }
 
-                        return (
-                            <div key={component.id} className="grid grid-cols-3 gap-2 items-start">
-                                <strong className="col-span-1 break-words">{component.label || fieldName}:</strong>
-                                <div className="col-span-2 break-words">
-                                    {component.__component === 'dynamic-component.media-field' ? (
-                                    Array.isArray(value) ? (
-                                        <div className="flex flex-wrap gap-2">
-                                        {value.map((mediaId: string | number, idx: number) => ( // Assuming mediaId can be string or number for now
-                                           typeof mediaId === 'number' ?
-                                            <MediaRenderer key={idx} mediaId={mediaId} className="w-24 h-24 object-contain" />
-                                            : <span key={idx} className="text-xs text-muted-foreground">(Invalid Media ID: {String(mediaId)})</span>
-                                        ))}
-                                        </div>
-                                    ) : (
-                                       typeof value === 'number' ?
-                                        <MediaRenderer mediaId={value} className="max-w-xs max-h-48 object-contain" />
-                                        : <span className="text-xs text-muted-foreground">(Unsupported Media ID: {String(value)})</span>
-                                    )
-                                    ) : component.__component === 'dynamic-component.date-field' ? (
+                            return (
+                                <div key={component.id} className="grid grid-cols-3 gap-2 items-start">
+                                    <strong className="col-span-1 break-words">{component.label || fieldName}:</strong>
+                                    <div className="col-span-2 break-words">
+                                        {component.__component === 'dynamic-component.media-field' ? (
                                         Array.isArray(value) ? (
-                                            value.map((v: any) => {
-                                                try { return isValid(parseISO(String(v))) ? format(parseISO(String(v)), (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP')) : String(v); } catch { return String(v); }
-                                            }).join(', ')
+                                            <div className="flex flex-wrap gap-2">
+                                            {value.map((mediaId: string | number, idx: number) => (
+                                               typeof mediaId === 'number' ?
+                                                <MediaRenderer key={idx} mediaId={mediaId} className="w-24 h-24 object-contain" />
+                                                : <span key={idx} className="text-xs text-muted-foreground">(Invalid Media ID: {String(mediaId)})</span>
+                                            ))}
+                                            </div>
                                         ) : (
-                                            isValid(parseISO(String(value))) ? format(parseISO(String(value)), (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP')) : String(value)
+                                           typeof value === 'number' ?
+                                            <MediaRenderer mediaId={value} className="max-w-xs max-h-48 object-contain" />
+                                            : <span className="text-xs text-muted-foreground">(Unsupported Media ID: {String(value)})</span>
                                         )
-                                    ) : typeof value === 'boolean' ? (
-                                        value ? 'Yes' : 'No'
-                                    ) : Array.isArray(value) ? (
-                                        value.join(', ')
-                                    ) : (
-                                        String(value)
-                                    )}
+                                        ) : component.__component === 'dynamic-component.date-field' ? (
+                                            Array.isArray(value) ? (
+                                                value.map((v: any) => {
+                                                    try { return isValid(parseISO(String(v))) ? format(parseISO(String(v)), (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP')) : String(v); } catch { return String(v); }
+                                                }).join(', ')
+                                            ) : (
+                                                isValid(parseISO(String(value))) ? format(parseISO(String(value)), (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP')) : String(value)
+                                            )
+                                        ) : typeof value === 'boolean' ? (
+                                            value ? 'Yes' : 'No'
+                                        ) : Array.isArray(value) ? (
+                                            value.join(', ')
+                                        ) : (
+                                            String(value)
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                        })
+                            );
+                        })}
+                        </>
                     ) : (
                         <p>No data to display or format definition missing.</p>
                     )}
@@ -442,5 +452,3 @@ export default function MetaDataListingPage() {
     </div>
   );
 }
-
-    
