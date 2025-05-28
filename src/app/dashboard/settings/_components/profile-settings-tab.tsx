@@ -8,20 +8,20 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useCurrentUser, useUpdateUserProfileMutation } from '@/lib/queries/user'; // Ensure this import is correct
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'; // Added FormDescription
+import { useCurrentUser, useUpdateUserProfileMutation } from '@/lib/queries/user';
 import { useChangePasswordMutation } from '@/lib/queries/auth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertTitle, AlertDescription as AlertDescriptionComponent } from '@/components/ui/alert'; // Renamed AlertDescription import
 import { Loader2, AlertCircle, KeyRound } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription as CardDescriptionComponent, CardHeader, CardTitle } from '@/components/ui/card'; // Renamed CardDescription import
 import type { ProfileFormValues, ChangePasswordFormValues } from '@/types/auth';
 import { profileSchema, changePasswordSchema } from '@/types/auth';
 
 export default function ProfileSettingsTab() {
   const { data: currentUser, isLoading: isLoadingUser, isError, error } = useCurrentUser();
-  const updateUserProfileMutation = useUpdateUserProfileMutation(); // Make sure this line is present and correct
+  const updateUserMutation = useUpdateUserProfileMutation();
   const changePasswordMutation = useChangePasswordMutation();
 
   const profileForm = useForm<ProfileFormValues>({
@@ -48,7 +48,8 @@ export default function ProfileSettingsTab() {
       profileForm.reset({
         full_name: currentUser.full_name || '',
         email: currentUser.email || '',
-        phone: String(currentUser.phone || ''),
+        // Ensure phone is a string for the form field, even if it's number/null from API
+        phone: currentUser.phone !== null && currentUser.phone !== undefined ? String(currentUser.phone) : '',
         address: currentUser.address || '',
       });
     }
@@ -61,7 +62,7 @@ export default function ProfileSettingsTab() {
     }
     // Exclude email from the payload as it's typically not updated here
     const { email, ...updatePayload } = data;
-    updateUserProfileMutation.mutate({ id: currentUser.id, payload: updatePayload });
+    updateUserMutation.mutate({ id: currentUser.id, payload: updatePayload });
   };
 
   const onChangePasswordSubmit = (data: ChangePasswordFormValues) => {
@@ -90,12 +91,12 @@ export default function ProfileSettingsTab() {
     );
   }
 
-  if (isError || !currentUser) { // Added !currentUser check for robustness
+  if (isError || !currentUser) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Error Loading Profile</AlertTitle>
-        <AlertDescription>{(error as Error)?.message || 'Could not load your profile data.'}</AlertDescription>
+        <AlertDescriptionComponent>{(error as Error)?.message || 'Could not load your profile data.'}</AlertDescriptionComponent>
       </Alert>
     );
   }
@@ -105,7 +106,7 @@ export default function ProfileSettingsTab() {
       <Card>
         <CardHeader>
           <CardTitle>Personal Information</CardTitle>
-          <CardDescription>Update your personal details.</CardDescription>
+          <CardDescriptionComponent>Update your personal details.</CardDescriptionComponent>
         </CardHeader>
         <CardContent>
           <Form {...profileForm}>
@@ -117,7 +118,7 @@ export default function ProfileSettingsTab() {
                   <FormItem>
                     <FormLabel>Full Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your full name" {...field} disabled={updateUserProfileMutation.isPending} />
+                      <Input placeholder="Your full name" {...field} value={field.value || ''} disabled={updateUserMutation.isPending} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -130,7 +131,7 @@ export default function ProfileSettingsTab() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your@email.com" {...field} disabled={true} />
+                      <Input placeholder="your@email.com" {...field} value={field.value || ''} disabled={true} />
                     </FormControl>
                     <FormDescription>Email address cannot be changed here.</FormDescription>
                     <FormMessage />
@@ -144,7 +145,7 @@ export default function ProfileSettingsTab() {
                   <FormItem>
                     <FormLabel>Phone Number</FormLabel>
                     <FormControl>
-                      <Input type="tel" placeholder="Your phone number" {...field} disabled={updateUserProfileMutation.isPending} />
+                      <Input type="tel" placeholder="Your phone number" {...field} value={field.value || ''} disabled={updateUserMutation.isPending} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -157,7 +158,7 @@ export default function ProfileSettingsTab() {
                   <FormItem>
                     <FormLabel>Address</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Your address" {...field} disabled={updateUserProfileMutation.isPending} />
+                      <Textarea placeholder="Your address" {...field} value={field.value || ''} disabled={updateUserMutation.isPending} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -166,8 +167,8 @@ export default function ProfileSettingsTab() {
               {profileForm.formState.errors.root && (
                   <FormMessage>{profileForm.formState.errors.root.message}</FormMessage>
               )}
-              <Button type="submit" disabled={updateUserProfileMutation.isPending}>
-                {updateUserProfileMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type="submit" disabled={updateUserMutation.isPending}>
+                {updateUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Changes
               </Button>
             </form>
@@ -180,7 +181,7 @@ export default function ProfileSettingsTab() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> Change Password</CardTitle>
-          <CardDescription>Update your account password.</CardDescription>
+          <CardDescriptionComponent>Update your account password.</CardDescriptionComponent>
         </CardHeader>
         <CardContent>
           <Form {...passwordForm}>
