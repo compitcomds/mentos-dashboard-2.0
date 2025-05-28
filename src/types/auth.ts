@@ -1,3 +1,4 @@
+
 import type { Role } from './common'; // Import Role
 import * as z from 'zod';
 
@@ -37,7 +38,13 @@ export const profileSchema = z.object({
   full_name: z.string().min(2, 'Full name must be at least 2 characters.').optional().or(z.literal('')),
   email: z.string().email('Invalid email address.').optional(), // Email might not be updatable
   phone: z.string().min(10, 'Phone number seems too short.').max(15, 'Phone number seems too long.').optional().or(z.literal('')),
-  address: z.string().min(5, 'Address must be at least 5 characters.').optional().or(z.literal('')),
+  // address: z.string().min(5, 'Address must be at least 5 characters.').optional().or(z.literal('')), // Old single address field
+  street: z.string().optional().or(z.literal('')),
+  address_line_2: z.string().optional().or(z.literal('')),
+  city: z.string().optional().or(z.literal('')),
+  state: z.string().optional().or(z.literal('')),
+  postal_code: z.string().optional().or(z.literal('')),
+  country: z.string().optional().or(z.literal('')),
 });
 export type ProfileFormValues = z.infer<typeof profileSchema>;
 
