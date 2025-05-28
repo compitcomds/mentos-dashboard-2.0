@@ -4,7 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchCurrentUser, updateUserProfile as updateUserProfileService } from '@/lib/services/user'; // Import the service function
 import type { User, ProfileFormValues } from '@/types/auth'; // Import the User type
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast'; // Added import
 
 const USER_QUERY_KEY = ['currentUser'];
 
