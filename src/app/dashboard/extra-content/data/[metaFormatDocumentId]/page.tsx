@@ -15,7 +15,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription as DialogDescriptionForDialog,
+  DialogDescription as DialogDescriptionComponent,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -32,7 +32,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, FileJson as FileJsonIcon, Loader2 } from 'lucide-react';
+import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, FileJson as FileJsonIcon, Loader2, PackageOpen } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import type { MetaData } from '@/types/meta-data';
 import type { FormFormatComponent } from '@/types/meta-format';
@@ -43,18 +43,16 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from '@/app/dashboard/extra-content/data/_components/media-renderer';
+import MediaRenderer from './_components/media-renderer';
 
-// Helper to generate a unique field name for RHF from MetaFormat component
 const getFieldName = (component: FormFormatComponent): string => {
   if (component.label && component.label.trim() !== '') {
     const slugifiedLabel = component.label
       .toLowerCase()
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
-    return slugifiedLabel; // ID suffix removed
+    return slugifiedLabel;
   }
-  // Fallback if no label
   return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
 };
 
@@ -115,9 +113,9 @@ export default function MetaDataListingPage() {
         <Skeleton className="h-10 w-36" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...Array(3)].map((_, i) => (
-                 <Card key={`skeleton-${i}`} className="flex flex-col">
+                 <Card key={`skeleton-${i}`} className="flex flex-col shadow-sm">
                     <CardContent className="p-4 pb-0">
-                        <Skeleton className="w-full h-32 rounded-md" />
+                        <Skeleton className="w-full h-32 rounded-md bg-muted" />
                     </CardContent>
                     <CardHeader className="pb-2 pt-3">
                         <Skeleton className="h-5 w-3/4" />
@@ -127,7 +125,7 @@ export default function MetaDataListingPage() {
                         <Skeleton className="h-4 w-full" />
                         <Skeleton className="h-4 w-5/6" />
                     </CardContent>
-                    <CardFooter className="border-t pt-3"><Skeleton className="h-8 w-20 ml-auto" /></CardFooter>
+                    <CardFooter className="border-t pt-3 flex justify-end"><Skeleton className="h-8 w-24" /></CardFooter>
                  </Card>
             ))}
         </div>
@@ -142,6 +140,7 @@ export default function MetaDataListingPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
           <AlertDescription>{(error as Error)?.message || 'Could not load data for this extra content format.'}</AlertDescription>
+           <Button onClick={() => router.refresh()} className="mt-2">Retry</Button>
         </Alert>
       </div>
     );
@@ -152,7 +151,7 @@ export default function MetaDataListingPage() {
       <div className="p-6">
         <Alert>
           <AlertTitle>Extra Content Format Not Found</AlertTitle>
-          <AlertDescription>The requested extra content format could not be found.</AlertDescription>
+          <AlertDescription>The requested extra content format (ID: {metaFormatDocumentId}) could not be found.</AlertDescription>
         </Alert>
       </div>
     );
@@ -160,19 +159,18 @@ export default function MetaDataListingPage() {
 
   const createNewEntryLink = `/dashboard/extra-content/render/${metaFormatDocumentId}?action=create`;
 
-  // The main return statement starts here. Any syntax errors before this point could cause the "Unexpected token div" error.
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Button variant="outline" onClick={() => router.push('/dashboard/extra-content')}>
         &larr; Back to Extra Content Management
       </Button>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Data for: {metaFormat.name}</h1>
-          {metaFormat.description && <p className="text-muted-foreground">{metaFormat.description}</p>}
+          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{metaFormat.name}</h1>
+          {metaFormat.description && <p className="text-muted-foreground mt-1">{metaFormat.description}</p>}
         </div>
-        <Button asChild>
+        <Button asChild className="flex-shrink-0">
           <Link href={createNewEntryLink}>
             <PlusCircle className="mr-2 h-4 w-4" /> Create New Entry
           </Link>
@@ -182,9 +180,9 @@ export default function MetaDataListingPage() {
     {(isFetchingMetaData && (!metaDataEntries || metaDataEntries.length === 0)) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
              {[...Array(3)].map((_, i) => (
-                 <Card key={`skeleton-fetching-${i}`} className="flex flex-col">
-                     <CardContent className="p-4 pb-0">
-                         <Skeleton className="w-full h-32 rounded-md" />
+                 <Card key={`skeleton-fetching-${i}`} className="flex flex-col shadow-sm">
+                     <CardContent className="p-4 pb-0 aspect-video bg-muted rounded-t-lg flex items-center justify-center">
+                         <Skeleton className="w-full h-full" />
                      </CardContent>
                      <CardHeader className="pb-2 pt-3">
                          <Skeleton className="h-5 w-3/4" />
@@ -194,14 +192,20 @@ export default function MetaDataListingPage() {
                          <Skeleton className="h-4 w-full" />
                          <Skeleton className="h-4 w-5/6" />
                      </CardContent>
-                     <CardFooter className="border-t pt-3"><Skeleton className="h-8 w-20 ml-auto" /></CardFooter>
+                     <CardFooter className="border-t pt-3 flex justify-end"><Skeleton className="h-8 w-24" /></CardFooter>
                  </Card>
              ))}
         </div>
     )}
 
     {(!metaDataEntries || metaDataEntries.length === 0) && !isFetchingMetaData && (
-         <p className="text-muted-foreground text-center py-8">No data entries found for this format yet.</p>
+         <Card className="col-span-full text-center py-12 shadow-sm">
+            <CardContent className="flex flex-col items-center justify-center">
+                <PackageOpen className="h-16 w-16 text-muted-foreground mb-4" />
+                <h3 className="text-xl font-semibold text-foreground">No Data Entries Yet</h3>
+                <p className="text-muted-foreground mt-1">Get started by creating a new entry for "{metaFormat.name}".</p>
+            </CardContent>
+         </Card>
       ) }
 
       {metaDataEntries && metaDataEntries.length > 0 && (
@@ -218,14 +222,14 @@ export default function MetaDataListingPage() {
                       if (component.__component === 'dynamic-component.media-field' && value !== null && value !== undefined) {
                           const idsToCollect: (number | string)[] = component.is_array && Array.isArray(value) ? value : [value];
                           idsToCollect.forEach(mediaIdValue => {
-                             const numericMediaId = typeof mediaIdValue === 'string' && !isNaN(parseInt(mediaIdValue, 10)) ? parseInt(mediaIdValue, 10) : typeof mediaIdValue === 'number' ? mediaIdValue : null;
+                             const numericMediaId = typeof mediaIdValue === 'number' ? mediaIdValue : (typeof mediaIdValue === 'string' && !isNaN(parseInt(mediaIdValue, 10)) ? parseInt(mediaIdValue, 10) : null);
                              if (numericMediaId !== null && !isNaN(numericMediaId)) {
                                  entryMediaIds.push(numericMediaId);
                              }
                           });
                       } else if (value !== null && value !== undefined && (typeof value !== 'string' || String(value).trim() !== '')) {
                           let displayValue: any = value;
-                          if (typeof value === 'object' && !Array.isArray(value)) displayValue = '[Object]';
+                          if (typeof value === 'object' && !Array.isArray(value) && value !== null) displayValue = '[Object]';
                           else if (Array.isArray(value) && component.__component !== 'dynamic-component.media-field') displayValue = value.join(', ');
                           else if (typeof value === 'boolean') displayValue = value ? 'Yes' : 'No';
                           else if (component.__component === 'dynamic-component.date-field' && value) {
@@ -239,8 +243,8 @@ export default function MetaDataListingPage() {
                              } catch { displayValue = String(value); }
                           }
 
-                          if (typeof displayValue === 'string' && displayValue.length > 70) {
-                             displayValue = `${displayValue.substring(0, 67)}...`;
+                          if (typeof displayValue === 'string' && displayValue.length > 60) {
+                             displayValue = `${displayValue.substring(0, 57)}...`;
                           }
                           if (component.__component !== 'dynamic-component.media-field') {
                               otherFields.push({ label: component.label, value: displayValue });
@@ -250,60 +254,58 @@ export default function MetaDataListingPage() {
                 }
 
                 return (
-                    <Card key={entry.documentId || entry.id} className="flex flex-col">
+                    <Card key={entry.documentId || entry.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow rounded-lg overflow-hidden">
                         {entryMediaIds.length > 0 && (
-                            <CardContent className="p-4 pb-0">
+                            <div className="bg-muted border-b">
                                 {entryMediaIds.length === 1 && entryMediaIds[0] !== null && !isNaN(entryMediaIds[0]) ? (
-                                    <MediaRenderer mediaId={entryMediaIds[0]} className="rounded-md border" />
+                                    <MediaRenderer mediaId={entryMediaIds[0]} className="w-full h-48 object-cover" />
                                 ) : entryMediaIds.length > 1 ? (
-                                    <Carousel className="w-full rounded-md border" opts={{ loop: entryMediaIds.length > 1 }}>
+                                    <Carousel className="w-full" opts={{ loop: entryMediaIds.length > 1 }}>
                                         <CarouselContent>
                                             {entryMediaIds.map((mediaId, index) => (
                                                 mediaId !== null && !isNaN(mediaId) && (
                                                 <CarouselItem key={`${entry.documentId}-media-${index}`}>
-                                                    <div className="p-1">
-                                                         <MediaRenderer mediaId={mediaId} />
+                                                    <div className="p-0 aspect-video flex items-center justify-center"> {/* Changed p-1 to p-0 for tighter fit */}
+                                                         <MediaRenderer mediaId={mediaId} className="w-full h-48 object-cover" />
                                                     </div>
                                                 </CarouselItem>
                                                 )
                                             ))}
                                         </CarouselContent>
-                                        {entryMediaIds.length > 1 && <CarouselPrevious className="left-2 disabled:opacity-30" />}
-                                        {entryMediaIds.length > 1 && <CarouselNext className="right-2 disabled:opacity-30"/>}
+                                        {entryMediaIds.length > 1 && <CarouselPrevious className="left-2 disabled:opacity-30 bg-background/50 hover:bg-background/80" />}
+                                        {entryMediaIds.length > 1 && <CarouselNext className="right-2 disabled:opacity-30 bg-background/50 hover:bg-background/80"/>}
                                     </Carousel>
                                 ) : null }
-                            </CardContent>
+                            </div>
                         )}
-                        <CardHeader className={entryMediaIds.length > 0 ? "pt-3 pb-2" : "pb-2"}>
-                            <CardTitle className="text-base">
-                                Handle: <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{entry.handle || 'N/A'}</span>
+                        <CardHeader className={entryMediaIds.length > 0 ? "pt-4 pb-2" : "pb-2"}>
+                            <CardTitle className="text-base font-semibold text-foreground">
+                                {entry.handle || `Entry ID: ${entry.documentId || 'N/A'}`}
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                ID: {entry.documentId || 'N/A'} <br/>
-                                Created: {entry.createdAt ? format(new Date(entry.createdAt), 'PPp') : 'N/A'}
+                                {entry.handle && `ID: ${entry.documentId || 'N/A'} | `}
+                                Created: {entry.createdAt ? formatDate(entry.createdAt, 'MMM d, yyyy, HH:mm') : 'N/A'}
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="flex-1 space-y-2 pt-0">
-                             {otherFields.length > 0 && (
+                        <CardContent className="flex-1 space-y-2 pt-0 text-sm">
+                             {otherFields.length > 0 ? (
                                  <div className="space-y-1">
-                                     <h4 className="text-sm font-medium mt-2 border-t pt-2">Content Preview:</h4>
                                      {otherFields.slice(0, 3).map((field, index) => (
-                                         <p key={index} className="text-xs text-muted-foreground truncate">
-                                             <span className="font-semibold text-foreground">{field.label || 'Field'}:</span> {String(field.value)}
+                                         <p key={index} className="text-muted-foreground truncate">
+                                             <span className="font-medium text-foreground">{field.label || 'Field'}:</span> {String(field.value)}
                                          </p>
                                      ))}
-                                     {otherFields.length > 3 && <p className="text-xs text-muted-foreground">...and more.</p>}
+                                     {otherFields.length > 3 && <p className="text-xs text-muted-foreground">...and {otherFields.length - 3} more fields.</p>}
                                  </div>
-                             )}
-                             {(entryMediaIds.length === 0 && otherFields.length === 0) && (
-                                 <p className="text-xs text-muted-foreground text-center py-4">No displayable data in this entry.</p>
-                             )}
+                             ) : (entryMediaIds.length === 0 && (
+                                 <p className="text-xs text-muted-foreground text-center py-4">No displayable text data.</p>
+                             ))}
                         </CardContent>
-                        <CardFooter className="flex justify-end border-t pt-3">
+                        <CardFooter className="flex justify-end border-t pt-3 bg-muted/30 p-3">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8">
-                                    <MoreHorizontal className="h-4 w-4" /> <span className="ml-2">Actions</span>
+                                <Button variant="ghost" size="sm" className="h-8 px-2">
+                                    <MoreHorizontal className="h-4 w-4" /> <span className="ml-1 sr-only md:not-sr-only">Actions</span>
                                 </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
@@ -368,11 +370,11 @@ export default function MetaDataListingPage() {
         <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Details for Entry (Handle: {selectedEntryForDialog?.handle || selectedEntryForDialog?.documentId || 'N/A'})</DialogTitle>
-            <DialogDescriptionForDialog>
+            <DialogDescriptionComponent>
               View formatted data or raw JSON.
-            </DialogDescriptionForDialog>
+            </DialogDescriptionComponent>
           </DialogHeader>
-          <Tabs defaultValue="ui" className="flex-1 flex flex-col overflow-hidden">
+          <Tabs defaultValue="ui" className="flex-1 flex flex-col overflow-hidden mt-2">
             <TabsList className="flex-shrink-0">
               <TabsTrigger value="ui">Formatted View</TabsTrigger>
               <TabsTrigger value="raw">Raw JSON</TabsTrigger>
@@ -381,20 +383,25 @@ export default function MetaDataListingPage() {
                 <TabsContent value="ui" className="p-4 space-y-3 text-sm">
                     {selectedEntryData && metaFormat?.from_formate ? (
                        <>
-                        <div className="grid grid-cols-3 gap-2 items-start">
+                        <div className="grid grid-cols-3 gap-2 items-start py-1 border-b">
                             <strong className="col-span-1 break-words">Handle:</strong>
-                            <div className="col-span-2 break-words">{selectedEntryForDialog?.handle || 'N/A'}</div>
+                            <div className="col-span-2 break-words font-mono text-xs bg-muted px-1 py-0.5 rounded">{selectedEntryForDialog?.handle || 'N/A'}</div>
                         </div>
                         {metaFormat.from_formate.map(component => {
                             const fieldName = getFieldName(component);
                             const value = selectedEntryData[fieldName];
 
                             if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
-                                return null;
+                                return (
+                                     <div key={component.id} className="grid grid-cols-3 gap-2 items-start py-1 border-b">
+                                        <strong className="col-span-1 break-words text-muted-foreground/70">{component.label || fieldName}:</strong>
+                                        <div className="col-span-2 break-words text-muted-foreground/70 italic">Not set</div>
+                                    </div>
+                                );
                             }
 
                             return (
-                                <div key={component.id} className="grid grid-cols-3 gap-2 items-start">
+                                <div key={component.id} className="grid grid-cols-3 gap-2 items-start py-2 border-b last:border-b-0">
                                     <strong className="col-span-1 break-words">{component.label || fieldName}:</strong>
                                     <div className="col-span-2 break-words">
                                         {component.__component === 'dynamic-component.media-field' ? (
@@ -402,14 +409,14 @@ export default function MetaDataListingPage() {
                                             <div className="flex flex-wrap gap-2">
                                             {value.map((mediaId: string | number, idx: number) => (
                                                typeof mediaId === 'number' ?
-                                                <MediaRenderer key={idx} mediaId={mediaId} className="w-24 h-24 object-contain" />
-                                                : <span key={idx} className="text-xs text-muted-foreground">(Invalid Media ID: {String(mediaId)})</span>
+                                                <MediaRenderer key={idx} mediaId={mediaId} className="w-24 h-24 object-contain border rounded" />
+                                                : <Badge variant="outline" key={idx} className="text-xs">Invalid Media ID: {String(mediaId)}</Badge>
                                             ))}
                                             </div>
                                         ) : (
                                            typeof value === 'number' ?
-                                            <MediaRenderer mediaId={value} className="max-w-xs max-h-48 object-contain" />
-                                            : <span className="text-xs text-muted-foreground">(Unsupported Media ID: {String(value)})</span>
+                                            <MediaRenderer mediaId={value} className="max-w-xs max-h-48 object-contain border rounded" />
+                                            : <Badge variant="outline" className="text-xs">Unsupported Media ID: {String(value)}</Badge>
                                         )
                                         ) : component.__component === 'dynamic-component.date-field' ? (
                                             Array.isArray(value) ? (
@@ -420,9 +427,11 @@ export default function MetaDataListingPage() {
                                                 isValid(parseISO(String(value))) ? format(parseISO(String(value)), (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP')) : String(value)
                                             )
                                         ) : typeof value === 'boolean' ? (
-                                            value ? 'Yes' : 'No'
+                                            value ? <Badge variant="default" className="bg-green-600 hover:bg-green-700">Yes</Badge> : <Badge variant="secondary">No</Badge>
                                         ) : Array.isArray(value) ? (
-                                            value.join(', ')
+                                            value.map((item, i) => <Badge key={i} variant="outline" className="mr-1 mb-1">{String(item)}</Badge>)
+                                        ) : component.inputType === 'tip-tap' && typeof value === 'string' && value.startsWith('<') ? (
+                                            <div className="prose prose-sm dark:prose-invert max-w-none border rounded p-2 bg-background" dangerouslySetInnerHTML={{ __html: value }} />
                                         ) : (
                                             String(value)
                                         )}
@@ -436,13 +445,13 @@ export default function MetaDataListingPage() {
                     )}
                 </TabsContent>
                 <TabsContent value="raw" className="p-0">
-                    <pre className="p-4 text-xs whitespace-pre-wrap break-all h-full">
+                    <pre className="p-4 text-xs whitespace-pre-wrap break-all h-full bg-muted rounded-b-md">
                     {selectedEntryData ? JSON.stringify(selectedEntryData, null, 2) : 'No JSON data available.'}
                     </pre>
                 </TabsContent>
             </ScrollArea>
           </Tabs>
-          <DialogFooter className="mt-4 flex-shrink-0">
+          <DialogFooter className="mt-4 flex-shrink-0 pt-4 border-t">
             <DialogClose asChild>
               <Button type="button" variant="outline">Close</Button>
             </DialogClose>
@@ -452,3 +461,5 @@ export default function MetaDataListingPage() {
     </div>
   );
 }
+
+    
