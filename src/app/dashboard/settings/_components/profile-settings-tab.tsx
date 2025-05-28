@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useCurrentUser, useUpdateUserProfileMutation } from '@/lib/queries/user';
+import { useCurrentUser, useUpdateUserProfileMutation } from '@/lib/queries/user'; // Ensure this import is correct
 import { useChangePasswordMutation } from '@/lib/queries/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -21,7 +21,7 @@ import { profileSchema, changePasswordSchema } from '@/types/auth';
 
 export default function ProfileSettingsTab() {
   const { data: currentUser, isLoading: isLoadingUser, isError, error } = useCurrentUser();
-  const updateUserMutation = useUpdateUserProfileMutation();
+  const updateUserProfileMutation = useUpdateUserProfileMutation(); // Make sure this line is present and correct
   const changePasswordMutation = useChangePasswordMutation();
 
   const profileForm = useForm<ProfileFormValues>({
@@ -90,7 +90,7 @@ export default function ProfileSettingsTab() {
     );
   }
 
-  if (isError) {
+  if (isError || !currentUser) { // Added !currentUser check for robustness
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
