@@ -32,6 +32,28 @@ export const loginSchema = z.object({
 
 export type LoginFormValues = z.infer<typeof loginSchema>;
 
+// Schema for the profile update form UI
+export const profileSchema = z.object({
+  full_name: z.string().min(2, 'Full name must be at least 2 characters.').optional().or(z.literal('')),
+  email: z.string().email('Invalid email address.').optional(), // Email might not be updatable
+  phone: z.string().min(10, 'Phone number seems too short.').max(15, 'Phone number seems too long.').optional().or(z.literal('')),
+  address: z.string().min(5, 'Address must be at least 5 characters.').optional().or(z.literal('')),
+});
+export type ProfileFormValues = z.infer<typeof profileSchema>;
+
+
+// Schema for the change password form UI
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, { message: "Current password is required." }),
+  password: z.string().min(6, { message: "New password must be at least 6 characters." }),
+  passwordConfirmation: z.string().min(6, { message: "Password confirmation must be at least 6 characters." }),
+}).refine(data => data.password === data.passwordConfirmation, {
+  message: "New passwords don't match",
+  path: ["passwordConfirmation"],
+});
+export type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>;
+
+
 // --- API Payload and Response Types ---
 
 // Payload expected by the /api/auth/local/register endpoint
@@ -40,9 +62,9 @@ export interface RegisterPayload {
     email: string;
     password: string;
     full_name?: string;
-    phone?: number | string;
+    phone?: number | string; // Service layer handles conversion to number if needed by API
     address?: string;
-    tenent_id?: string; // Changed from key to tenent_id
+    tenent_id?: string;
 }
 
 // Structure of the response from the /api/auth/local/register endpoint
@@ -59,7 +81,7 @@ export interface LoginResponse {
     jwt: string;
     user: User;
     message?: string;
-    data?: {
+    data?: { // This structure might be specific to older Strapi or custom setups
         accessToken: string;
         accessTokenExpiry: string;
         user?: User;
@@ -80,15 +102,30 @@ export interface ResetPasswordPayload {
   passwordConfirmation: string;
 }
 
-// Generic response type for simple API messages (e.g., forgot password success)
-export interface GenericResponse {
-    message: string;
-    status?: number;
+// Payload for the /api/auth/change-password endpoint
+export interface ChangePasswordPayload {
+    currentPassword: string;
+    password: string;
+    passwordConfirmation: string;
 }
 
-// Updated User type based on user's provided interface
+
+// Generic response type for simple API messages (e.g., forgot password success)
+export interface GenericResponse {
+    message?: string; // Make message optional as some Strapi responses might not have it directly
+    status?: number;
+    // Strapi sometimes returns errors in a nested structure
+    error?: {
+        status: number;
+        name: string;
+        message: string;
+        details?: any;
+    };
+}
+
+// Updated User type based on user's provided interface and app needs
 export interface User {
-    id?: number;
+    id?: number; // Strapi User ID is numeric
     username: string;
     email: string;
     provider?: string;
@@ -96,13 +133,9 @@ export interface User {
     blocked?: boolean;
     createdAt?: Date | string;
     updatedAt?: Date | string;
-    role?: Role | null | number; // Using the new Role interface
-    tenent_id?: string; // Added to maintain compatibility with existing services
-    // Fields like full_name, phone, address are not in the provided User,
-    // they are usually part of a related profile or custom fields.
-    // If they come from /users/me, they should be added here.
-    // For now, assuming they are not standard fields on the User object from /users/me.
-    full_name?: string; // Keeping for compatibility if Strapi returns it on /users/me
-    phone?: string | number; // Keeping for compatibility
-    address?: string; // Keeping for compatibility
+    role?: Role | null | number; // Role can be object or ID
+    tenent_id?: string; // Custom field for multi-tenancy
+    full_name?: string | null; // Custom field for full name
+    phone?: string | number | null; // Custom field for phone
+    address?: string | null; // Custom field for address
 }
