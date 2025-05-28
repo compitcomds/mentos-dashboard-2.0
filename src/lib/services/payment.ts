@@ -28,7 +28,7 @@ export const getPayments = async (userTenentId: string): Promise<Payment[]> => {
     // 'populate[user]': '*',                    // Temporarily removed
     // 'sort[0]': 'Billing_From:desc',           // Temporarily removed
   };
-  const url = '/payments';
+  const url = '/payments?populate=*';
   console.log(`[getPayments] Fetching URL: ${url} with SIMPLIFIED params:`, params);
 
   try {

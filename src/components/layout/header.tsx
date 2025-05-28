@@ -131,7 +131,7 @@ export default function Header({ userName, onLogout, menuItems }: HeaderProps) {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/dashboard/billing">
+              <Link href="/dashboard/settings?tab=billing"> {/* Updated link */}
                 <CreditCard className="mr-2 h-4 w-4" />
                 <span>Billing</span>
               </Link>
