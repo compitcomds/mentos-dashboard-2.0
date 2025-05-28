@@ -4,7 +4,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, LogOut, UserCircle, LucideIcon, HelpCircle, LayoutList, FileJson } from 'lucide-react';
+import { Menu, LogOut, UserCircle, LucideIcon, Settings, CreditCard } from 'lucide-react'; // Added Settings, CreditCard
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
@@ -16,6 +16,14 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 
 interface MenuItem {
@@ -34,8 +42,7 @@ const environment = process.env.NEXT_PUBLIC_ENVIRONMENT || 'production';
 
 export default function Header({ userName, onLogout, menuItems }: HeaderProps) {
    const pathname = usePathname();
-   // menuItems are passed down from DashboardLayout, which already has the updated label and path
-   const mobileMenuItems = menuItems; 
+   const mobileMenuItems = menuItems;
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:px-6">
@@ -103,36 +110,41 @@ export default function Header({ userName, onLogout, menuItems }: HeaderProps) {
         <div className="text-xs text-muted-foreground hidden sm:block capitalize">
           Environment: {environment}
         </div>
-        <div className="flex items-center gap-2">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src="https://picsum.photos/40/40" alt={userName} data-ai-hint="profile user" />
-            <AvatarFallback><UserCircle className="h-5 w-5" /></AvatarFallback>
-          </Avatar>
-          <span className="text-sm font-medium hidden lg:inline-block">{userName}</span>
-        </div>
-        <Tooltip content="Logout">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={onLogout}
-            aria-label="Logout"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </Tooltip>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="flex items-center gap-2 px-2 py-1 h-auto focus-visible:ring-0 focus-visible:ring-offset-0">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src="https://picsum.photos/40/40" alt={userName} data-ai-hint="profile user" />
+                <AvatarFallback><UserCircle className="h-5 w-5" /></AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium hidden lg:inline-block">{userName}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/settings">
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/billing">
+                <CreditCard className="mr-2 h-4 w-4" />
+                <span>Billing</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Logout</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
       </div>
     </header>
   );
 }
-
-const Tooltip = ({ children, content }: { children: React.ReactNode; content: string }) => (
-    <TooltipProvider>
-        <RadixTooltip>
-            <TooltipTrigger asChild>{children}</TooltipTrigger>
-            <TooltipContent side="bottom" align="center">
-                <p>{content}</p>
-            </TooltipContent>
-        </RadixTooltip>
-    </TooltipProvider>
-);
