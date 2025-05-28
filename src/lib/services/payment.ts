@@ -20,16 +20,22 @@ export const getPayments = async (userTenentId: string): Promise<Payment[]> => {
     console.error('[Service getPayments]: userTenentId is missing.');
     throw new Error('User tenent_id is required to fetch payments.');
   }
+
+  // Temporarily remove complex params for debugging
   const params = {
-    'filters[tenent_id][$eq]': userTenentId,
-    'populate[Items]': '*', // Populate the Billing_items component
-    'populate[user]': '*',   // Populate the user relation if needed for display, though schema shows blog
-    'sort[0]': 'Billing_From:desc',
+    // 'filters[tenent_id][$eq]': userTenentId, // Temporarily removed
+    // 'populate[Items]': '*',                   // Temporarily removed
+    // 'populate[user]': '*',                    // Temporarily removed
+    // 'sort[0]': 'Billing_From:desc',           // Temporarily removed
   };
   const url = '/payments';
-  console.log(`[getPayments] Fetching URL: ${url} with params:`, params);
+  console.log(`[getPayments] Fetching URL: ${url} with SIMPLIFIED params:`, params);
+
   try {
     const headers = await getAuthHeader();
+    // Make sure to pass even empty params object if that's how axiosInstance is configured to send them.
+    // Or, if params is empty, you might be able to omit it entirely depending on axios defaults.
+    // For now, let's send it as is, which might be an empty params object or specific ones if you re-enable above.
     const response = await axiosInstance.get<FindMany<Payment>>(url, { params, headers });
 
     if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
@@ -44,18 +50,39 @@ export const getPayments = async (userTenentId: string): Promise<Payment[]> => {
     return response.data.data;
 
   } catch (error: unknown) {
-    let message = `Failed to fetch payments for tenent_id ${userTenentId}.`;
+    let detailedMessage = `Failed to fetch payments for tenent_id ${userTenentId}.`;
+    let loggableErrorData: any = error;
+
     if (error instanceof AxiosError) {
-      const status = error.response?.status;
-      const errorDataMessage = error.response?.data?.error?.message || error.response?.data?.message || error.message;
-      console.error(`[getPayments] Failed to fetch payments from ${url} (${status}) for tenent_id ${userTenentId}:`, error.response?.data);
-      message = `Failed to fetch payments (${status}) - ${errorDataMessage || 'Unknown API error'}`;
+        loggableErrorData = error.response?.data || error.message;
+        const status = error.response?.status;
+        const strapiError = error.response?.data?.error;
+
+        if (strapiError && typeof strapiError === 'object') {
+            let mainMsg = strapiError.message || "Unknown API error from Strapi.";
+            if (strapiError.name) {
+                mainMsg = `${strapiError.name}: ${mainMsg}`;
+            }
+            detailedMessage = `API Error (Status ${status || strapiError.status || 'unknown'}): ${mainMsg}`;
+            if (strapiError.details && Object.keys(strapiError.details).length > 0) {
+                try {
+                    detailedMessage += ` Details: ${JSON.stringify(strapiError.details)}`;
+                } catch (e) { /* ignore */ }
+            }
+        } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+            detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data.message}`;
+        } else if (typeof error.response?.data === 'string' && error.response.data.trim() !== '') {
+            detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data}`;
+        } else {
+            detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
+        }
+        if (status === 500) {
+            detailedMessage += " This is an Internal Server Error from the API. Please check Strapi server logs for more details.";
+        }
     } else if (error instanceof Error) {
-      console.error(`[getPayments] Generic Error for tenent_id ${userTenentId}:`, error.message);
-      message = error.message;
-    } else {
-      console.error(`[getPayments] Unknown Error for tenent_id ${userTenentId}:`, error);
+        detailedMessage = error.message;
     }
-    throw new Error(message);
+    console.error(`[getPayments] Failed for tenent_id ${userTenentId}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
+    throw new Error(detailedMessage);
   }
 };
