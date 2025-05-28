@@ -1,5 +1,6 @@
-import type { User } from './auth'; // Keep for now, though Payment.user points to Blog
-import type { Blog } from './blog';   // Import Blog type
+
+import type { User } from './auth'; // Import the User type
+import type { Blog } from './blog';   // This will no longer be used for Payment.user but kept if used elsewhere
 import type { BillingItem } from './common'; // Import BillingItem
 
 // Updated interface based on provided schema
@@ -11,10 +12,7 @@ export interface Payment {
   publishedAt?: Date | string | null; // draftAndPublish is true
   locale?: string | null;
 
-  // Strapi schema indicates 'user' relation targets 'api::blog.blog'
-  // If it's meant to be a standard User, the Strapi schema for Payment.user needs to change
-  // For now, typing according to the provided Strapi schema's target.
-  user?: Blog | null; 
+  user?: User | null; // Changed from Blog | null to User | null
 
   tenent_id: string; // Kept as mandatory for frontend filtering logic
   Items?: BillingItem[] | null; // Array of BillingItem components
