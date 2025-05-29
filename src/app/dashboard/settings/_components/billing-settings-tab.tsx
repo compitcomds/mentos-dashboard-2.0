@@ -251,7 +251,7 @@ export default function BillingSettingsTab() {
 
         {selectedPaymentForDetails && (
           <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-            <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
+            <DialogContent className="sm:max-w-[90%] max-h-[95vh] flex flex-col">
               <DialogHeader>
                 <DialogTitle className="text-center text-xl">TAX INVOICE</DialogTitle>
                 <DialogDescriptionComponent className="text-center">

@@ -57,7 +57,7 @@ export default function PaymentDueAlert({ payment, onDismiss, onPayNow }: Paymen
   }
 
   return (
-    <Alert variant="destructive" className="mb-6 rounded-md shadow-md">
+    <Alert variant="destructive" className="mb-6 rounded-md shadow-md flex">
       <AlertCircle className="h-5 w-5" />
       <div className="flex-grow ml-2">
         <AlertTitle className="font-semibold">{title}</AlertTitle>

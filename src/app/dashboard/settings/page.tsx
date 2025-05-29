@@ -37,15 +37,15 @@ export default function SettingsPage() {
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto sm:h-10">
           <TabsTrigger value="profile" className="gap-2 py-2 sm:py-0">
-            <User className="h-4 w-4" />
+            <User className="h-7 w-4" />
             Profile
           </TabsTrigger>
           <TabsTrigger value="billing" className="gap-2 py-2 sm:py-0">
-            <CreditCard className="h-4 w-4" />
+            <CreditCard className="h-7 w-4" />
             Billing
           </TabsTrigger>
           <TabsTrigger value="help" className="gap-2 py-2 sm:py-0">
-            <LifeBuoy className="h-4 w-4" />
+            <LifeBuoy className="h-7 w-4" />
             Help & Support
           </TabsTrigger>
         </TabsList>
