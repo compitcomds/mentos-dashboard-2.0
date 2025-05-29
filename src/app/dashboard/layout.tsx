@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'; // Ensure useSearchParams is imported
 import {
   LayoutDashboard,
   PenSquare,
@@ -14,7 +14,7 @@ import {
   HelpCircle,
   LayoutList,
   FileJson,
-  CreditCard, // Added for Billing in static menu
+  CreditCard,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { removeAccessToken, getAccessToken } from '@/lib/actions/auth';
@@ -24,7 +24,7 @@ import SidebarNav from '@/components/layout/sidebar';
 import { useCurrentUser } from '@/lib/queries/user';
 import { useGetMetaFormats } from '@/lib/queries/meta-format';
 import type { MetaFormat } from '@/types/meta-format';
-import type { MenuItem } from '@/components/layout/header'; // Assuming MenuItem is defined here or in a common types file
+import type { MenuItem } from '@/components/layout/header';
 import { useGetPayments } from '@/lib/queries/payment';
 import type { Payment } from '@/types/payment';
 import PaymentDueAlert from '@/components/layout/payment-due-alert';
@@ -43,9 +43,6 @@ const initialStaticMenuItems: MenuItem[] = [
   { href: '/dashboard/query-forms', label: 'Query Forms', icon: HelpCircle },
   { href: '/dashboard/developer-docs', label: 'Developer Docs', icon: BookText },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
-  // Billing is now primarily accessed via settings dropdown, but keeping it here for direct access too if desired.
-  // Or remove it if the dropdown is the only intended access point.
-  // For now, keeping it, will point to the new settings tab.
   { href: '/dashboard/settings?tab=billing', label: 'Billing', icon: CreditCard },
 ];
 
@@ -56,6 +53,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams(); // Initialize useSearchParams
   const { toast } = useToast();
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
 
@@ -75,12 +73,12 @@ export default function DashboardLayout({
       setIsCheckingAuth(true);
       try {
         const token = await getAccessToken();
-        if (!token && !['/login', '/register'].includes(pathname)) {
+        if (!token && pathname && !['/login', '/register'].includes(pathname)) {
           router.replace('/login');
         }
       } catch (error) {
         console.error("DashboardLayout: Error checking auth status:", error);
-        if (!['/login', '/register'].includes(pathname)) {
+        if (pathname && !['/login', '/register'].includes(pathname)) {
           router.replace('/login');
         }
       } finally {
@@ -91,24 +89,30 @@ export default function DashboardLayout({
   }, [router, pathname]);
 
   React.useEffect(() => {
-    if (metaFormats && !isLoadingMetaFormats && !isErrorMetaFormats) {
-      const dynamicItems = metaFormats
-        .filter(format => format.placing === 'sidebar' || format.placing === 'both')
-        .map(format => ({
-          href: `/dashboard/extra-content/render/${format.documentId}`,
-          label: format.name || 'Unnamed Form',
-          icon: FileJson,
-        }));
+    if (isLoadingMetaFormats || isErrorMetaFormats || !metaFormats) {
+      setMenuItems(initialStaticMenuItems); // Reset or keep static if error/loading
+      return;
+    }
 
+    const dynamicItems = metaFormats
+      .filter(format => format.placing === 'sidebar' || format.placing === 'both')
+      .map(format => ({
+        href: `/dashboard/extra-content/render/${format.documentId}`,
+        label: format.name || 'Unnamed Form',
+        icon: FileJson, // Or a more specific icon if available
+      }));
+
+    if (dynamicItems.length > 0) {
       const extraContentIndex = initialStaticMenuItems.findIndex(item => item.href === '/dashboard/extra-content');
       let newMenuItems = [...initialStaticMenuItems];
       if (extraContentIndex !== -1) {
         newMenuItems.splice(extraContentIndex + 1, 0, ...dynamicItems);
       } else {
+        // Fallback: append if "Extra Content Management" link isn't found (shouldn't happen)
         newMenuItems = [...newMenuItems, ...dynamicItems];
       }
       setMenuItems(newMenuItems);
-    } else if (!isLoadingMetaFormats) {
+    } else {
       setMenuItems(initialStaticMenuItems);
     }
   }, [metaFormats, isLoadingMetaFormats, isErrorMetaFormats]);
@@ -118,7 +122,7 @@ export default function DashboardLayout({
     if (isLoadingPayments || isErrorPayments || !payments) {
       setIsDashboardLocked(false);
       setPaymentToAlert(null);
-      setShowPaymentAlert(false); // Ensure alert is hidden if payments aren't loaded
+      setShowPaymentAlert(false);
       return;
     }
 
@@ -126,46 +130,41 @@ export default function DashboardLayout({
     let alertForPayment: Payment | null = null;
     const today = startOfDay(new Date());
     const fourteenDaysAgo = subDays(today, 14);
-    const fourteenDaysFromNow = addDays(today, 14); // Alert for payments due in the next 14 days
+    const fourteenDaysFromNow = addDays(today, 14);
 
     const unpaidPayments = payments.filter(p => p.Payment_Status === 'Unpaid');
 
-    // Check for lock condition first
     for (const payment of unpaidPayments) {
       if (payment.Last_date_of_payment) {
         const dueDate = startOfDay(parseISO(payment.Last_date_of_payment as string));
         if (isValid(dueDate) && isBefore(dueDate, fourteenDaysAgo)) {
           lock = true;
-          break; 
+          break;
         }
       }
     }
     setIsDashboardLocked(lock);
 
-    // If not locked, determine if an alert banner is needed
     if (!lock) {
       let mostRelevantPayment: Payment | null = null;
-
       for (const payment of unpaidPayments) {
         if (payment.Last_date_of_payment) {
           const dueDate = startOfDay(parseISO(payment.Last_date_of_payment as string));
           if (!isValid(dueDate)) continue;
 
           const isOverdue = isBefore(dueDate, today);
-          // Alert if overdue OR due within the next 14 days
           const isDueSoonOrOverdue = isOverdue || (isAfter(dueDate, subDays(today,1)) && isBefore(dueDate, fourteenDaysFromNow));
 
-
           if (isDueSoonOrOverdue) {
-            if (!mostRelevantPayment || isBefore(dueDate, startOfDay(parseISO(mostRelevantPayment.Last_date_of_payment as string)))) {
+            if (!mostRelevantPayment || (mostRelevantPayment.Last_date_of_payment && isBefore(dueDate, startOfDay(parseISO(mostRelevantPayment.Last_date_of_payment as string))))) {
               mostRelevantPayment = payment;
             }
           }
         }
       }
       setPaymentToAlert(mostRelevantPayment);
-      
-      if (mostRelevantPayment) {
+
+      if (mostRelevantPayment?.id) {
         const dismissedKey = `paymentAlertDismissed_${mostRelevantPayment.id}`;
         const isDismissed = sessionStorage.getItem(dismissedKey) === 'true';
         setShowPaymentAlert(!isDismissed);
@@ -173,11 +172,9 @@ export default function DashboardLayout({
         setShowPaymentAlert(false);
       }
     } else {
-      // If locked, don't show the regular payment alert banner
       setPaymentToAlert(null);
       setShowPaymentAlert(false);
     }
-
   }, [payments, isLoadingPayments, isErrorPayments]);
 
   const handleDismissPaymentAlert = () => {
@@ -188,14 +185,19 @@ export default function DashboardLayout({
   };
 
   const handlePayNowFromAlert = (paymentId?: string | number) => {
+    let targetPath = '/dashboard/settings?tab=billing';
     if (paymentId !== undefined) {
-      router.push(`/dashboard/settings?tab=billing&paymentId=${paymentId}`);
-    } else {
-      router.push(`/dashboard/settings?tab=billing`);
+      targetPath += `&paymentId=${paymentId}`;
     }
-    setShowPaymentAlert(false); // Dismiss alert on pay now attempt
+    router.push(targetPath);
+    setShowPaymentAlert(false);
   };
 
+  const handleLogout = async () => {
+    await removeAccessToken();
+    toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
+    router.push('/login');
+  };
 
   const isLoadingCombined = isCheckingAuth || isLoadingUser || isLoadingMetaFormats || isLoadingPayments;
 
@@ -220,9 +222,12 @@ export default function DashboardLayout({
     );
   }
   
-  const canAccessBilling = pathname === '/dashboard/settings' && router.asPath.includes('tab=billing');
-  const effectiveLock = isDashboardLocked && !canAccessBilling && pathname !== '/dashboard/settings';
-
+  // Correctly use searchParams to check for the 'tab' query parameter
+  const canAccessBilling = pathname === '/dashboard/settings' && searchParams.get('tab') === 'billing';
+  
+  // Add null check for pathname before calling string methods like 'startsWith' or '!='
+  const isPathnameValidForLockCheck = pathname !== null && pathname !== undefined;
+  const effectiveLock = isDashboardLocked && !canAccessBilling && isPathnameValidForLockCheck && pathname !== '/dashboard/settings';
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -253,3 +258,4 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
+    
