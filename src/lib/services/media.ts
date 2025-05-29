@@ -77,7 +77,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
             const sizeInBytes = typeof mediaFile.size === 'number' ? mediaFile.size * 1024 : null;
 
             return {
-                webMediaId: item.id,
+                webMediaId: item.id, // Numeric WebMedia.id
                 webMediaDocumentId: item.documentId || String(item.id),
                 name: item.name || mediaFile.name || 'Unnamed Media',
                 alt: item.alt || null,
@@ -85,8 +85,8 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
                 createdAt: item.createdAt!,
                 updatedAt: item.updatedAt!,
                 publishedAt: item.publishedAt || null,
-                fileId: mediaFile.id, // Numeric ID
-                fileDocumentId: mediaFile.documentId || null, // String document ID
+                fileId: mediaFile.id, // Numeric Media.id
+                fileDocumentId: mediaFile.documentId || String(mediaFile.id),
                 fileUrl: constructUrl(mediaFile.url),
                 fileName: mediaFile.name ?? 'N/A',
                 mime: mediaFile.mime ?? null,
@@ -131,6 +131,7 @@ export async function uploadFile(formData: FormData): Promise<UploadFile[]> {
         if (!Array.isArray(response.data) || response.data.length === 0) {
             throw new Error("Upload response was empty or not an array.");
         }
+        // Ensure IDs are numbers
         return response.data.map(file => ({ ...file, id: Number(file.id) }));
     } catch (error: unknown) {
         let detailedMessage = 'File upload failed.';
@@ -152,7 +153,7 @@ export async function uploadFile(formData: FormData): Promise<UploadFile[]> {
                         detailedMessage += ` Details: ${JSON.stringify(strapiError.details)}`;
                     } catch (e) { /* ignore */ }
                 }
-                if (mainMsg.toLowerCase().includes("unsupported image format") || (strapiError.details as any)?.errors?.some((e: any) => e.message?.toLowerCase().includes("unsupported image format"))) {
+                 if (mainMsg.toLowerCase().includes("unsupported image format") || (strapiError.details as any)?.errors?.some((e: any) => e.message?.toLowerCase().includes("unsupported image format"))) {
                     detailedMessage = `Strapi reported an unsupported image format. Please check server logs and ensure the file type is supported by the backend media library configuration. Original error: ${mainMsg}`;
                 } else if (mainMsg.toLowerCase().includes("fileNameToLong")) {
                     detailedMessage = `The filename is too long. Please shorten it and try again. Original error: ${mainMsg}`;
@@ -167,7 +168,7 @@ export async function uploadFile(formData: FormData): Promise<UploadFile[]> {
             } else {
                 detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
             }
-             if (status === 500) {
+            if (status === 500) {
                 detailedMessage = `Internal Server Error. This is an Internal Server Error from the API. Please check Strapi server logs for more details on why the upload was rejected (e.g., unsupported format, processing error). Original error: ${error.message}`;
             }
         } else if (error instanceof Error) {
@@ -198,18 +199,37 @@ export async function createWebMedia(payload: CreateWebMediaPayload): Promise<We
         console.log(`[Service createWebMedia]: Web media entry created successfully for tenent_id '${payload.tenent_id}':`, createdWebMedia);
         return createdWebMedia;
     } catch (error: unknown) {
-        let message = `Failed to create web media entry for tenent_id '${payload.tenent_id}'.`;
+        let detailedMessage = `Failed to create web media entry for tenent_id '${payload.tenent_id}'.`;
+        let loggableErrorData: any = error;
+
         if (error instanceof AxiosError) {
-            console.error('[Service createWebMedia] Axios Error:', error.response?.status, JSON.stringify(error.response?.data, null, 2) || error.message);
+            loggableErrorData = error.response?.data || error.message;
+            const status = error.response?.status;
             const strapiError = error.response?.data?.error;
-            message = strapiError?.message || error.message || message;
+
+            if (strapiError && typeof strapiError === 'object') {
+                let mainMsg = strapiError.message || "Unknown API error from Strapi.";
+                if (strapiError.name) {
+                    mainMsg = `${strapiError.name}: ${mainMsg}`;
+                }
+                detailedMessage = `API Error (Status ${status || strapiError.status || 'unknown'}): ${mainMsg}`;
+                if (strapiError.details && Object.keys(strapiError.details).length > 0) {
+                    try {
+                        detailedMessage += ` Details: ${JSON.stringify(strapiError.details)}`;
+                    } catch (e) { /* ignore */ }
+                }
+            } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+                detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data.message}`;
+            } else if (typeof error.response?.data === 'string' && error.response.data.trim() !== '') {
+                detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.response.data}`;
+            } else {
+                detailedMessage = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
+            }
         } else if (error instanceof Error) {
-            console.error('[Service createWebMedia] Generic Error:', error.message, error.stack);
-            message = error.message;
-        } else {
-            console.error('[Service createWebMedia] Unknown Error:', error);
+            detailedMessage = error.message;
         }
-        throw new Error(message);
+        console.error(`[createWebMedia] Failed for tenent_id ${payload.tenent_id}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
+        throw new Error(detailedMessage);
     }
 }
 
@@ -260,7 +280,7 @@ export async function deleteUploadFile(fileId: number): Promise<Media | void> {
             return { ...response.data, id: Number(response.data.id) };
         } else if (response.status === 204) {
              console.log(`[Service deleteUploadFile]: File ${fileId} deleted successfully (204 No Content).`);
-             return;
+             return; // Explicitly return undefined for void
         } else {
             const errorMsg = `Unexpected success response (status ${response.status}) after deleting file ${fileId}. Data: ${JSON.stringify(response.data)}`;
             console.error(`[Service deleteUploadFile]: ${errorMsg}`);
@@ -299,37 +319,33 @@ export async function deleteWebMedia(webMediaId: number): Promise<WebMedia | voi
             return { ...response.data.data, id: Number(response.data.data.id) };
         } else if (response.status === 204) {
             console.log(`[Service deleteWebMedia]: Web media entry ${webMediaId} deleted successfully (204 No Content).`);
-            return;
+            return; // Explicitly return undefined for void
         } else {
             const errorMsg = `Unexpected success response (status ${response.status}) after deleting web media ${webMediaId}. Data: ${JSON.stringify(response.data)}`;
             console.error(`[Service deleteWebMedia]: ${errorMsg}`);
             throw new Error(errorMsg);
         }
     } catch (error: unknown) {
-        let message = `Failed to delete web media entry ${webMediaId}`;
-        if (error instanceof AxiosError) {
-            const errorResponseData = error.response?.data;
-            const errorStatus = error.response?.status;
-            console.error(`[Service deleteWebMedia] Axios Error deleting ${webMediaId}: Status: ${errorStatus}, Data:`, errorResponseData || error.message);
+        let detailedMessage = `Failed to delete web media entry ${webMediaId}`;
+        let loggableErrorData: any = error;
 
-            if (errorStatus === 403) {
-                message = `Forbidden: You do not have permission to delete web media entry ${webMediaId}.`;
-            } else if (errorStatus === 404) {
-                message = `Web media entry ${webMediaId} not found.`;
-            } else {
-                const strapiError = (errorResponseData as any)?.error;
-                message = strapiError?.message || (errorResponseData as any)?.message || error.message || message;
-                 if (errorStatus === 500) {
-                    message = `Internal Server Error while deleting web media entry ${webMediaId}. Check Strapi logs. Details: ${strapiError?.details ? JSON.stringify(strapiError.details) : message}`;
-                }
+        if (error instanceof AxiosError) {
+            loggableErrorData = error.response?.data || error.message;
+            const status = error.response?.status;
+            const strapiError = (errorResponseData as any)?.error;
+            detailedMessage = strapiError?.message || (errorResponseData as any)?.message || error.message || detailedMessage;
+            if (status === 403) {
+                detailedMessage = `Forbidden: You do not have permission to delete web media entry ${webMediaId}.`;
+            } else if (status === 404) {
+                detailedMessage = `Web media entry ${webMediaId} not found.`;
+            } else if (status === 500) {
+                 detailedMessage = `Internal Server Error while deleting web media entry ${webMediaId}. Check Strapi logs. Details: ${strapiError?.details ? JSON.stringify(strapiError.details) : detailedMessage}`;
             }
         } else if (error instanceof Error) {
-            console.error(`[Service deleteWebMedia] Generic Error deleting ${webMediaId}:`, error.message);
-            message = error.message;
-        } else {
-            console.error(`[Service deleteWebMedia] Unknown Error deleting ${webMediaId}:`, error);
+            detailedMessage = error.message;
         }
-        throw new Error(message);
+        console.error(`[deleteWebMedia] Failed for WebMedia ID ${webMediaId}. Error: ${detailedMessage}`, "Full error object/data logged:", loggableErrorData);
+        throw new Error(detailedMessage);
     }
 }
 
@@ -344,9 +360,11 @@ export async function deleteMediaAndFile(webMediaId: number, fileId: number | nu
         console.log(`[Service deleteMediaAndFile]: Web media entry ${webMediaId} deleted successfully.`);
     } catch (error) {
         console.error(`[Service deleteMediaAndFile]: Error deleting web media entry ${webMediaId}:`, error);
+        // Propagate the error specific to WebMedia deletion
         throw new Error(`Failed to delete web media entry ${webMediaId}. Associated file (ID: ${fileId}) was not attempted to be deleted. Original error: ${(error as Error).message}`);
     }
 
+    // Only attempt to delete file if WebMedia entry deletion was successful AND a fileId is provided
     if (webMediaDeleted && fileId !== null) {
         console.log(`[Service deleteMediaAndFile]: WebMedia entry ${webMediaId} deleted. Proceeding to delete file with ID: ${fileId}`);
         try {
@@ -354,9 +372,9 @@ export async function deleteMediaAndFile(webMediaId: number, fileId: number | nu
             fileDeleted = true;
             console.log(`[Service deleteMediaAndFile]: Associated file ${fileId} deleted successfully.`);
         } catch (error) {
+            // Log this error but do not re-throw if WebMedia was deleted, as the primary entity is gone.
+            // The returned object will indicate fileDeleted: false.
             console.error(`[Service deleteMediaAndFile]: Error deleting associated file ${fileId} (WebMedia entry ${webMediaId} was already deleted):`, error);
-            // Do not re-throw here if the webMedia entry was successfully deleted,
-            // but the file deletion failed. The returned object will indicate fileDeleted: false.
         }
     } else if (webMediaDeleted && fileId === null) {
         console.log(`[Service deleteMediaAndFile]: Web media entry ${webMediaId} deleted, but no associated file ID was provided to delete.`);
@@ -364,6 +382,7 @@ export async function deleteMediaAndFile(webMediaId: number, fileId: number | nu
 
     return { webMediaDeleted, fileDeleted };
 }
+
 
 export async function getMediaFileDetailsById(id: number): Promise<Media | null> {
     if (!id) {
@@ -375,11 +394,12 @@ export async function getMediaFileDetailsById(id: number): Promise<Media | null>
     try {
         const headers = await getAuthHeader();
         const response = await axiosInstance.get<Media>(url, { headers }); // Strapi /upload/files/:id directly returns the Media object
-        console.log(response)
+        console.log("[getMediaFileDetailsById] Raw Response:", response)
         if (!response.data || typeof response.data !== 'object' || response.data === null) {
-            console.error(`[getMediaFileDetailsById] Unexpected API response structure for media ${id}. Expected 'data' object, received:`, response.data);
+            console.error(`[getMediaFileDetailsById] Unexpected API response structure for media ${id}. Expected an object, received:`, response.data);
             return null;
         }
+        // Ensure ID is number
         const mediaData = { ...response.data, id: Number(response.data.id) };
         console.log(`[getMediaFileDetailsById] Fetched Media ${id} Data:`, mediaData);
         return mediaData;
@@ -402,7 +422,9 @@ export async function getMediaFileDetailsById(id: number): Promise<Media | null>
         } else {
             console.error(`[getMediaFileDetailsById] Unknown Error for media ${id}:`, error);
         }
-        console.error(message);
-        return null;
+        console.error(message); // Log the error before returning null or throwing
+        return null; // Or re-throw if you want the query hook to show an error state: throw new Error(message);
     }
 }
+
+    

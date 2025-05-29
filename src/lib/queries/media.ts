@@ -9,7 +9,7 @@ import {
     createWebMedia,
     updateWebMedia,
     deleteMediaAndFile,
-    getMediaFileDetailsById, // Changed from getMediaFileDetailsByDocumentId
+    getMediaFileDetailsById,
 } from '@/lib/services/media';
 import type {
     CombinedMediaData,
@@ -23,7 +23,7 @@ import { useCurrentUser } from './user';
 
 
 const MEDIA_QUERY_KEY = (userKey?: string) => ['mediaFiles', userKey || 'all'];
-const MEDIA_DETAIL_QUERY_KEY = (id: number) => ['mediaFileDetail', id]; // Changed to use numeric id
+const MEDIA_DETAIL_QUERY_KEY = (id: number) => ['mediaFileDetail', id];
 
 export function useFetchMedia(userKey?: string) {
     const { isLoading: isLoadingUser } = useCurrentUser();
@@ -54,40 +54,52 @@ export function useUploadMediaMutation() {
              if (!userKey) {
                 throw new Error('User key is not available. Cannot upload media.');
             }
+            console.log(`[useUploadMediaMutation] User key for upload: ${userKey}`);
             const formData = new FormData();
             formData.append('files', file);
 
+            console.log(`[useUploadMediaMutation] Calling uploadFile service...`);
             const uploadResponseArray = await uploadFile(formData);
+            console.log(`[useUploadMediaMutation] Response from uploadFile service:`, uploadResponseArray);
+
 
             if (!uploadResponseArray || uploadResponseArray.length === 0 || typeof uploadResponseArray[0].id !== 'number') {
+                console.error("[useUploadMediaMutation] File upload response did not contain expected data (numeric ID) or failed. Response:", uploadResponseArray);
                 throw new Error('File upload response did not contain expected data (numeric ID) or failed.');
             }
 
             const uploadedFile = uploadResponseArray[0];
+            console.log(`[useUploadMediaMutation] Uploaded file details from service:`, uploadedFile);
+
 
              const createPayload: CreateWebMediaPayload = {
                 name: name || uploadedFile.name,
                 alt: alt || name || uploadedFile.name || null,
-                tenent_id: userKey,
+                tenent_id: userKey, // Ensure tenent_id is included
                 media: uploadedFile.id, // This is the numeric Media ID
             };
+            console.log(`[useUploadMediaMutation] Payload for createWebMedia service:`, createPayload);
+
 
             const webMediaResponse = await createWebMedia(createPayload);
+            console.log(`[useUploadMediaMutation] Response from createWebMedia service:`, webMediaResponse);
             return webMediaResponse;
         },
         onSuccess: (data) => {
+            console.log(`[useUploadMediaMutation] onSuccess: Invalidating media queries for userKey: ${userKey}`);
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
+             // Toast for success is handled by the upload button component itself after this mutation succeeds
         },
         onError: (error: unknown) => {
             let message = 'Could not upload the media file.';
             if (error instanceof AxiosError) {
                  message = error.response?.data?.error?.message || error.message || message;
-                 console.error("Upload/Create WebMedia Axios Error:", error.response?.data || error);
+                 console.error("[useUploadMediaMutation] Upload/Create WebMedia Axios Error:", error.response?.data || error);
             } else if (error instanceof Error) {
                  message = error.message;
-                 console.error("Upload/Create WebMedia Error:", error);
+                 console.error("[useUploadMediaMutation] Upload/Create WebMedia Error:", error);
             } else {
-                 console.error("Unknown Upload/Create WebMedia Error:", error);
+                 console.error("[useUploadMediaMutation] Unknown Upload/Create WebMedia Error:", error);
             }
             toast({
                 variant: 'destructive',
@@ -175,16 +187,16 @@ export function useDeleteMediaMutation() {
     });
 }
 
-export function useGetMediaFileDetailsById(id: number | null) { // Changed parameter to number
+export function useGetMediaFileDetailsById(id: number | null) {
     const { isLoading: isLoadingUser } = useCurrentUser();
     return useQuery<Media | null, Error>({
-        queryKey: MEDIA_DETAIL_QUERY_KEY(id ?? 0), // Ensure queryKey is always valid, using 0 for null case if needed
+        queryKey: MEDIA_DETAIL_QUERY_KEY(id ?? 0),
         queryFn: () => {
             if (id === null || id === undefined) {
                 console.warn("useGetMediaFileDetailsById: id is null or undefined. Returning null.");
                 return Promise.resolve(null);
             }
-            return getMediaFileDetailsById(id); // Call renamed service
+            return getMediaFileDetailsById(id);
         },
         enabled: id !== null && id !== undefined && !isLoadingUser,
         staleTime: 1000 * 60 * 10,
@@ -197,3 +209,5 @@ export function useGetMediaFileDetailsById(id: number | null) { // Changed param
         },
     });
 }
+
+    
