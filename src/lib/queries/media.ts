@@ -71,7 +71,10 @@ export function useUploadMediaMutation() {
             const uploadedFile = uploadResponseArray[0];
             console.log(`[useUploadMediaMutation] Uploaded file details from service:`, uploadedFile);
 
-
+            if(!uploadedFile.id){
+                console.log("[useUploadMediaMutation] Uploaded file does not have a valid ID. Cannot proceed with creating WebMedia.");
+                throw new Error('Uploaded file does not have a valid ID. Cannot proceed with creating WebMedia.');
+            }
              const createPayload: CreateWebMediaPayload = {
                 name: name || uploadedFile.name,
                 alt: alt || name || uploadedFile.name || null,

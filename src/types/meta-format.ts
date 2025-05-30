@@ -35,6 +35,7 @@ export interface DynamicComponentNumberField extends DynamicComponentBase {
 
 // --- Media Field Component ---
 export interface DynamicComponentMediaField extends DynamicComponentBase {
+  is_array: boolean;
   __component: "dynamic-component.media-field";
   label?: string | null;
   placeholder?: string | null;

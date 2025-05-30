@@ -43,7 +43,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from './_components/media-renderer';
+import MediaRenderer from '@/app/dashboard/extra-content/data/_components/media-renderer';
 
 const getFieldName = (component: FormFormatComponent): string => {
   if (component.label && component.label.trim() !== '') {
@@ -247,7 +247,7 @@ export default function MetaDataListingPage() {
                              displayValue = `${displayValue.substring(0, 57)}...`;
                           }
                           if (component.__component !== 'dynamic-component.media-field') {
-                              otherFields.push({ label: component.label, value: displayValue });
+                              otherFields.push({ label: component.label ?? null, value: displayValue });
                           }
                       }
                   });
