@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2, Download, CreditCard, Eye, FileText, Info, PackagePlus, CircleDollarSign, HardDrive, Trash2 } from 'lucide-react'; // Added Trash2
+import { AlertCircle, Loader2, Download, CreditCard, Eye, FileText, Info, PackagePlus, CircleDollarSign, HardDrive, Trash2, EyeOff } from 'lucide-react'; // Added EyeOff
 import { format, parseISO, isValid } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription as DialogDescriptionComponent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -25,11 +25,11 @@ import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useCurrentUser } from '@/lib/queries/user';
 import { useGetUserResource, useUpdateUserResource } from '@/lib/queries/user-resource';
-import { useGetCardDetails, useCreateCardDetail, useDeleteCardDetail } from '@/lib/queries/card-detail'; // Added card detail hooks
-import type { CardDetail, CreateCardDetailPayload } from '@/types/card-detail'; // Added card detail types
+import { useGetCardDetails, useCreateCardDetail, useDeleteCardDetail } from '@/lib/queries/card-detail';
+import type { CardDetail, CreateCardDetailPayload } from '@/types/card-detail';
 import { toast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
-import { Label } from '@/components/ui/label'; // Re-added Label
+import { Label } from '@/components/ui/label';
 
 const formatBytesForDisplayLocal = (bytes?: number | null, decimals = 2): string => {
     if (bytes === null || bytes === undefined || bytes <= 0) return '0 Bytes';
@@ -76,8 +76,11 @@ const calculateOverallTotal = (items: BillingItem[] | null | undefined): number 
 
 const cardDetailFormSchema = z.object({
   card_holder_name: z.string().min(1, "Cardholder name is required."),
-  card_number: z.string().min(13, "Card number is too short.").max(19, "Card number is too long.").regex(/^\d+$/, "Card number must be digits only."),
-  Expiry_Date: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "Expiry date must be MM/YY format."),
+  card_number: z.string()
+    .min(16, "Card number must be at least 16 digits.") // Raw digits
+    .max(23, "Card number is too long.") // 19 digits + 3-4 spaces
+    .regex(/^(\d{4} ?){3,4}\d{4}$/, "Invalid card number format."), // Validates with or without spaces
+  Expiry_Date: z.string().regex(/^(0[1-9]|1[0-2])\/?([0-9]{2})$/, "Expiry date must be MM/YY format."),
   cvv: z.string().min(3, "CVV must be 3 or 4 digits.").max(4, "CVV must be 3 or 4 digits.").regex(/^\d+$/, "CVV must be digits only."),
 });
 type CardDetailFormValues = z.infer<typeof cardDetailFormSchema>;
@@ -96,15 +99,17 @@ export default function BillingSettingsTab() {
   const updateUserResourceMutation = useUpdateUserResource();
   const { data: cardDetails, isLoading: isLoadingCardDetails, refetch: refetchCardDetails } = useGetCardDetails();
   const createCardDetailMutation = useCreateCardDetail();
-  const deleteCardDetailMutation = useDeleteCardDetail(); // Placeholder
+  const deleteCardDetailMutation = useDeleteCardDetail();
 
   const [selectedPaymentForDetails, setSelectedPaymentForDetails] = React.useState<Payment | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [selectedStorageUpgradeGB, setSelectedStorageUpgradeGB] = React.useState<number | null>(null);
+  const [showCvv, setShowCvv] = React.useState(false);
 
   const cardForm = useForm<CardDetailFormValues>({
     resolver: zodResolver(cardDetailFormSchema),
     defaultValues: { card_holder_name: "", card_number: "", Expiry_Date: "", cvv: "" },
+    mode: 'onChange', // Validate on change for better UX with formatting
   });
 
   const handlePayNow = (paymentId?: string | number) => {
@@ -114,29 +119,11 @@ export default function BillingSettingsTab() {
 
   const handleDownloadInvoice = (paymentId?: string | number) => {
     if (paymentId === undefined) { alert("Payment ID is undefined."); return; }
-    const paymentToPrint = payments?.find(p => (p.id && p.id.toString() === String(paymentId)) || (p.documentId && p.documentId === String(paymentId)));
+    const paymentToPrint = payments?.find(p => (p.id && String(p.id) === String(paymentId)) || (p.documentId && p.documentId === String(paymentId)));
     if (!paymentToPrint) {
       toast({ variant: 'destructive', title: 'Error', description: 'Invoice data not found.' });
       return;
     }
-    // Logic to render InvoiceTemplate to hidden iframe and print
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-    const iframeDoc = iframe.contentWindow?.document;
-    if (iframeDoc) {
-      // Dynamically render component to string (simplified - real-world needs ReactDOMServer or a dedicated solution)
-      // This part is complex for client-side only React, usually print is handled differently or server-side.
-      // For a pure client-side quick hack, you'd typically render to a new window or a specific div and print that.
-      // The existing logic with selectedPaymentForPrint in state and rendering the component to a new window/iframe is okay for a prototype.
-      // This part remains as a placeholder.
-      iframeDoc.open();
-      iframeDoc.write('<html><head><title>Invoice</title></head><body><div>Invoice Content Here (Render InvoiceTemplate)</div></body></html>');
-      iframeDoc.close();
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    }
-    // document.body.removeChild(iframe); // Clean up iframe
     console.log(`Download Invoice triggered for ${paymentId}. Actual print to PDF logic needed.`);
     toast({ title: "Download Started (Simulated)", description: "Your invoice download should begin shortly." });
   };
@@ -147,10 +134,14 @@ export default function BillingSettingsTab() {
   };
 
   const onSaveCardSubmit = (data: CardDetailFormValues) => {
-    createCardDetailMutation.mutate(data, {
+    const payload = {
+        ...data,
+        card_number: data.card_number.replace(/\s/g, ''), // Remove spaces before sending
+        // Expiry_Date is already in MM/YY string format
+    };
+    createCardDetailMutation.mutate(payload, {
       onSuccess: () => {
         cardForm.reset();
-        // refetchCardDetails(); // Already handled by queryClient.invalidateQueries in the hook
       }
     });
   };
@@ -160,9 +151,7 @@ export default function BillingSettingsTab() {
           toast({ variant: "destructive", title: "Error", description: "Card ID missing." });
           return;
       }
-      // For now, using alert as deleteCardDetailService is a placeholder
-      alert(`Placeholder: Delete card with ID: ${documentId}`);
-      // deleteCardDetailMutation.mutate({ documentId });
+      deleteCardDetailMutation.mutate({ documentId });
   };
 
   const handlePurchaseStorage = () => {
@@ -183,14 +172,31 @@ export default function BillingSettingsTab() {
         onSuccess: () => {
           toast({ title: "Storage Upgraded", description: `Your storage has been increased to ${formatBytesForDisplayLocal(newTotalStorageKB * 1024)}.` });
           setSelectedStorageUpgradeGB(null);
-          // refetchUserResource(); // Handled by query invalidation in hook
         },
       }
     );
   };
 
+  const formatCardNumber = (value: string) => {
+    const cleaned = value.replace(/\D/g, '');
+    const parts = [];
+    for (let i = 0; i < cleaned.length; i += 4) {
+      parts.push(cleaned.substring(i, i + 4));
+    }
+    return parts.join(' ').trim();
+  };
+
+  const formatExpiryDate = (value: string) => {
+    const cleaned = value.replace(/\D/g, '');
+    if (cleaned.length >= 2) {
+      return `${cleaned.substring(0, 2)}/${cleaned.substring(2, 4)}`;
+    }
+    return cleaned;
+  };
+
+
   const isLoading = isLoadingPayments || isLoadingUserResource || isLoadingCardDetails;
-  const isError = isPaymentsError; // Assuming payments error is primary for now
+  const isError = isPaymentsError;
   const error = paymentsError;
 
   const currentTotalStorageKB = userResource?.storage ?? 0;
@@ -395,17 +401,17 @@ export default function BillingSettingsTab() {
                             </div>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                     <Button 
-                                        variant="ghost" 
-                                        size="icon" 
+                                     <Button
+                                        variant="ghost"
+                                        size="icon"
                                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                         onClick={() => handleDeleteCard(card.documentId)}
-                                        disabled={deleteCardDetailMutation.isPending} // Placeholder
+                                        disabled={deleteCardDetailMutation.isPending && deleteCardDetailMutation.variables?.documentId === card.documentId}
                                     >
-                                        <Trash2 className="h-4 w-4" />
+                                        {deleteCardDetailMutation.isPending && deleteCardDetailMutation.variables?.documentId === card.documentId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Delete Card (Placeholder)</TooltipContent>
+                                <TooltipContent>Delete Card</TooltipContent>
                             </Tooltip>
                         </Card>
                     ))}
@@ -425,14 +431,68 @@ export default function BillingSettingsTab() {
                   <FormItem><FormLabel>Cardholder Name</FormLabel><FormControl><Input placeholder="John Doe" {...field} disabled={createCardDetailMutation.isPending} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={cardForm.control} name="card_number" render={({ field }) => (
-                  <FormItem><FormLabel>Card Number</FormLabel><FormControl><Input placeholder="•••• •••• •••• ••••" {...field} disabled={createCardDetailMutation.isPending} /></FormControl><FormMessage /></FormItem>
+                  <FormItem>
+                    <FormLabel>Card Number</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="•••• •••• •••• ••••"
+                        {...field}
+                        onChange={(e) => {
+                            const formatted = formatCardNumber(e.target.value);
+                            field.onChange(formatted); // Update RHF with formatted value
+                        }}
+                        maxLength={19} // 16 digits + 3 spaces
+                        disabled={createCardDetailMutation.isPending}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )} />
                 <div className="grid grid-cols-2 gap-4">
                   <FormField control={cardForm.control} name="Expiry_Date" render={({ field }) => (
-                    <FormItem><FormLabel>Expiry Date (MM/YY)</FormLabel><FormControl><Input placeholder="MM/YY" {...field} disabled={createCardDetailMutation.isPending} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel>Expiry Date (MM/YY)</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="MM/YY"
+                          {...field}
+                          onChange={(e) => {
+                            const formatted = formatExpiryDate(e.target.value);
+                            field.onChange(formatted);
+                          }}
+                          maxLength={5} // MM/YY
+                          disabled={createCardDetailMutation.isPending}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )} />
                   <FormField control={cardForm.control} name="cvv" render={({ field }) => (
-                    <FormItem><FormLabel>CVV</FormLabel><FormControl><Input placeholder="•••" {...field} type="password" disabled={createCardDetailMutation.isPending} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel>CVV</FormLabel>
+                      <div className="relative">
+                        <FormControl>
+                          <Input
+                            placeholder="•••"
+                            {...field}
+                            type={showCvv ? "text" : "password"}
+                            maxLength={4}
+                            disabled={createCardDetailMutation.isPending}
+                          />
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowCvv(!showCvv)}
+                          aria-label={showCvv ? "Hide CVV" : "Show CVV"}
+                        >
+                          {showCvv ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
                   )} />
                 </div>
                 <Button type="submit" disabled={createCardDetailMutation.isPending}>
@@ -570,3 +630,5 @@ export default function BillingSettingsTab() {
     </TooltipProvider>
   );
 }
+
+    
