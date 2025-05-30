@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2, Download, CreditCard, Eye, FileText, Info, PackagePlus, CircleDollarSign } from 'lucide-react';
+import { AlertCircle, Loader2, Download, CreditCard, Eye, FileText, Info, PackagePlus, CircleDollarSign, HardDrive } from 'lucide-react'; // Added HardDrive
 import { format, parseISO, isValid } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription as DialogDescriptionComponent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -22,10 +22,12 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Added RadioGroup
-import { useCurrentUser } from '@/lib/queries/user'; // Added
-import { useGetUserResource, useUpdateUserResource } from '@/lib/queries/user-resource'; // Added
-import { toast } from '@/hooks/use-toast'; // Added
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useCurrentUser } from '@/lib/queries/user';
+import { useGetUserResource, useUpdateUserResource } from '@/lib/queries/user-resource';
+import { toast } from '@/hooks/use-toast';
+import { Progress } from '@/components/ui/progress'; // Added Progress
+import { Label } from '@/components/ui/label'; // Added Label
 
 const formatDate = (dateString?: string | Date | null, dateFormat: string = 'PPP'): string => {
   if (!dateString) return 'N/A';
@@ -146,7 +148,7 @@ export default function BillingSettingsTab() {
         { documentId: userResource.documentId, payload: { storage: newTotalStorageMB } },
         {
             onSuccess: () => {
-                toast({ title: "Storage Upgraded", description: `Your storage has been increased to ${newTotalStorageMB}MB.` });
+                toast({ title: "Storage Upgraded", description: `Your storage has been increased to ${formatBytesForDisplay(newTotalStorageMB * 1024 * 1024)}.` });
                 setSelectedStorageUpgradeGB(null); // Reset selection
                 refetchUserResource(); // Refetch to update displayed storage
             },
@@ -159,12 +161,12 @@ export default function BillingSettingsTab() {
   const isError = isPaymentsError; // Could also check for userResource error
   const error = paymentsError;
 
-  const currentTotalStorageMB = userResource?.storage ?? 500;
+  const currentTotalStorageMB = userResource?.storage ?? 0; // Use 0 if not set, though API default is 500
   const currentUsedStorageMB = userResource?.used_storage ?? 0;
   const storageUsagePercent = currentTotalStorageMB > 0 ? (currentUsedStorageMB / currentTotalStorageMB) * 100 : 0;
 
 
-  if (isLoading && !payments && !userResource) { // Adjust loading state condition
+  if (isLoading && !payments && !userResource) {
     return (
       <div className="space-y-6">
         <Card><CardHeader><Skeleton className="h-7 w-1/3" /></CardHeader><CardContent><Skeleton className="h-20 w-full" /></CardContent></Card>
@@ -323,7 +325,7 @@ export default function BillingSettingsTab() {
                           <TableCell className="text-right">
                             <div className="flex justify-end space-x-2">
                               <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(payment)}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>View Details</TooltipContent></Tooltip>
-                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleDownloadInvoice(payment.documentId || payment.id)} disabled><Download className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Download Invoice</TooltipContent></Tooltip>
+                              <Tooltip><TooltipTrigger asChild><Button disabled variant="outline" size="icon" className="h-8 w-8" onClick={() => handleDownloadInvoice(payment.documentId || payment.id)}><Download className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Download Invoice</TooltipContent></Tooltip>
                               {payment.Payment_Status === 'Unpaid' && (
                                 <Tooltip><TooltipTrigger asChild><Button size="icon" className="h-8 w-8 bg-green-600 hover:bg-green-700 text-white" onClick={() => handlePayNow(payment.documentId || payment.id)}><CreditCard className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Pay Now</TooltipContent></Tooltip>
                               )}
@@ -492,7 +494,7 @@ export default function BillingSettingsTab() {
                 </div>
               </ScrollArea>
               <DialogFooter className="border-t pt-4">
-                <Button onClick={() => alert("Print action triggered for invoice: " + (selectedPaymentForDetails?.documentId || selectedPaymentForDetails?.id))}>Print Invoice</Button>
+                <Button disabled onClick={() => alert("Print action triggered for invoice: " + (selectedPaymentForDetails?.documentId || selectedPaymentForDetails?.id))}>Print Invoice</Button>
                 <DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose>
               </DialogFooter>
             </DialogContent>
@@ -502,3 +504,5 @@ export default function BillingSettingsTab() {
     </TooltipProvider>
   );
 }
+
+    
