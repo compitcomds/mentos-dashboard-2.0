@@ -3,41 +3,54 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import MediaTable from './_components/media-table';
 import UploadButton from './_components/upload-button';
 import { useFetchMedia } from '@/lib/queries/media';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, LayoutGrid, List } from "lucide-react";
+import { AlertCircle, Loader2, LayoutGrid, List, HardDrive } from "lucide-react"; // Added HardDrive
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrentUser } from '@/lib/queries/user';
-import MediaCardGrid from './_components/media-card-grid'; // Import new component
+import MediaCardGrid from './_components/media-card-grid';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Progress } from '@/components/ui/progress'; // Added Progress
+import { useGetUserResource } from '@/lib/queries/user-resource'; // Added UserResource hook
 
 type ViewMode = 'table' | 'card';
+
+const formatBytesForDisplay = (bytes?: number | null, decimals = 2): string => {
+    if (bytes === null || bytes === undefined || bytes <= 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizeValue = parseFloat((bytes / Math.pow(k, i)).toFixed(dm));
+    return sizeValue + ' ' + (sizes[i] || 'Bytes');
+};
+
 
 export default function WebMediaPage() {
     const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser();
     const userKey = currentUser?.tenent_id;
     const { data: mediaData, isLoading: isLoadingMedia, isError: isMediaError, error: mediaError, refetch, isFetching } = useFetchMedia(userKey);
+    const { data: userResource, isLoading: isLoadingUserResource } = useGetUserResource(); // Fetch user resource
+
     const [viewMode, setViewMode] = React.useState<ViewMode>('table');
 
     const handleUploadSuccess = () => {
-        refetch();
+        refetch(); // Refetch media list
+        // Potentially refetch userResource if uploads affect used_storage, but backend should handle used_storage updates.
+        // For now, let's assume used_storage is primarily for display and backend updates it.
+        // If needed: queryClient.invalidateQueries(USER_RESOURCE_QUERY_KEY(userKey))
     };
 
-    React.useEffect(() => {
-        if (isMediaError) {
-            console.error("Error fetching media data in WebMediaPage:", mediaError);
-        }
-        if (isUserError) {
-            console.error("Error fetching current user in WebMediaPage");
-        }
-    }, [isMediaError, mediaError, isUserError]);
-
-    const isLoading = isLoadingUser || isLoadingMedia;
-    const isError = isUserError || isMediaError;
+    const isLoading = isLoadingUser || isLoadingMedia || isLoadingUserResource;
+    const isError = isUserError || isMediaError; // Note: isErrorUserResource could be added if its failure is critical
     const error = isUserError ? new Error("Failed to load user data.") : mediaError;
+
+    const totalStorageMB = userResource?.storage ?? 500; // Default to 500MB if not set
+    const usedStorageMB = userResource?.used_storage ?? 0;
+    const storageProgress = totalStorageMB > 0 ? (usedStorageMB / totalStorageMB) * 100 : 0;
 
     return (
         <TooltipProvider>
@@ -77,7 +90,37 @@ export default function WebMediaPage() {
                     </div>
                 </div>
 
-                {(isLoading || isFetching) && <WebMediaPageSkeleton viewMode={viewMode} />}
+                {/* Storage Usage Section */}
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <HardDrive className="h-5 w-5 text-primary" />
+                            Storage Usage
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {isLoadingUserResource && !userResource ? (
+                            <div className="space-y-2">
+                                <Skeleton className="h-4 w-1/2" />
+                                <Skeleton className="h-4 w-full" />
+                            </div>
+                        ) : userResource ? (
+                            <>
+                                <Progress value={storageProgress} className="w-full h-2 mb-1" />
+                                <p className="text-sm text-muted-foreground">
+                                    Used {formatBytesForDisplay(usedStorageMB * 1024 * 1024)} of {formatBytesForDisplay(totalStorageMB * 1024 * 1024)}
+                                    {` (${storageProgress.toFixed(1)}%)`}
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">Storage information not available.</p>
+                        )}
+                    </CardContent>
+                </Card>
+
+
+                {(isLoading && !mediaData) || (isFetching && !mediaData) ? <WebMediaPageSkeleton viewMode={viewMode} /> : null}
+
 
                 {isError && !isFetching && (
                     <Alert variant="destructive">
@@ -103,7 +146,7 @@ export default function WebMediaPage() {
 
                 {!isLoading && !isError && userKey && mediaData && mediaData.length > 0 && (
                     viewMode === 'table' ? (
-                        <Card className='w-full overflow-x-auto max-w-full'> {/* Removed max-w-[41vh] */}
+                        <Card className='w-full overflow-x-auto max-w-full'>
                             <CardHeader>
                                 <CardTitle>Manage Media</CardTitle>
                                 <CardDescription>
@@ -134,6 +177,13 @@ function WebMediaPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
     const skeletonItems = Array(viewMode === 'table' ? 5 : 6).fill(0);
     return (
       <div className="space-y-4">
+        <Card>
+            <CardHeader className="pb-2"><Skeleton className="h-5 w-1/4" /></CardHeader>
+            <CardContent>
+                <Skeleton className="h-4 w-1/2 mb-1" />
+                <Skeleton className="h-2 w-full" />
+            </CardContent>
+        </Card>
         {viewMode === 'table' ? (
           <>
             <div className="flex items-center justify-between mb-4">
@@ -185,8 +235,6 @@ function WebMediaPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
                         </CardContent>
                         <CardFooter className="p-4 flex justify-end space-x-1">
                             <Skeleton className="h-8 w-8" />
-                            <Skeleton className="h-8 w-8" />
-                            <Skeleton className="h-8 w-8" />
                         </CardFooter>
                     </Card>
                 ))}
@@ -195,5 +243,3 @@ function WebMediaPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
       </div>
     );
 }
-
-    

@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2, Download, CreditCard, Eye, FileText, Info } from 'lucide-react';
+import { AlertCircle, Loader2, Download, CreditCard, Eye, FileText, Info, PackagePlus, CircleDollarSign } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription as DialogDescriptionComponent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -22,6 +22,10 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Added RadioGroup
+import { useCurrentUser } from '@/lib/queries/user'; // Added
+import { useGetUserResource, useUpdateUserResource } from '@/lib/queries/user-resource'; // Added
+import { toast } from '@/hooks/use-toast'; // Added
 
 const formatDate = (dateString?: string | Date | null, dateFormat: string = 'PPP'): string => {
   if (!dateString) return 'N/A';
@@ -42,7 +46,6 @@ const calculateItemTaxes = (item: BillingItem, taxableValue: number) => {
     const sgstAmount = taxableValue * ((item.SGST || 0) / 100);
     const cgstAmount = taxableValue * ((item.CGST || 0) / 100);
     const igstAmount = taxableValue * ((item.IGST || 0) / 100);
-    // Assuming CESS is not part of BillingItem for now
     return { sgstAmount, cgstAmount, igstAmount };
 };
 
@@ -57,6 +60,15 @@ const calculateOverallTotal = (items: BillingItem[] | null | undefined): number 
   return items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
 };
 
+const formatBytesForDisplay = (bytes?: number | null, decimals = 2): string => {
+    if (bytes === null || bytes === undefined || bytes <= 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizeValue = parseFloat((bytes / Math.pow(k, i)).toFixed(dm));
+    return sizeValue + ' ' + (sizes[i] || 'Bytes');
+};
 
 const addCardSchema = z.object({
   cardholderName: z.string().min(1, "Cardholder name is required."),
@@ -66,23 +78,36 @@ const addCardSchema = z.object({
 });
 type AddCardFormValues = z.infer<typeof addCardSchema>;
 
+const storageUpgradeOptions = [
+    { label: "+5 GB", value: 5 },
+    { label: "+10 GB", value: 10 },
+    { label: "+15 GB", value: 15 },
+    { label: "+20 GB", value: 20 },
+    { label: "+25 GB", value: 25 },
+];
+const COST_PER_GB_RUPEES = 85; // 100 - 15% discount
 
 export default function BillingSettingsTab() {
-  const { data: payments, isLoading, isError, error, refetch, isFetching } = useGetPayments();
+  const { data: currentUser } = useCurrentUser();
+  const { data: payments, isLoading: isLoadingPayments, isError: isPaymentsError, error: paymentsError, refetch: refetchPayments, isFetching: isFetchingPayments } = useGetPayments();
+  const { data: userResource, isLoading: isLoadingUserResource, refetch: refetchUserResource } = useGetUserResource();
+  const updateUserResourceMutation = useUpdateUserResource();
+
   const [selectedPaymentForDetails, setSelectedPaymentForDetails] = React.useState<Payment | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
+  const [selectedStorageUpgradeGB, setSelectedStorageUpgradeGB] = React.useState<number | null>(null);
 
   const addCardForm = useForm<AddCardFormValues>({
     resolver: zodResolver(addCardSchema),
     defaultValues: { cardholderName: "", cardNumber: "", expiryDate: "", cvv: "" },
   });
 
-  const handlePayNow = (paymentId?: string | number) => { // Updated to string | number
+  const handlePayNow = (paymentId?: string | number) => {
     if (paymentId === undefined) {
       alert("Payment ID is undefined.");
       return;
     }
-    alert(`Pay Now clicked for Payment ID: ${paymentId}`);
+    alert(`Pay Now clicked for Payment ID: ${paymentId}. Implement Razorpay flow.`);
   };
 
   const handleDownloadInvoice = (paymentId?: string | number) => {
@@ -104,7 +129,42 @@ export default function BillingSettingsTab() {
     addCardForm.reset();
   };
 
-  if (isLoading || (isFetching && !payments)) {
+  const handlePurchaseStorage = () => {
+    if (!selectedStorageUpgradeGB || !userResource || !userResource.documentId) {
+        toast({ variant: "destructive", title: "Error", description: "Please select a storage amount or user resource not found." });
+        return;
+    }
+    const currentStorageMB = userResource.storage || 0;
+    const upgradeMB = selectedStorageUpgradeGB * 1024;
+    const newTotalStorageMB = currentStorageMB + upgradeMB;
+    const cost = selectedStorageUpgradeGB * COST_PER_GB_RUPEES;
+
+    // Simulate payment success for now
+    alert(`Simulating purchase of ${selectedStorageUpgradeGB}GB for ₹${cost}. New total storage will be ${newTotalStorageMB}MB.`);
+
+    updateUserResourceMutation.mutate(
+        { documentId: userResource.documentId, payload: { storage: newTotalStorageMB } },
+        {
+            onSuccess: () => {
+                toast({ title: "Storage Upgraded", description: `Your storage has been increased to ${newTotalStorageMB}MB.` });
+                setSelectedStorageUpgradeGB(null); // Reset selection
+                refetchUserResource(); // Refetch to update displayed storage
+            },
+            // onError handled by the hook
+        }
+    );
+  };
+
+  const isLoading = isLoadingPayments || isLoadingUserResource;
+  const isError = isPaymentsError; // Could also check for userResource error
+  const error = paymentsError;
+
+  const currentTotalStorageMB = userResource?.storage ?? 500;
+  const currentUsedStorageMB = userResource?.used_storage ?? 0;
+  const storageUsagePercent = currentTotalStorageMB > 0 ? (currentUsedStorageMB / currentTotalStorageMB) * 100 : 0;
+
+
+  if (isLoading && !payments && !userResource) { // Adjust loading state condition
     return (
       <div className="space-y-6">
         <Card><CardHeader><Skeleton className="h-7 w-1/3" /></CardHeader><CardContent><Skeleton className="h-20 w-full" /></CardContent></Card>
@@ -114,15 +174,15 @@ export default function BillingSettingsTab() {
     );
   }
 
-  if (isError && !isFetching) {
+  if (isError && !isFetchingPayments) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Error Loading Billing Information</AlertTitle>
         <AlertDescription>
           {(error as Error)?.message || 'Could not fetch billing data.'}
-          <Button onClick={() => refetch()} variant="secondary" size="sm" className="ml-2 mt-2" disabled={isFetching}>
-            {isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          <Button onClick={() => refetchPayments()} variant="secondary" size="sm" className="ml-2 mt-2" disabled={isFetchingPayments}>
+            {isFetchingPayments ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Retry
           </Button>
         </AlertDescription>
@@ -133,26 +193,94 @@ export default function BillingSettingsTab() {
   return (
     <TooltipProvider>
       <div className="space-y-8">
+        {/* Subscription & Storage Overview in one card */}
         <Card>
-          <CardHeader>
-            <CardTitle>Subscription Overview</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <div>
-              <p className="text-sm text-muted-foreground">Current Plan</p>
-              <p className="text-xl font-semibold">Pro Plan (Example)</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Next Billing Date</p>
-              <p className="text-xl font-semibold">{formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))}</p>
-            </div>
-          </CardContent>
+            <CardHeader>
+                <CardTitle>Account Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-6 md:grid-cols-2">
+                <div>
+                    <h3 className="text-lg font-medium mb-2">Current Subscription</h3>
+                    <p className="text-sm text-muted-foreground">Plan: <span className="text-foreground font-semibold">Pro Plan (Example)</span></p>
+                    <p className="text-sm text-muted-foreground">Next Billing: <span className="text-foreground font-semibold">{formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))}</span></p>
+                </div>
+                <div>
+                    <h3 className="text-lg font-medium mb-2 flex items-center gap-2"><HardDrive className="h-5 w-5" /> Storage</h3>
+                    {isLoadingUserResource && !userResource ? (
+                        <div className="space-y-1.5">
+                            <Skeleton className="h-3 w-3/4" />
+                            <Skeleton className="h-2 w-full" />
+                            <Skeleton className="h-3 w-1/2" />
+                        </div>
+                    ) : userResource ? (
+                        <>
+                            <Progress value={storageUsagePercent} className="w-full h-2 mb-1" />
+                            <p className="text-xs text-muted-foreground">
+                                {formatBytesForDisplay(currentUsedStorageMB * 1024 * 1024)} of {formatBytesForDisplay(currentTotalStorageMB * 1024 * 1024)} used
+                            </p>
+                            <p className="text-xs text-muted-foreground">({storageUsagePercent.toFixed(1)}%)</p>
+                        </>
+                    ) : (
+                         <p className="text-xs text-muted-foreground">Storage info unavailable. A default plan might be active.</p>
+                    )}
+                </div>
+            </CardContent>
         </Card>
+
+        {/* Storage Upgrade Card */}
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><PackagePlus className="h-6 w-6"/> Upgrade Storage</CardTitle>
+                <CardDescription>Add more storage to your account. (1GB = ₹100, with 15% discount = ₹85/GB)</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoadingUserResource && !userResource ? (
+                     <Skeleton className="h-20 w-full" />
+                ) : (
+                <RadioGroup
+                    value={selectedStorageUpgradeGB?.toString()}
+                    onValueChange={(value) => setSelectedStorageUpgradeGB(value ? parseInt(value) : null)}
+                    className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4"
+                >
+                    {storageUpgradeOptions.map(option => (
+                    <Label
+                        key={option.value}
+                        htmlFor={`storage-upgrade-${option.value}`}
+                        className={`border rounded-md p-4 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors
+                                    ${selectedStorageUpgradeGB === option.value ? 'border-primary ring-2 ring-primary bg-primary/5' : 'border-border'}`}
+                    >
+                        <RadioGroupItem value={option.value.toString()} id={`storage-upgrade-${option.value}`} className="sr-only" />
+                        <div className="text-lg font-semibold">{option.label}</div>
+                        <div className="text-sm text-muted-foreground">₹{(option.value * COST_PER_GB_RUPEES).toLocaleString()}</div>
+                    </Label>
+                    ))}
+                </RadioGroup>
+                )}
+                {selectedStorageUpgradeGB && (
+                    <div className="mt-4 p-3 bg-muted/50 rounded-md text-sm">
+                        You selected: <strong>{selectedStorageUpgradeGB} GB</strong><br />
+                        Cost: <strong>₹{(selectedStorageUpgradeGB * COST_PER_GB_RUPEES).toLocaleString()}</strong> (at ₹{COST_PER_GB_RUPEES}/GB after discount)<br />
+                        {userResource && `Your new total storage will be: ${formatBytesForDisplay((currentTotalStorageMB + selectedStorageUpgradeGB * 1024) * 1024 * 1024)}`}
+                    </div>
+                )}
+            </CardContent>
+            <CardFooter>
+                <Button
+                    onClick={handlePurchaseStorage}
+                    disabled={!selectedStorageUpgradeGB || updateUserResourceMutation.isPending || isLoadingUserResource}
+                >
+                    {updateUserResourceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <CircleDollarSign className="mr-2 h-4 w-4" />
+                    Purchase Storage
+                </Button>
+            </CardFooter>
+        </Card>
+
 
         <Card>
           <CardHeader>
             <CardTitle>Invoice History</CardTitle>
-            <CardDescription>Review your past and outstanding invoices. {isFetching && <Loader2 className="ml-2 h-4 w-4 animate-spin inline-block" />}</CardDescription>
+            <CardDescription>Review your past and outstanding invoices. {isFetchingPayments && <Loader2 className="ml-2 h-4 w-4 animate-spin inline-block" />}</CardDescription>
           </CardHeader>
           <CardContent>
             {!payments || payments.length === 0 ? (
@@ -178,7 +306,7 @@ export default function BillingSettingsTab() {
                       const overallTotal = calculateOverallTotal(payment.Items);
                       return (
                         <TableRow key={payment.id || payment.documentId}>
-                          <TableCell className="font-medium">#{payment.id || payment.documentId || 'N/A'}</TableCell>
+                          <TableCell className="font-medium">#{payment.documentId || payment.id || 'N/A'}</TableCell>
                           <TableCell>
                             {formatDate(payment.Billing_From, 'MMM d, yyyy')} - {formatDate(payment.Billing_To, 'MMM d, yyyy')}
                           </TableCell>
@@ -195,9 +323,9 @@ export default function BillingSettingsTab() {
                           <TableCell className="text-right">
                             <div className="flex justify-end space-x-2">
                               <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(payment)}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>View Details</TooltipContent></Tooltip>
-                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleDownloadInvoice(payment.id || payment.documentId)} disabled><Download className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Download Invoice (Soon)</TooltipContent></Tooltip>
+                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleDownloadInvoice(payment.documentId || payment.id)} disabled><Download className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Download Invoice</TooltipContent></Tooltip>
                               {payment.Payment_Status === 'Unpaid' && (
-                                <Tooltip><TooltipTrigger asChild><Button size="icon" className="h-8 w-8 bg-green-600 hover:bg-green-700 text-white" onClick={() => handlePayNow(payment.id || payment.documentId)}><CreditCard className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Pay Now</TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Button size="icon" className="h-8 w-8 bg-green-600 hover:bg-green-700 text-white" onClick={() => handlePayNow(payment.documentId || payment.id)}><CreditCard className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Pay Now</TooltipContent></Tooltip>
                               )}
                             </div>
                           </TableCell>
@@ -217,7 +345,6 @@ export default function BillingSettingsTab() {
             <CardDescription>Manage your saved payment methods or add a new one.</CardDescription>
           </CardHeader>
           <CardContent>
-             {/* Placeholder for listing saved cards */}
              <div className="mb-6 p-4 border border-dashed rounded-md text-center text-muted-foreground">
                  <Info className="mx-auto h-8 w-8 mb-2" />
                 Saved payment methods will appear here. (Feature coming soon)
@@ -255,18 +382,17 @@ export default function BillingSettingsTab() {
               <DialogHeader>
                 <DialogTitle className="text-center text-xl">TAX INVOICE</DialogTitle>
                 <DialogDescriptionComponent className="text-center">
-                  Invoice #{selectedPaymentForDetails.id || selectedPaymentForDetails.documentId} | Period: {formatDate(selectedPaymentForDetails.Billing_From)} - {formatDate(selectedPaymentForDetails.Billing_To)}
+                  Invoice #{selectedPaymentForDetails.documentId || selectedPaymentForDetails.id} | Period: {formatDate(selectedPaymentForDetails.Billing_From)} - {formatDate(selectedPaymentForDetails.Billing_To)}
                 </DialogDescriptionComponent>
               </DialogHeader>
               <ScrollArea className="flex-1 my-2">
                 <div className="p-4 space-y-4 border rounded-md">
-                    {/* Invoice Header Info */}
                     <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                         <div>
                             <h3 className="font-semibold">Your Company Name</h3>
-                            <p>Your Address Line 1</p>
-                            <p>City, State, Postal Code</p>
-                            <p>GSTIN: YOUR_GSTIN</p>
+                            <p>123 Business Rd, Suite 456</p>
+                            <p>Anytown, ST 12345</p>
+                            <p>GSTIN: YOUR_GSTIN_HERE</p>
                         </div>
                         <div className="text-right">
                             <p><span className="font-semibold">Invoice Date:</span> {formatDate(selectedPaymentForDetails.createdAt)}</p>
@@ -274,11 +400,11 @@ export default function BillingSettingsTab() {
                         </div>
                     </div>
                      <Separator />
-                    {/* Customer & Billing Info (Placeholder) */}
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm my-4">
                         <div>
-                            <h4 className="font-semibold mb-1">Customer Name</h4>
+                            <h4 className="font-semibold mb-1">Billed To</h4>
                             <p>{selectedPaymentForDetails.user?.username || 'N/A'}</p>
+                            <p>{selectedPaymentForDetails.user?.email || 'N/A'}</p>
                             <p>GSTIN: (Customer GSTIN if available)</p>
                         </div>
                         <div>
@@ -291,22 +417,18 @@ export default function BillingSettingsTab() {
                         </div>
                     </div>
                      <Separator />
-
-                  {/* Items Table - Invoice Style */}
                   <Table className="my-4 text-xs">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[40%]">Item</TableHead>
+                        <TableHead className="w-[35%]">Item/Description</TableHead>
                         <TableHead className="text-center">HSN/SAC</TableHead>
                         <TableHead className="text-center">Qty</TableHead>
-                        <TableHead className="text-right">Rate</TableHead>
+                        <TableHead className="text-right">Rate (₹)</TableHead>
                         <TableHead className="text-right">Discount</TableHead>
-                        <TableHead className="text-right">Taxable</TableHead>
-                        <TableHead className="text-right">CGST</TableHead>
-                        <TableHead className="text-right">SGST</TableHead>
-                        {/* <TableHead className="text-right">UTGST</TableHead>
-                        <TableHead className="text-right">CESS</TableHead> */}
-                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Taxable Value (₹)</TableHead>
+                        <TableHead className="text-center">CGST</TableHead>
+                        <TableHead className="text-center">SGST</TableHead>
+                        <TableHead className="text-right">Total (₹)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -315,27 +437,26 @@ export default function BillingSettingsTab() {
                           const price = parseFloat(item.Price || '0');
                           const quantity = item.Quantity || 0;
                           const discountPercent = item.Discount || 0;
-                          
                           const baseAmount = price * quantity;
                           const discountAmount = baseAmount * (discountPercent / 100);
                           const taxableValue = baseAmount - discountAmount;
-                          
-                          const { sgstAmount, cgstAmount, igstAmount } = calculateItemTaxes(item, taxableValue);
-                          const itemTotal = taxableValue + sgstAmount + cgstAmount + igstAmount;
+                          const { sgstAmount, cgstAmount } = calculateItemTaxes(item, taxableValue);
+                          const itemTotal = taxableValue + sgstAmount + cgstAmount; /* IGST not included here for simplicity, assume CGST/SGST */
 
                           return (
                             <TableRow key={index}>
-                              <TableCell>{item.Particulars || 'N/A'}</TableCell>
+                              <TableCell>
+                                <div className="font-medium">{item.Particulars || 'N/A'}</div>
+                                {item.Description && <div className="text-muted-foreground text-xs">{item.Description}</div>}
+                              </TableCell>
                               <TableCell className="text-center">{item.HSN || '-'}</TableCell>
                               <TableCell className="text-center">{quantity}</TableCell>
-                              <TableCell className="text-right">₹{price.toFixed(2)}</TableCell>
-                              <TableCell className="text-right">{discountPercent > 0 ? `₹${discountAmount.toFixed(2)} (${discountPercent}%)` : '-'}</TableCell>
-                              <TableCell className="text-right">₹{taxableValue.toFixed(2)}</TableCell>
-                              <TableCell className="text-right">{cgstAmount > 0 ? `₹${cgstAmount.toFixed(2)} (${item.CGST || 0}%)` : '-'}</TableCell>
-                              <TableCell className="text-right">{sgstAmount > 0 ? `₹${sgstAmount.toFixed(2)} (${item.SGST || 0}%)` : '-'}</TableCell>
-                              {/* <TableCell className="text-right">-</TableCell> 
-                              <TableCell className="text-right">-</TableCell>  */}
-                              <TableCell className="text-right">₹{itemTotal.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">{price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">{discountPercent > 0 ? `${discountAmount.toFixed(2)} (${discountPercent}%)` : '-'}</TableCell>
+                              <TableCell className="text-right">{taxableValue.toFixed(2)}</TableCell>
+                              <TableCell className="text-center">{item.CGST || 0}%<br/>(₹{cgstAmount.toFixed(2)})</TableCell>
+                              <TableCell className="text-center">{item.SGST || 0}%<br/>(₹{sgstAmount.toFixed(2)})</TableCell>
+                              <TableCell className="text-right font-semibold">{itemTotal.toFixed(2)}</TableCell>
                             </TableRow>
                           );
                         })
@@ -344,10 +465,9 @@ export default function BillingSettingsTab() {
                       )}
                     </TableBody>
                   </Table>
-                  {/* Totals Section - Invoice Style */}
                     <div className="flex justify-end mt-4">
                         <div className="w-full max-w-xs space-y-1 text-sm">
-                            <div className="flex justify-between"><span>Taxable Amount:</span><span>₹{
+                            <div className="flex justify-between"><span>Subtotal:</span><span>₹{
                                 (selectedPaymentForDetails.Items || []).reduce((sum, item) => sum + calculateItemTaxableValue(item), 0).toFixed(2)
                             }</span></div>
                             <div className="flex justify-between"><span>Total CGST:</span><span>₹{
@@ -356,18 +476,23 @@ export default function BillingSettingsTab() {
                             <div className="flex justify-between"><span>Total SGST:</span><span>₹{
                                 (selectedPaymentForDetails.Items || []).reduce((sum, item) => sum + calculateItemTaxes(item, calculateItemTaxableValue(item)).sgstAmount, 0).toFixed(2)
                             }</span></div>
-                            {/* Add IGST if applicable */}
                             <Separator />
                             <div className="flex justify-between font-semibold text-base"><span>Invoice Total:</span><span>₹{calculateOverallTotal(selectedPaymentForDetails.Items).toFixed(2)}</span></div>
                         </div>
                     </div>
-                    <div className="text-xs text-muted-foreground text-center mt-6">
-                        ABC Enterprises, New Delhi - 1111111 (Example Footer)
+                     <Separator className="my-4" />
+                    <div className="text-xs space-y-1">
+                        <p className="font-semibold">Terms & Conditions:</p>
+                        <p>1. Please pay within 15 days of the invoice date.</p>
+                        <p>2. Interest @ 18% p.a. will be charged on overdue bills.</p>
                     </div>
-
+                    <div className="text-xs text-muted-foreground text-center mt-6 border-t pt-3">
+                        Thank you for your business! | This is a computer-generated invoice.
+                    </div>
                 </div>
               </ScrollArea>
               <DialogFooter className="border-t pt-4">
+                <Button onClick={() => alert("Print action triggered for invoice: " + (selectedPaymentForDetails?.documentId || selectedPaymentForDetails?.id))}>Print Invoice</Button>
                 <DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose>
               </DialogFooter>
             </DialogContent>
