@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2, Download, CreditCard, Eye, FileText, Info, PackagePlus, CircleDollarSign, HardDrive } from 'lucide-react'; // Added HardDrive
+import { AlertCircle, Loader2, Download, CreditCard, Eye, FileText, Info, PackagePlus, CircleDollarSign, HardDrive } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription as DialogDescriptionComponent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -26,8 +26,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useCurrentUser } from '@/lib/queries/user';
 import { useGetUserResource, useUpdateUserResource } from '@/lib/queries/user-resource';
 import { toast } from '@/hooks/use-toast';
-import { Progress } from '@/components/ui/progress'; // Added Progress
-import { Label } from '@/components/ui/label'; // Added Label
+import { Progress } from '@/components/ui/progress';
+import { Label } from '@/components/ui/label';
 
 const formatDate = (dateString?: string | Date | null, dateFormat: string = 'PPP'): string => {
   if (!dateString) return 'N/A';
@@ -136,34 +136,32 @@ export default function BillingSettingsTab() {
         toast({ variant: "destructive", title: "Error", description: "Please select a storage amount or user resource not found." });
         return;
     }
-    const currentStorageMB = userResource.storage || 0;
-    const upgradeMB = selectedStorageUpgradeGB * 1024;
-    const newTotalStorageMB = currentStorageMB + upgradeMB;
+    const currentTotalStorageKB = userResource.storage || 0; // Value from API is in KB
+    const upgradeAmountInKB = selectedStorageUpgradeGB * 1024 * 1024; // Convert selected GB to KB (1GB = 1024MB, 1MB = 1024KB)
+    const newTotalStorageKB = currentTotalStorageKB + upgradeAmountInKB;
     const cost = selectedStorageUpgradeGB * COST_PER_GB_RUPEES;
 
-    // Simulate payment success for now
-    alert(`Simulating purchase of ${selectedStorageUpgradeGB}GB for ₹${cost}. New total storage will be ${newTotalStorageMB}MB.`);
+    alert(`Simulating purchase of ${selectedStorageUpgradeGB}GB for ₹${cost}. New total storage will be ${formatBytesForDisplay(newTotalStorageKB * 1024)} (sent as ${newTotalStorageKB} KB).`);
 
     updateUserResourceMutation.mutate(
-        { documentId: userResource.documentId, payload: { storage: newTotalStorageMB } },
+        { documentId: userResource.documentId, payload: { storage: newTotalStorageKB } }, // Send new total in KB
         {
             onSuccess: () => {
-                toast({ title: "Storage Upgraded", description: `Your storage has been increased to ${formatBytesForDisplay(newTotalStorageMB * 1024 * 1024)}.` });
+                toast({ title: "Storage Upgraded", description: `Your storage has been increased to ${formatBytesForDisplay(newTotalStorageKB * 1024)}.` });
                 setSelectedStorageUpgradeGB(null); // Reset selection
-                refetchUserResource(); // Refetch to update displayed storage
+                refetchUserResource();
             },
-            // onError handled by the hook
         }
     );
   };
 
   const isLoading = isLoadingPayments || isLoadingUserResource;
-  const isError = isPaymentsError; // Could also check for userResource error
+  const isError = isPaymentsError;
   const error = paymentsError;
 
-  const currentTotalStorageMB = userResource?.storage ?? 0; // Use 0 if not set, though API default is 500
-  const currentUsedStorageMB = userResource?.used_storage ?? 0;
-  const storageUsagePercent = currentTotalStorageMB > 0 ? (currentUsedStorageMB / currentTotalStorageMB) * 100 : 0;
+  const currentTotalStorageKB = userResource?.storage ?? 0; // Value from API is in KB
+  const currentUsedStorageKB = userResource?.used_storage ?? 0; // Value from API is in KB
+  const storageUsagePercent = currentTotalStorageKB > 0 ? (currentUsedStorageKB / currentTotalStorageKB) * 100 : 0;
 
 
   if (isLoading && !payments && !userResource) {
@@ -195,7 +193,6 @@ export default function BillingSettingsTab() {
   return (
     <TooltipProvider>
       <div className="space-y-8">
-        {/* Subscription & Storage Overview in one card */}
         <Card>
             <CardHeader>
                 <CardTitle>Account Overview</CardTitle>
@@ -218,7 +215,7 @@ export default function BillingSettingsTab() {
                         <>
                             <Progress value={storageUsagePercent} className="w-full h-2 mb-1" />
                             <p className="text-xs text-muted-foreground">
-                                {formatBytesForDisplay(currentUsedStorageMB * 1024 * 1024)} of {formatBytesForDisplay(currentTotalStorageMB * 1024 * 1024)} used
+                                {formatBytesForDisplay(currentUsedStorageKB * 1024)} of {formatBytesForDisplay(currentTotalStorageKB * 1024)} used
                             </p>
                             <p className="text-xs text-muted-foreground">({storageUsagePercent.toFixed(1)}%)</p>
                         </>
@@ -229,7 +226,6 @@ export default function BillingSettingsTab() {
             </CardContent>
         </Card>
 
-        {/* Storage Upgrade Card */}
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><PackagePlus className="h-6 w-6"/> Upgrade Storage</CardTitle>
@@ -262,7 +258,7 @@ export default function BillingSettingsTab() {
                     <div className="mt-4 p-3 bg-muted/50 rounded-md text-sm">
                         You selected: <strong>{selectedStorageUpgradeGB} GB</strong><br />
                         Cost: <strong>₹{(selectedStorageUpgradeGB * COST_PER_GB_RUPEES).toLocaleString()}</strong> (at ₹{COST_PER_GB_RUPEES}/GB after discount)<br />
-                        {userResource && `Your new total storage will be: ${formatBytesForDisplay((currentTotalStorageMB + selectedStorageUpgradeGB * 1024) * 1024 * 1024)}`}
+                        {userResource && `Your new total storage will be: ${formatBytesForDisplay((currentTotalStorageKB + (selectedStorageUpgradeGB * 1024 * 1024)) * 1024)}`}
                     </div>
                 )}
             </CardContent>
@@ -277,7 +273,6 @@ export default function BillingSettingsTab() {
                 </Button>
             </CardFooter>
         </Card>
-
 
         <Card>
           <CardHeader>
@@ -443,7 +438,7 @@ export default function BillingSettingsTab() {
                           const discountAmount = baseAmount * (discountPercent / 100);
                           const taxableValue = baseAmount - discountAmount;
                           const { sgstAmount, cgstAmount } = calculateItemTaxes(item, taxableValue);
-                          const itemTotal = taxableValue + sgstAmount + cgstAmount; /* IGST not included here for simplicity, assume CGST/SGST */
+                          const itemTotal = taxableValue + sgstAmount + cgstAmount;
 
                           return (
                             <TableRow key={index}>
@@ -504,5 +499,3 @@ export default function BillingSettingsTab() {
     </TooltipProvider>
   );
 }
-
-    

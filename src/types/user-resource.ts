@@ -9,11 +9,10 @@ export interface UserResource {
   publishedAt?: Date | string | null;
   tenent_id: string;
   user?: User | null;
-  storage: number; // Assuming this is in MB
-  used_storage?: number | null; // Assuming this is in MB, can be null or 0 initially
+  storage: number; // Storage capacity in Kilobytes (KB)
+  used_storage?: number | null; // Used storage in Kilobytes (KB), can be null or 0 initially
 }
 
 export interface UpdateUserResourcePayload {
-  storage: number; // New total storage in MB
-  // used_storage might be updated by backend, not directly by user here
+  storage: number; // New total storage capacity in Kilobytes (KB)
 }

@@ -8,13 +8,13 @@ import MediaTable from './_components/media-table';
 import UploadButton from './_components/upload-button';
 import { useFetchMedia } from '@/lib/queries/media';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, LayoutGrid, List, HardDrive } from "lucide-react"; // Added HardDrive
+import { AlertCircle, Loader2, LayoutGrid, List, HardDrive } from "lucide-react";
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrentUser } from '@/lib/queries/user';
 import MediaCardGrid from './_components/media-card-grid';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Progress } from '@/components/ui/progress'; // Added Progress
-import { useGetUserResource } from '@/lib/queries/user-resource'; // Added UserResource hook
+import { Progress } from '@/components/ui/progress';
+import { useGetUserResource } from '@/lib/queries/user-resource';
 
 type ViewMode = 'table' | 'card';
 
@@ -33,24 +33,21 @@ export default function WebMediaPage() {
     const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser();
     const userKey = currentUser?.tenent_id;
     const { data: mediaData, isLoading: isLoadingMedia, isError: isMediaError, error: mediaError, refetch, isFetching } = useFetchMedia(userKey);
-    const { data: userResource, isLoading: isLoadingUserResource } = useGetUserResource(); // Fetch user resource
+    const { data: userResource, isLoading: isLoadingUserResource } = useGetUserResource();
 
     const [viewMode, setViewMode] = React.useState<ViewMode>('table');
 
     const handleUploadSuccess = () => {
-        refetch(); // Refetch media list
-        // Potentially refetch userResource if uploads affect used_storage, but backend should handle used_storage updates.
-        // For now, let's assume used_storage is primarily for display and backend updates it.
-        // If needed: queryClient.invalidateQueries(USER_RESOURCE_QUERY_KEY(userKey))
+        refetch();
     };
 
     const isLoading = isLoadingUser || isLoadingMedia || isLoadingUserResource;
-    const isError = isUserError || isMediaError; // Note: isErrorUserResource could be added if its failure is critical
+    const isError = isUserError || isMediaError;
     const error = isUserError ? new Error("Failed to load user data.") : mediaError;
 
-    const totalStorageMB = userResource?.storage ?? 500; // Default to 500MB if not set
-    const usedStorageMB = userResource?.used_storage ?? 0;
-    const storageProgress = totalStorageMB > 0 ? (usedStorageMB / totalStorageMB) * 100 : 0;
+    const totalStorageKB = userResource?.storage ?? 0; // API value is in KB
+    const usedStorageKB = userResource?.used_storage ?? 0; // API value is in KB
+    const storageProgress = totalStorageKB > 0 ? (usedStorageKB / totalStorageKB) * 100 : 0;
 
     return (
         <TooltipProvider>
@@ -90,7 +87,6 @@ export default function WebMediaPage() {
                     </div>
                 </div>
 
-                {/* Storage Usage Section */}
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center gap-2">
@@ -108,7 +104,7 @@ export default function WebMediaPage() {
                             <>
                                 <Progress value={storageProgress} className="w-full h-2 mb-1" />
                                 <p className="text-sm text-muted-foreground">
-                                    Used {formatBytesForDisplay(usedStorageMB * 1024 * 1024)} of {formatBytesForDisplay(totalStorageMB * 1024 * 1024)}
+                                    Used {formatBytesForDisplay(usedStorageKB * 1024)} of {formatBytesForDisplay(totalStorageKB * 1024)}
                                     {` (${storageProgress.toFixed(1)}%)`}
                                 </p>
                             </>
