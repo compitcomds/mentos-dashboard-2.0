@@ -24,15 +24,14 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogDescription,
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, FileJson as FileJsonIcon, Loader2, PackageOpen } from 'lucide-react';
+import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, FileJson as FileJsonIcon, Loader2, PackageOpen, Eye, ImageIcon } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import type { MetaData } from '@/types/meta-data';
 import type { FormFormatComponent } from '@/types/meta-format';
@@ -43,7 +42,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from './_components/media-renderer';
+import MediaRenderer from '../_components/media-renderer'; // Corrected import path
 
 const getFieldName = (component: FormFormatComponent): string => {
   if (component.label && component.label.trim() !== '') {
@@ -51,9 +50,16 @@ const getFieldName = (component: FormFormatComponent): string => {
       .toLowerCase()
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
-    return slugifiedLabel;
+    return slugifiedLabel; // ID suffix removed
   }
+  // Fallback remains the same, using component ID for uniqueness if no label
   return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
+};
+
+const formatDate = (dateString?: string | Date, formatType: string = 'PPP p') => {
+  if (!dateString) return 'N/A';
+  const date = typeof dateString === 'string' ? parseISO(dateString) : dateString;
+  return isValid(date) ? format(date, formatType) : 'Invalid Date';
 };
 
 export default function MetaDataListingPage() {
@@ -71,7 +77,6 @@ export default function MetaDataListingPage() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [selectedEntryData, setSelectedEntryData] = React.useState<Record<string, any> | null>(null);
   const [selectedEntryForDialog, setSelectedEntryForDialog] = React.useState<MetaData | null>(null);
-
 
   const handleDeleteConfirmation = (entry: MetaData) => {
     setMetaDataToDelete(entry);
@@ -114,9 +119,9 @@ export default function MetaDataListingPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...Array(3)].map((_, i) => (
                  <Card key={`skeleton-${i}`} className="flex flex-col shadow-sm">
-                    <CardContent className="p-4 pb-0">
-                        <Skeleton className="w-full h-32 rounded-md bg-muted" />
-                    </CardContent>
+                    <CardContent className="p-4 pb-0 aspect-video bg-muted rounded-t-lg flex items-center justify-center">
+                         <Skeleton className="w-full h-full" />
+                     </CardContent>
                     <CardHeader className="pb-2 pt-3">
                         <Skeleton className="h-5 w-3/4" />
                         <Skeleton className="h-4 w-1/2 mt-1" />
@@ -169,6 +174,7 @@ export default function MetaDataListingPage() {
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{metaFormat.name}</h1>
           {metaFormat.description && <p className="text-muted-foreground mt-1">{metaFormat.description}</p>}
+           <p className="text-xs text-muted-foreground mt-1">Format ID: {metaFormatDocumentId}</p>
         </div>
         <Button asChild className="flex-shrink-0">
           <Link href={createNewEntryLink}>
@@ -236,7 +242,7 @@ export default function MetaDataListingPage() {
                              try {
                                const parsedDate = parseISO(String(value));
                                if (isValid(parsedDate)) {
-                                 displayValue = format(parsedDate, (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP'));
+                                 displayValue = formatDate(parsedDate, (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP'));
                                } else {
                                  displayValue = String(value);
                                }
@@ -265,7 +271,7 @@ export default function MetaDataListingPage() {
                                             {entryMediaIds.map((mediaId, index) => (
                                                 mediaId !== null && !isNaN(mediaId) && (
                                                 <CarouselItem key={`${entry.documentId}-media-${index}`}>
-                                                    <div className="p-0 aspect-video flex items-center justify-center"> {/* Changed p-1 to p-0 for tighter fit */}
+                                                    <div className="p-0 aspect-video flex items-center justify-center">
                                                          <MediaRenderer mediaId={mediaId} className="w-full h-48 object-cover" />
                                                     </div>
                                                 </CarouselItem>
@@ -280,7 +286,7 @@ export default function MetaDataListingPage() {
                         )}
                         <CardHeader className={entryMediaIds.length > 0 ? "pt-4 pb-2" : "pb-2"}>
                             <CardTitle className="text-base font-semibold text-foreground">
-                                {entry.handle || `Entry ID: ${entry.documentId || 'N/A'}`}
+                                {entry.handle || `Data Entry ID: ${entry.documentId || 'N/A'}`}
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 {entry.handle && `ID: ${entry.documentId || 'N/A'} | `}
@@ -319,7 +325,7 @@ export default function MetaDataListingPage() {
                                     onSelect={() => handleViewData(entry)}
                                     disabled={!entry.meta_data}
                                 >
-                                    <FileJsonIcon className="mr-2 h-4 w-4" /> View Data
+                                    <Eye className="mr-2 h-4 w-4" /> View Data
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -410,13 +416,13 @@ export default function MetaDataListingPage() {
                                             {value.map((mediaId: string | number, idx: number) => (
                                                typeof mediaId === 'number' ?
                                                 <MediaRenderer key={idx} mediaId={mediaId} className="w-24 h-24 object-contain border rounded" />
-                                                : <Badge variant="outline" key={idx} className="text-xs">Invalid Media ID: {String(mediaId)}</Badge>
+                                                : <code className="text-xs bg-muted px-1 py-0.5 rounded" key={idx}>Invalid ID: {String(mediaId)}</code>
                                             ))}
                                             </div>
                                         ) : (
                                            typeof value === 'number' ?
                                             <MediaRenderer mediaId={value} className="max-w-xs max-h-48 object-contain border rounded" />
-                                            : <Badge variant="outline" className="text-xs">Unsupported Media ID: {String(value)}</Badge>
+                                            : <code className="text-xs bg-muted px-1 py-0.5 rounded">Invalid ID: {String(value)}</code>
                                         )
                                         ) : component.__component === 'dynamic-component.date-field' ? (
                                             Array.isArray(value) ? (
@@ -427,9 +433,9 @@ export default function MetaDataListingPage() {
                                                 isValid(parseISO(String(value))) ? format(parseISO(String(value)), (component.type === 'time' ? 'p' : component.type === 'data&time' || component.type === 'datetime' ? 'Pp' : 'PP')) : String(value)
                                             )
                                         ) : typeof value === 'boolean' ? (
-                                            value ? <Badge variant="default" className="bg-green-600 hover:bg-green-700">Yes</Badge> : <Badge variant="secondary">No</Badge>
+                                            value ? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Yes</span> : <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">No</span>
                                         ) : Array.isArray(value) ? (
-                                            value.map((item, i) => <Badge key={i} variant="outline" className="mr-1 mb-1">{String(item)}</Badge>)
+                                            value.map((item, i) => <code key={i} className="text-xs bg-muted px-1 py-0.5 rounded mr-1 mb-1 inline-block">{String(item)}</code>)
                                         ) : component.inputType === 'tip-tap' && typeof value === 'string' && value.startsWith('<') ? (
                                             <div className="prose prose-sm dark:prose-invert max-w-none border rounded p-2 bg-background" dangerouslySetInnerHTML={{ __html: value }} />
                                         ) : (
@@ -445,9 +451,11 @@ export default function MetaDataListingPage() {
                     )}
                 </TabsContent>
                 <TabsContent value="raw" className="p-0">
-                    <pre className="p-4 text-xs whitespace-pre-wrap break-all h-full bg-muted rounded-b-md">
-                    {selectedEntryData ? JSON.stringify(selectedEntryData, null, 2) : 'No JSON data available.'}
-                    </pre>
+                    <ScrollArea className="h-full">
+                        <pre className="p-4 text-xs whitespace-pre-wrap break-all bg-muted rounded-b-md h-full">
+                            {selectedEntryData ? JSON.stringify(selectedEntryData, null, 2) : 'No JSON data available.'}
+                        </pre>
+                    </ScrollArea>
                 </TabsContent>
             </ScrollArea>
           </Tabs>
@@ -461,5 +469,3 @@ export default function MetaDataListingPage() {
     </div>
   );
 }
-
-    
