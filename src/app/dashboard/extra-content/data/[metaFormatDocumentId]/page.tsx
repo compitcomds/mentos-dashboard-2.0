@@ -16,10 +16,19 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription as AlertDialogDescriptionComponent, // Renamed import
+  AlertDialogTitle as AlertDialogTitleComponent, // Renamed to avoid conflict
+  AlertDialogDescription as AlertDialogDescriptionComponent, 
   AlertDialogFooter,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,16 +70,16 @@ const formatDate = (dateString?: string | Date, formatType: string = 'PPP p') =>
 type SortFieldMetaData = 'handle' | 'createdAt' | 'updatedAt' | 'publishedAt';
 type SortOrderMetaData = 'asc' | 'desc';
 
-const DEFAULT_PAGE_SIZE_METADATA = 9; // Suitable for card view
+const DEFAULT_PAGE_SIZE_METADATA = 9; 
 const PAGE_SIZE_OPTIONS_METADATA = [
     { label: "9 per page", value: "9" }, { label: "12 per page", value: "12" },
     { label: "24 per page", value: "24" }, { label: "48 per page", value: "48" },
 ];
 const SORT_FIELD_OPTIONS_METADATA: { label: string; value: SortFieldMetaData }[] = [
+  { label: "Handle", value: "handle" },
   { label: "Created At", value: "createdAt" },
   { label: "Updated At", value: "updatedAt" },
   { label: "Published At", value: "publishedAt" },
-  { label: "Handle", value: "handle" },
 ];
 const SORT_ORDER_OPTIONS_METADATA: { label: string; value: SortOrderMetaData }[] = [
   { label: "Ascending", value: "asc" }, { label: "Descending", value: "desc" },
@@ -423,7 +432,7 @@ export default function MetaDataListingPage() {
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitleComponent>Are you sure?</AlertDialogTitleComponent>
             <AlertDialogDescriptionComponent>
               This action cannot be undone. This will permanently delete the data entry with handle
               <span className="font-semibold"> "{metaDataToDelete?.handle || metaDataToDelete?.documentId || 'this entry'}"</span>.
@@ -447,9 +456,9 @@ export default function MetaDataListingPage() {
         <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Details for Entry (Handle: {selectedEntryForDialog?.handle || selectedEntryForDialog?.documentId || 'N/A'})</DialogTitle>
-            <AlertDialogDescriptionComponent>
+            <DialogDescription>
               View formatted data or raw JSON.
-            </AlertDialogDescriptionComponent>
+            </DialogDescription>
           </DialogHeader>
           <Tabs defaultValue="ui" className="flex-1 flex flex-col overflow-hidden mt-2">
             <TabsList className="flex-shrink-0">
@@ -531,7 +540,7 @@ export default function MetaDataListingPage() {
             </ScrollArea>
           </Tabs>
           <DialogFooter className="mt-4 flex-shrink-0 pt-4 border-t">
-            <AlertDialogCancel asChild><Button type="button" variant="outline">Close</Button></AlertDialogCancel>
+            <DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -587,3 +596,4 @@ function MetaDataPageSkeleton() {
     </div>
   );
 }
+
