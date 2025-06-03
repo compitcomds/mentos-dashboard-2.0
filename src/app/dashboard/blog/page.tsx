@@ -8,6 +8,7 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Pencil, Trash2, Loader2, AlertCircle, Eye, ImageIcon, LayoutGrid, List, Search, X, ArrowUpDown, Filter, ChevronLeft, ChevronRight } from "lucide-react";
@@ -48,6 +49,7 @@ import { useGetCategories } from '@/lib/queries/category';
 import type { Categorie } from '@/types/category'; 
 import { toast } from '@/hooks/use-toast';
 import { getStoredPreference, setStoredPreference } from '@/lib/storage';
+import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || '';
 
