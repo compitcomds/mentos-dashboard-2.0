@@ -2,7 +2,7 @@
 'use client';
 
 import { useQuery } from "@tanstack/react-query";
-import { getQueryForms as getQueryFormsService, getQueryForm as getQueryFormService } from "@/lib/services/query-form";
+import { getQueryForms as getQueryFormsService, getQueryForm as getQueryFormService, type GetQueryFormsParams } from "@/lib/services/query-form";
 import type { QueryForm } from "@/types/query-form";
 import type { FindMany } from "@/types/strapi_response";
 import { useCurrentUser } from './user';
@@ -12,26 +12,29 @@ export interface UseGetQueryFormsOptions {
   group_id?: string | null;
   page?: number;
   pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
-const QUERY_FORMS_QUERY_KEY = (userTenentId?: string, type?: string | null, group_id?: string | null, page?: number, pageSize?: number) =>
-  ['queryForms', userTenentId || 'all', type || 'allTypes', group_id || 'allGroups', page || 1, pageSize || 10];
+const QUERY_FORMS_QUERY_KEY = (userTenentId?: string, options?: UseGetQueryFormsOptions) =>
+  ['queryForms', userTenentId || 'all', options?.type || 'allTypes', options?.group_id || 'allGroups', options?.page || 1, options?.pageSize || 10, options?.sortField, options?.sortOrder];
 
 const QUERY_FORM_DETAIL_QUERY_KEY = (id?: string, userTenentId?: string) => ['queryForm', id || 'detail', userTenentId || 'all'];
 
 export const useGetQueryForms = (options?: UseGetQueryFormsOptions) => {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
-  const { type, group_id, page = 1, pageSize = 10 } = options || {};
+  const { type, group_id, page = 1, pageSize = 10, sortField, sortOrder } = options || {};
 
   return useQuery<FindMany<QueryForm>, Error>({
-    queryKey: QUERY_FORMS_QUERY_KEY(userTenentId, type, group_id, page, pageSize),
+    queryKey: QUERY_FORMS_QUERY_KEY(userTenentId, { type, group_id, page, pageSize, sortField, sortOrder }),
     queryFn: () => {
         if (!userTenentId) {
             console.warn("useGetQueryForms: User tenent_id not available. Returning empty result.");
             return Promise.resolve({ data: [], meta: { pagination: { page: 1, pageSize, pageCount: 0, total: 0 } } });
         }
-        return getQueryFormsService({ userTenentId, type, group_id, page, pageSize });
+        const params: GetQueryFormsParams = { userTenentId, type, group_id, page, pageSize, sortField, sortOrder };
+        return getQueryFormsService(params);
     },
     enabled: !!userTenentId && !isLoadingUser,
     staleTime: 1000 * 60 * 2, // 2 minutes

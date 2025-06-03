@@ -21,10 +21,12 @@ export interface GetQueryFormsParams {
   group_id?: string | null;
   page?: number;
   pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export const getQueryForms = async (params: GetQueryFormsParams): Promise<FindMany<QueryForm>> => {
-    const { userTenentId, type, group_id, page = 1, pageSize = 10 } = params;
+    const { userTenentId, type, group_id, page = 1, pageSize = 10, sortField = 'createdAt', sortOrder = 'desc' } = params;
 
     if (!userTenentId) {
         console.error('[Service getQueryForms]: userTenentId is missing.');
@@ -33,30 +35,33 @@ export const getQueryForms = async (params: GetQueryFormsParams): Promise<FindMa
 
     const strapiParams: any = {
         'filters[tenent_id][$eq]': userTenentId,
-        'sort[0]': 'createdAt:desc',
-        'populate': ['user', 'media'], // Populate user and media relations
+        'populate': ['user', 'media'],
         'pagination[page]': page,
         'pagination[pageSize]': pageSize,
     };
 
+    if (sortField && sortOrder) {
+        strapiParams['sort[0]'] = `${sortField}:${sortOrder}`;
+    }
     if (type) {
       strapiParams['filters[type][$eq]'] = type;
     }
     if (group_id) {
-      strapiParams['filters[group_id][$eq]'] = group_id;
+      // Assuming group_id is a text field, use containsi for case-insensitive partial match
+      strapiParams['filters[group_id][$containsi]'] = group_id;
     }
 
     const url = '/query-forms';
-    console.log(`[getQueryForms] Fetching URL: ${url} with params:`, strapiParams);
+    console.log(`[getQueryForms] Fetching URL: ${url} with params:`, JSON.stringify(strapiParams));
 
     try {
         const headers = await getAuthHeader();
         const response = await axiosInstance.get<FindMany<QueryForm>>(url, { params: strapiParams, headers });
 
         if (!response.data || !response.data.data || !Array.isArray(response.data.data) || !response.data.meta?.pagination) {
-            console.error(`[getQueryForms] Unexpected API response structure for tenent_id ${userTenentId}. Expected 'data' array and 'meta.pagination', received:`, response.data);
+            console.error(`[getQueryForms] Unexpected API response structure. Expected 'data' array and 'meta.pagination', received:`, response.data);
             if (response.data === null || response.data === undefined || (response.data && !response.data.data)) {
-                console.warn(`[getQueryForms] API returned null, undefined, or no 'data' property for tenent_id ${userTenentId}. Returning empty result.`);
+                console.warn(`[getQueryForms] API returned null, undefined, or no 'data' property. Returning empty result.`);
                 return { data: [], meta: { pagination: { page: 1, pageSize, pageCount: 0, total: 0 } } };
             }
             throw new Error("Unexpected API response structure. Expected 'data' array and 'meta.pagination'.");

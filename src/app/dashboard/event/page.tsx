@@ -3,8 +3,8 @@
 
 import * as React from 'react';
 import Link from "next/link";
-import { format } from "date-fns";
-import { PlusCircle, Pencil, Trash2, Loader2, AlertCircle, Eye, CalendarIcon, MapPin, LayoutGrid, List } from "lucide-react";
+import { format, parseISO, isValid } from "date-fns";
+import { PlusCircle, Pencil, Trash2, Loader2, AlertCircle, Eye, CalendarIcon, MapPin, LayoutGrid, List, Search, X, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -36,105 +36,190 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { useGetEvents, useDeleteEvent } from "@/lib/queries/event";
+import { Alert, AlertTitle, AlertDescription as AlertDescriptionComponent } from "@/components/ui/alert";
+import { useGetEvents, useDeleteEvent, type UseGetEventsOptions } from "@/lib/queries/event";
 import { useCurrentUser } from '@/lib/queries/user';
 import EventCardGrid from './_components/event-card-grid'; 
-import type { Event } from '@/types/event'; // Import Event type
+import type { Event } from '@/types/event';
 import { toast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { getStoredPreference, setStoredPreference } from '@/lib/storage';
 
 type ViewMode = 'table' | 'card';
+type SortFieldEvent = 'title' | 'event_date_time' | 'createdAt' | 'category' | 'event_status';
+type SortOrderEvent = 'asc' | 'desc';
+
+const DEFAULT_PAGE_SIZE_EVENT_TABLE = 10;
+const DEFAULT_PAGE_SIZE_EVENT_CARD = 9;
+const EVENT_CATEGORIES_MOCK = ["Conference", "Workshop", "Webinar", "Meetup", "Party", "Product Launch", "Networking", "Charity", "Sports", "Cultural"]; // Re-using from form page
+const EVENT_STATUSES = ["Draft", "Published"];
+
+const PAGE_SIZE_OPTIONS_EVENT = [
+    { label: "9 per page (Card)", value: "9" }, { label: "10 per page (Table)", value: "10" },
+    { label: "12 per page", value: "12" }, { label: "20 per page", value: "20" },
+    { label: "24 per page", value: "24" }, { label: "50 per page", value: "50" },
+];
+const SORT_FIELD_OPTIONS_EVENT: { label: string; value: SortFieldEvent }[] = [
+  { label: "Title", value: "title" }, { label: "Event Date", value: "event_date_time" },
+  { label: "Category", value: "category" }, { label: "Status", value: "event_status" },
+  { label: "Created At", value: "createdAt" },
+];
+const SORT_ORDER_OPTIONS_EVENT: { label: string; value: SortOrderEvent }[] = [
+  { label: "Ascending", value: "asc" }, { label: "Descending", value: "desc" },
+];
 
 export default function EventPage() {
    const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser();
    const userKey = currentUser?.tenent_id;
-   const { data: events, isLoading: isLoadingEvents, isError: isEventsError, error: eventsError, refetch, isFetching } = useGetEvents();
+
+   const [viewMode, setViewMode] = React.useState<ViewMode>(() => getStoredPreference('eventViewMode', 'table'));
+   const [currentPage, setCurrentPage] = React.useState(1);
+   const [pageSize, setPageSize] = React.useState(() =>
+        getStoredPreference('eventPageSize', viewMode === 'table' ? DEFAULT_PAGE_SIZE_EVENT_TABLE : DEFAULT_PAGE_SIZE_EVENT_CARD)
+    );
+   const [sortField, setSortField] = React.useState<SortFieldEvent>(() => getStoredPreference('eventSortField', 'event_date_time'));
+   const [sortOrder, setSortOrder] = React.useState<SortOrderEvent>(() => getStoredPreference('eventSortOrder', 'desc'));
+
+   const [localTitleFilter, setLocalTitleFilter] = React.useState('');
+   const [activeTitleFilter, setActiveTitleFilter] = React.useState<string | null>(null);
+   const [selectedCategoryFilter, setSelectedCategoryFilter] = React.useState<string | null>(null);
+   const [selectedStatusFilter, setSelectedStatusFilter] = React.useState<string | null>(null);
+
+   const eventQueryOptions: UseGetEventsOptions = {
+        page: currentPage,
+        pageSize,
+        sortField,
+        sortOrder,
+        titleFilter: activeTitleFilter,
+        categoryFilter: selectedCategoryFilter,
+        statusFilter: selectedStatusFilter,
+   };
+   const { data: eventDataResponse, isLoading: isLoadingEvents, isError: isEventsError, error: eventsError, refetch, isFetching } = useGetEvents(eventQueryOptions);
+   const events = eventDataResponse?.data || [];
+   const pagination = eventDataResponse?.meta?.pagination;
+
    const deleteMutation = useDeleteEvent();
-   const [viewMode, setViewMode] = React.useState<ViewMode>('table');
+
+   React.useEffect(() => { setStoredPreference('eventViewMode', viewMode); }, [viewMode]);
+   React.useEffect(() => { setStoredPreference('eventPageSize', pageSize); setCurrentPage(1); }, [pageSize]);
+   React.useEffect(() => { setStoredPreference('eventSortField', sortField); setCurrentPage(1); }, [sortField]);
+   React.useEffect(() => { setStoredPreference('eventSortOrder', sortOrder); setCurrentPage(1); }, [sortOrder]);
+   React.useEffect(() => { setCurrentPage(1); }, [activeTitleFilter, selectedCategoryFilter, selectedStatusFilter]);
 
    const isLoading = isLoadingUser || isLoadingEvents;
    const isError = isUserError || isEventsError;
    const error = isUserError ? new Error("Failed to load user data.") : eventsError;
 
-    React.useEffect(() => {
-        // console.log("[EventPage] Current User:", currentUser);
-        // console.log("[EventPage] User Key (tenent_id):", userKey);
-        // console.log("[EventPage] Events Data:", events);
-        // console.log("[EventPage] Is Loading User:", isLoadingUser);
-        // console.log("[EventPage] Is Loading Events:", isLoadingEvents);
-        // console.log("[EventPage] Is Combined Loading:", isLoading);
-        // console.log("[EventPage] Is Events Error:", isEventsError);
-        // console.log("[EventPage] Events Error Object:", eventsError);
-        // console.log("[EventPage] Is Combined Error:", isError);
-        // console.log("[EventPage] Combined Error Object:", error);
-        // console.log("[EventPage] Is Fetching (useGetEvents):", isFetching);
-    }, [currentUser, userKey, events, isLoadingUser, isLoadingEvents, isLoading, isEventsError, eventsError, isError, error, isFetching]);
-
-
-   const handleDelete = (eventToDelete: Event) => { // Accept full event object
+   const handleDelete = (eventToDelete: Event) => {
        if (!eventToDelete.documentId) {
-            console.error("Cannot delete event: documentId is missing.", eventToDelete);
             toast({ variant: "destructive", title: "Error", description: "Cannot delete event: missing identifier."});
             return;
        }
-       deleteMutation.mutate({ 
-           documentId: eventToDelete.documentId, 
-           numericId: eventToDelete.id ? String(eventToDelete.id) : undefined 
-       });
+       deleteMutation.mutate({ documentId: eventToDelete.documentId, numericId: String(eventToDelete.id) });
+   };
+   
+   const applyFilters = () => {
+       setActiveTitleFilter(localTitleFilter.trim() === '' ? null : localTitleFilter.trim());
+       // Category and Status filters are already active via their select onChange
    };
 
    return (
      <TooltipProvider>
        <div className="flex flex-col space-y-6">
-         <div className="flex items-center justify-between">
+         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
            <h1 className="text-3xl font-bold tracking-tight">Events</h1>
-           <div className="flex items-center space-x-2">
+           <div className="flex items-center space-x-2 self-end sm:self-center">
                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                        variant={viewMode === 'table' ? 'default' : 'outline'}
-                        size="icon"
-                        onClick={() => setViewMode('table')}
-                        aria-label="Table View"
-                        disabled={isLoading}
-                        >
-                        <List className="h-4 w-4" />
-                        </Button>
-                    </TooltipTrigger>
+                    <TooltipTrigger asChild><Button variant={viewMode === 'table' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('table')} aria-label="Table View" disabled={isLoading}><List className="h-4 w-4" /></Button></TooltipTrigger>
                     <TooltipContent>Table View</TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                        variant={viewMode === 'card' ? 'default' : 'outline'}
-                        size="icon"
-                        onClick={() => setViewMode('card')}
-                        aria-label="Card View"
-                        disabled={isLoading}
-                        >
-                        <LayoutGrid className="h-4 w-4" />
-                        </Button>
-                    </TooltipTrigger>
+                    <TooltipTrigger asChild><Button variant={viewMode === 'card' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('card')} aria-label="Card View" disabled={isLoading}><LayoutGrid className="h-4 w-4" /></Button></TooltipTrigger>
                     <TooltipContent>Card View</TooltipContent>
                 </Tooltip>
                <Link href="/dashboard/event/new">
-                 <Button disabled={isLoadingUser || !userKey}>
-                   <PlusCircle className="mr-2 h-4 w-4" /> New Event
-                 </Button>
+                 <Button disabled={isLoadingUser || !userKey}><PlusCircle className="mr-2 h-4 w-4" /> New Event</Button>
                </Link>
            </div>
          </div>
 
-        {(isLoading || isFetching) && <EventPageSkeleton viewMode={viewMode} />}
+        <Card>
+            <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Filter Events</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                    <div>
+                        <Label htmlFor="title-filter-input" className="text-xs text-muted-foreground">Filter by Title</Label>
+                        <Input id="title-filter-input" type="search" placeholder="Event title..." value={localTitleFilter} onChange={(e) => setLocalTitleFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyFilters()} className="h-9 text-xs" disabled={isLoadingEvents || isFetching}/>
+                    </div>
+                    <div>
+                        <Label htmlFor="category-filter-select" className="text-xs text-muted-foreground">Filter by Category</Label>
+                        <Select value={selectedCategoryFilter || 'all'} onValueChange={(value) => {setSelectedCategoryFilter(value === 'all' ? null : value); setCurrentPage(1);}} disabled={isLoadingEvents || isFetching}>
+                            <SelectTrigger id="category-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Categories" /></SelectTrigger>
+                            <SelectContent>{['all', ...EVENT_CATEGORIES_MOCK].map(cat => <SelectItem key={cat} value={cat} className="text-xs capitalize">{cat === 'all' ? 'All Categories' : cat}</SelectItem>)}</SelectContent>
+                        </Select>
+                    </div>
+                     <div>
+                        <Label htmlFor="status-filter-select" className="text-xs text-muted-foreground">Filter by Status</Label>
+                        <Select value={selectedStatusFilter || 'all'} onValueChange={(value) => {setSelectedStatusFilter(value === 'all' ? null : value); setCurrentPage(1);}} disabled={isLoadingEvents || isFetching}>
+                            <SelectTrigger id="status-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+                            <SelectContent>{['all', ...EVENT_STATUSES].map(stat => <SelectItem key={stat} value={stat} className="text-xs capitalize">{stat === 'all' ? 'All Statuses' : stat}</SelectItem>)}</SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                 <Button onClick={applyFilters} className="h-9 text-xs mt-2" disabled={isLoadingEvents || isFetching}>
+                    <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Title Filter
+                </Button>
+
+                 <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="advanced-sort-pagination">
+                        <AccordionTrigger className="text-sm font-medium">
+                            <div className="flex items-center gap-2"><Filter className="h-4 w-4" />Advanced Sorting & Pagination</div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-4 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                    <Select value={sortField} onValueChange={(value) => setSortField(value as SortFieldEvent)} disabled={isLoadingEvents || isFetching}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                        <SelectContent>{SORT_FIELD_OPTIONS_EVENT.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Order</Label>
+                                    <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrderEvent)} disabled={isLoadingEvents || isFetching}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                        <SelectContent>{SORT_ORDER_OPTIONS_EVENT.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                    <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingEvents || isFetching}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                        <SelectContent>{PAGE_SIZE_OPTIONS_EVENT.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+            </CardContent>
+        </Card>
+
+        {(isLoading && !eventDataResponse) || (isFetching && !eventDataResponse) ? <EventPageSkeleton viewMode={viewMode} pageSize={pageSize} /> : null}
 
          {isError && !isFetching && (
            <Alert variant="destructive">
              <AlertCircle className="h-4 w-4" />
              <AlertTitle>Error Loading Data</AlertTitle>
-             <AlertDescription>
+             <AlertDescriptionComponent>
                Could not fetch user data or events. Please try again. <br />
                <span className="text-xs">{error?.message}</span>
-             </AlertDescription>
+             </AlertDescriptionComponent>
              <Button onClick={() => refetch()} variant="secondary" size="sm" className="mt-2" disabled={isFetching}>
                {isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
                {isFetching ? 'Retrying...' : 'Retry'}
@@ -142,13 +227,13 @@ export default function EventPage() {
            </Alert>
          )}
 
-         {!isLoading && !isError && userKey && events && events.length === 0 && (
+         {!isLoading && !isError && userKey && events.length === 0 && (
            <div className="mt-4 border border-dashed border-border rounded-md p-8 text-center text-muted-foreground">
-             No events found for your key ({userKey}). Click "New Event" to create one.
+             No events found for your key ({userKey}) matching the current filters. Click "New Event" to create one.
            </div>
          )}
 
-         {!isLoading && !isError && userKey && events && events.length > 0 && (
+         {!isLoading && !isError && userKey && events.length > 0 && (
             viewMode === 'table' ? (
             <Card>
                 <CardHeader>
@@ -172,13 +257,13 @@ export default function EventPage() {
                     </TableHeader>
                     <TableBody>
                     {events.map((event) => {
-                        const eventDateTime = event.event_date_time ? new Date(event.event_date_time as string) : null;
+                        const eventDateTime = event.event_date_time ? parseISO(String(event.event_date_time)) : null;
                         return (
-                        <TableRow key={event.id}>
+                        <TableRow key={event.id || event.documentId}>
                             <TableCell className="font-medium">{event.title || 'N/A'}</TableCell>
                             <TableCell className="hidden md:table-cell text-muted-foreground">{event.category || 'N/A'}</TableCell>
                             <TableCell className="hidden sm:table-cell">
-                            {eventDateTime ? (
+                            {eventDateTime && isValid(eventDateTime) ? (
                                 <Tooltip>
                                 <TooltipTrigger className="flex items-center gap-1 text-muted-foreground">
                                     <CalendarIcon className="h-4 w-4" />
@@ -284,11 +369,24 @@ export default function EventPage() {
             ) : (
                <EventCardGrid
                  events={events}
-                 onDelete={handleDelete}
+                 onDelete={(id: string) => { const eventToDelete = events.find(e => String(e.id) === id || e.documentId === id); if (eventToDelete) handleDelete(eventToDelete);}}
                  deleteMutation={deleteMutation}
                 />
             )
          )}
+         {pagination && pagination.pageCount > 1 && (
+            <div className="flex items-center justify-between pt-4">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1 || isFetching}>
+                    <ChevronLeft className="mr-1 h-4 w-4" /> Previous
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                    Page {pagination.page} of {pagination.pageCount} (Total: {pagination.total} events)
+                </span>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(pagination.pageCount, prev + 1))} disabled={currentPage === pagination.pageCount || isFetching}>
+                    Next <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+            </div>
+          )}
 
          {!isLoadingUser && !isUserError && !userKey && (
            <div className="mt-4 border border-dashed border-border rounded-md p-8 text-center text-muted-foreground">
@@ -300,10 +398,22 @@ export default function EventPage() {
    );
 }
 
-function EventPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
-    const skeletonItems = Array(viewMode === 'table' ? 5 : 6).fill(0);
+function EventPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, pageSize: number }) {
+    const skeletonItems = Array(pageSize).fill(0);
     return (
       <div className="space-y-4">
+        <Card>
+            <CardHeader className="pb-2"><Skeleton className="h-6 w-1/3" /></CardHeader>
+            <CardContent className="space-y-4 pt-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                    <Skeleton className="h-9 w-full"/>
+                    <Skeleton className="h-9 w-full"/>
+                    <Skeleton className="h-9 w-full"/>
+                </div>
+                <Skeleton className="h-9 w-24"/>
+                <Skeleton className="h-10 w-full rounded-md" />
+            </CardContent>
+        </Card>
         {viewMode === 'table' ? (
             <div className="rounded-md border">
             <Table>
@@ -359,6 +469,7 @@ function EventPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
                  ))}
             </div>
         )}
+         <div className="flex items-center justify-between pt-4"><Skeleton className="h-8 w-24" /><Skeleton className="h-6 w-1/4" /><Skeleton className="h-8 w-20" /></div>
       </div>
     );
 }

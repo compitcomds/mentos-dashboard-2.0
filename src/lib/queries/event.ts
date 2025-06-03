@@ -5,13 +5,27 @@ import {
   deleteEvent as deleteEventService,
   getEvent as getEventService,
   updateEvent as updateEventService,
-  getEvents as getEventsService, // Added getEventsService import
+  getEvents as getEventsService,
+  type GetEventsParams, // Import params type
 } from "@/lib/services/event";
 import type { CreateEventPayload, Event } from "@/types/event";
+import type { FindMany } from "@/types/strapi_response"; // Import FindMany
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from './user';
 
-const EVENTS_QUERY_KEY = (userTenentId?: string) => ['events', userTenentId || 'all'];
+export interface UseGetEventsOptions {
+  page?: number;
+  pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+  titleFilter?: string | null;
+  categoryFilter?: string | null;
+  statusFilter?: string | null;
+}
+
+const EVENTS_QUERY_KEY = (userTenentId?: string, options?: UseGetEventsOptions) =>
+  ['events', userTenentId || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder, options?.titleFilter, options?.categoryFilter, options?.statusFilter];
+
 const EVENT_DETAIL_QUERY_KEY = (id?: string, userTenentId?: string) => ['event', id || 'new', userTenentId || 'all'];
 
 export const useCreateEvent = () => {
@@ -55,18 +69,20 @@ export const useCreateEvent = () => {
   });
 };
 
-export const useGetEvents = () => {
+export const useGetEvents = (options?: UseGetEventsOptions) => {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
+  const { page, pageSize, sortField, sortOrder, titleFilter, categoryFilter, statusFilter } = options || {};
 
-  return useQuery<Event[], Error>({
-    queryKey: EVENTS_QUERY_KEY(userTenentId),
+  return useQuery<FindMany<Event>, Error>({
+    queryKey: EVENTS_QUERY_KEY(userTenentId, { page, pageSize, sortField, sortOrder, titleFilter, categoryFilter, statusFilter }),
     queryFn: () => {
       if (!userTenentId) {
         console.warn("useGetEvents: User tenent_id not available yet. Returning empty array.");
-        return Promise.resolve([]);
+        return Promise.resolve({ data: [], meta: { pagination: { page: 1, pageSize: pageSize || 10, pageCount: 0, total: 0 } } });
       }
-      return getEventsService(userTenentId);
+      const params: GetEventsParams = { userTenentId, page, pageSize, sortField, sortOrder, titleFilter, categoryFilter, statusFilter };
+      return getEventsService(params);
     },
     enabled: !!userTenentId && !isLoadingUser,
     staleTime: 1000 * 60 * 2,

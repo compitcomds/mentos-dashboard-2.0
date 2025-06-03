@@ -15,32 +15,71 @@ async function getAuthHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
-export const getEvents = async (userTenentId: string): Promise<Event[]> => {
+export interface GetEventsParams {
+  userTenentId: string;
+  page?: number;
+  pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+  titleFilter?: string | null;
+  categoryFilter?: string | null;
+  statusFilter?: string | null;
+}
+
+export const getEvents = async (params: GetEventsParams): Promise<FindMany<Event>> => {
+    const {
+        userTenentId,
+        page = 1,
+        pageSize = 10,
+        sortField = 'event_date_time', // Default sort
+        sortOrder = 'desc',
+        titleFilter,
+        categoryFilter,
+        statusFilter,
+    } = params;
+
     if (!userTenentId) {
         console.error('[Service getEvents]: userTenentId is missing.');
         throw new Error('User tenent_id is required to fetch events.');
     }
-     const params = {
+
+    const strapiParams: any = {
         'filters[tenent_id][$eq]': userTenentId,
-        'populate':'*',
+        'populate':'*', // Keep populate for card/table view needs
+        'pagination[page]': page,
+        'pagination[pageSize]': pageSize,
     };
+
+    if (sortField && sortOrder) {
+        strapiParams['sort[0]'] = `${sortField}:${sortOrder}`;
+    }
+    if (titleFilter) {
+        strapiParams['filters[title][$containsi]'] = titleFilter;
+    }
+    if (categoryFilter) {
+        strapiParams['filters[category][$eq]'] = categoryFilter;
+    }
+    if (statusFilter) {
+        strapiParams['filters[event_status][$eq]'] = statusFilter;
+    }
+
     const url = '/events';
-    console.log(`[getEvents] Fetching URL: ${url} with params:`, params);
+    console.log(`[getEvents] Fetching URL: ${url} with params:`, JSON.stringify(strapiParams));
 
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.get<FindMany<Event>>(url, { params, headers });
+        const response = await axiosInstance.get<FindMany<Event>>(url, { params: strapiParams, headers });
 
-        if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
-            console.error(`[getEvents] Unexpected API response structure for tenent_id ${userTenentId}. Expected 'data' array, received:`, response.data);
+        if (!response.data || !response.data.data || !Array.isArray(response.data.data) || !response.data.meta?.pagination) {
+            console.error(`[getEvents] Unexpected API response structure. Expected 'data' array and 'meta.pagination', received:`, response.data);
              if (response.data === null || response.data === undefined || (response.data && !response.data.data)) {
-                console.warn(`[getEvents] API returned null, undefined, or no 'data' property for tenent_id ${userTenentId}. Returning empty array.`);
-                return [];
+                console.warn(`[getEvents] API returned null, undefined, or no 'data' property. Returning empty result.`);
+                return { data: [], meta: { pagination: { page: 1, pageSize, pageCount: 0, total: 0 } } };
             }
-            throw new Error('Unexpected API response structure. Expected an array within a "data" property.');
+            throw new Error('Unexpected API response structure. Expected an array within a "data" property and pagination metadata.');
         }
-        console.log(`[getEvents] Fetched ${response.data.data.length} Events for tenent_id ${userTenentId}.`);
-        return response.data.data;
+        console.log(`[getEvents] Fetched ${response.data.data.length} Events for tenent_id ${userTenentId}. Pagination:`, response.data.meta.pagination);
+        return response.data;
 
     } catch (error: unknown) {
         let message = `Failed to fetch events for tenent_id ${userTenentId}`;
