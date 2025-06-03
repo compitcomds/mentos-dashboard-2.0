@@ -5,21 +5,19 @@ import * as React from 'react';
 import Image from 'next/image';
 import {
     ColumnDef,
-    ColumnFiltersState,
-    SortingState,
+    // ColumnFiltersState, // Removed, filters managed by parent
+    // SortingState, // Removed, sorting managed by parent
     VisibilityState,
     flexRender,
     getCoreRowModel,
-    getFilteredRowModel,
-    getPaginationRowModel,
-    getSortedRowModel,
+    // getFilteredRowModel, // Removed, filtering managed by parent
+    getPaginationRowModel, // Keep for client-side pagination display logic if table manages its own display
+    // getSortedRowModel, // Removed, sorting managed by parent
     useReactTable,
 } from '@tanstack/react-table';
 import { MoreHorizontal, ArrowUpDown, Image as ImageIcon, Video, FileText, FileQuestion, Copy, Eye, Edit, Trash2, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-// Checkbox removed as it's not used in the current table column definitions.
-// import { Checkbox } from '@/components/ui/checkbox';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -28,7 +26,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+// Input removed as main table filter is handled by parent
 import {
     Table,
     TableBody,
@@ -42,7 +40,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/hooks/use-toast';
 import { useDeleteMediaMutation } from '@/lib/queries/media';
 import type { CombinedMediaData } from '@/types/media';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, parseISO, isValid } from 'date-fns'; // Added parseISO and isValid
 
 import EditMediaDialog from './edit-media-dialog';
 import PreviewDialog from './preview-dialog';
@@ -87,27 +85,20 @@ const MediaActions: React.FC<{
     };
 
     const handleDelete = () => {
-        const webMediaIdToDelete = media.webMediaId; // Numeric ID for WebMedia entry
-        const fileIdToDelete = media.fileId; // Numeric ID for the file itself
+        const webMediaIdToDelete = media.webMediaId;
+        const fileIdToDelete = media.fileId;
 
         if (webMediaIdToDelete === undefined || webMediaIdToDelete === null) {
             toast({ variant: "destructive", title: "Error", description: "Cannot delete media: WebMedia identifier (numeric ID) missing."});
             setIsAlertDialogOpen(false);
             return;
         }
-        // fileIdToDelete can be null if there's no associated file, the service handles this.
 
         deleteMutation.mutate(
             { webMediaId: webMediaIdToDelete, fileId: fileIdToDelete },
             {
-                onSuccess: () => {
-                    setIsAlertDialogOpen(false);
-                    // Toast handled by mutation hook
-                },
-                onError: () => {
-                    setIsAlertDialogOpen(false);
-                    // Toast handled by mutation hook
-                }
+                onSuccess: () => { setIsAlertDialogOpen(false); },
+                onError: () => { setIsAlertDialogOpen(false); }
             }
         );
     };
@@ -138,7 +129,7 @@ const MediaActions: React.FC<{
                         <DropdownMenuItem
                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
                              disabled={deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId}
-                             onSelect={(e) => e.preventDefault()} // Prevent menu from closing before dialog
+                             onSelect={(e) => e.preventDefault()}
                         >
                              {deleteMutation.isPending && deleteMutation.variables?.webMediaId === media.webMediaId ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -166,9 +157,7 @@ const MediaActions: React.FC<{
                         disabled={deleteMutation.isPending}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                         {deleteMutation.isPending ? (
-                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                         ) : null}
+                         {deleteMutation.isPending ? (<Loader2 className="mr-2 h-4 w-4 animate-spin" />) : null}
                          {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
                      </AlertDialogAction>
                 </AlertDialogFooter>
@@ -207,66 +196,41 @@ export const columns: (
                  </div>
              );
         },
-         enableSorting: false,
+         enableSorting: false, // Sorting for preview doesn't make sense
     },
     {
         accessorKey: 'name',
-        header: ({ column }) => (
-            <Button
-                variant="ghost"
-                onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            >
-                Name
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-        ),
+        header: 'Name', // Parent component will handle sort button
         cell: ({ row }) => <div className="font-medium capitalize">{row.getValue('name')}</div>,
+        enableSorting: true,
     },
-    {
-        accessorKey: 'fileName',
-        header: 'Original Filename',
-         cell: ({ row }) => <div className="text-muted-foreground truncate max-w-xs">{row.getValue('fileName') || '-'}</div>,
-         enableSorting: true,
-    },
-    {
-        accessorKey: 'alt',
-        header: 'Alt Text',
-         cell: ({ row }) => <div className="text-muted-foreground truncate max-w-xs">{row.getValue('alt') || '-'}</div>,
+     {
+        accessorKey: 'category',
+        header: 'Category',
+        cell: ({ row }) => <div className="text-muted-foreground">{row.getValue('category') || '-'}</div>,
+        enableSorting: true,
     },
     {
         accessorKey: 'mime',
         header: 'Type',
         cell: ({ row }) => <Badge variant="outline">{row.getValue('mime') || 'N/A'}</Badge>,
+        enableSorting: true,
     },
     {
         accessorKey: 'size',
-        header: ({ column }) => (
-            <Button
-                variant="ghost"
-                onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            >
-                Size
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-        ),
+        header: 'Size',
         cell: ({ row }) => <div className="whitespace-nowrap">{formatBytes(row.getValue('size'))}</div>,
+        enableSorting: true,
     },
     {
         accessorKey: 'createdAt',
-        header: ({ column }) => (
-            <Button
-                variant="ghost"
-                onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            >
-                Uploaded
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-        ),
+        header: 'Uploaded',
          cell: ({ row }) => {
-            const dateValue = row.getValue('createdAt');
+            const dateValue = row.getValue('createdAt') as string | Date | undefined;
             if (!dateValue) return <div>-</div>;
             try {
-                const date = new Date(dateValue as string);
+                const date = typeof dateValue === 'string' ? parseISO(dateValue) : dateValue;
+                if (!isValid(date)) return <div>Invalid Date</div>;
                 const relativeTime = formatDistanceToNow(date, { addSuffix: true });
                 return (
                      <TooltipProvider>
@@ -285,27 +249,54 @@ export const columns: (
                  return <div>Invalid Date</div>;
             }
         },
+        enableSorting: true,
+    },
+     {
+        accessorKey: 'publishedAt',
+        header: 'Published',
+         cell: ({ row }) => {
+            const dateValue = row.getValue('publishedAt') as string | Date | undefined | null;
+            if (!dateValue) return <Badge variant="secondary">Draft</Badge>;
+            try {
+                const date = typeof dateValue === 'string' ? parseISO(dateValue) : dateValue;
+                 if (!isValid(date)) return <div>Invalid Date</div>;
+                const relativeTime = formatDistanceToNow(date, { addSuffix: true });
+                return (
+                     <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                               <div className="whitespace-nowrap">{relativeTime}</div>
+                            </TooltipTrigger>
+                             <TooltipContent>
+                                <p>{date.toLocaleString()}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                     </TooltipProvider>
+                );
+            } catch (e) {
+                 console.error("Error formatting publishedAt date:", dateValue, e);
+                 return <div>Invalid Date</div>;
+            }
+        },
+        enableSorting: true,
     },
     {
         id: 'actions',
          enableHiding: false,
+         header: () => <div className="text-right">Actions</div>,
          cell: ({ row }) => {
              const media = row.original;
-             return <MediaActions media={media} onEdit={onEdit} onPreview={onPreview} />;
+             return <div className="text-right"><MediaActions media={media} onEdit={onEdit} onPreview={onPreview} /></div>;
         },
     },
 ];
 
 interface MediaTableProps {
     data: CombinedMediaData[];
+    // Removed pagination and sorting props as they are managed by parent now
 }
 
 export default function MediaTable({ data }: MediaTableProps) {
-    const [sorting, setSorting] = React.useState<SortingState>([]);
-    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
-    const [rowSelection, setRowSelection] = React.useState({});
-
     const [isEditOpen, setIsEditOpen] = React.useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
     const [selectedMedia, setSelectedMedia] = React.useState<CombinedMediaData | null>(null);
@@ -322,46 +313,24 @@ export default function MediaTable({ data }: MediaTableProps) {
 
      const tableColumns = React.useMemo(() => columns(handleEdit, handlePreview), []);
 
-
+    // Table instance now mainly for rendering, pagination/sorting controlled by parent
     const table = useReactTable({
         data,
         columns: tableColumns,
-        onSortingChange: setSorting,
-        onColumnFiltersChange: setColumnFilters,
         getCoreRowModel: getCoreRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
-        getSortedRowModel: getSortedRowModel(),
-        getFilteredRowModel: getFilteredRowModel(),
-        onColumnVisibilityChange: setColumnVisibility,
-        onRowSelectionChange: setRowSelection,
-        state: {
-            sorting,
-            columnFilters,
-            columnVisibility,
-            rowSelection,
-        },
-         initialState: {
-             pagination: {
-                 pageSize: 10,
-             },
-             sorting: [{ id: 'createdAt', desc: true }],
-         },
-         getRowId: (row) => String(row.webMediaId), 
+        // The parent `WebMediaPage` handles pagination state and data fetching.
+        // This table component just renders the data it receives.
+        // We don't need table.previousPage(), table.nextPage() etc. here.
+        // Similarly, sorting and filtering are handled by parent based on API response.
+        manualPagination: true, // Indicate pagination is handled externally
+        manualSorting: true,    // Indicate sorting is handled externally
+        getRowId: (row) => String(row.webMediaId),
     });
 
     return (
         <TooltipProvider>
              <div className="w-full">
-                <div className="flex items-center py-4">
-                    <Input
-                        placeholder="Filter by name..."
-                        value={(table.getColumn('name')?.getFilterValue() as string) ?? ''}
-                        onChange={(event) =>
-                            table.getColumn('name')?.setFilterValue(event.target.value)
-                        }
-                        className="max-w-sm"
-                    />
-                </div>
+                {/* Filter input is now in the parent WebMediaPage */}
                 <div className="rounded-md border">
                     <Table>
                         <TableHeader>
@@ -384,7 +353,7 @@ export default function MediaTable({ data }: MediaTableProps) {
                             {table.getRowModel().rows?.length ? (
                                 table.getRowModel().rows.map((row) => (
                                     <TableRow
-                                        key={row.id} 
+                                        key={row.id}
                                         data-state={row.getIsSelected() && 'selected'}
                                     >
                                         {row.getVisibleCells().map((cell) => (
@@ -410,29 +379,7 @@ export default function MediaTable({ data }: MediaTableProps) {
                         </TableBody>
                     </Table>
                 </div>
-                <div className="flex items-center justify-end space-x-2 py-4">
-                     <div className="flex-1 text-sm text-muted-foreground">
-                        {table.getFilteredRowModel().rows.length} row(s) displayed.
-                    </div>
-                    <div className="space-x-2">
-                         <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => table.previousPage()}
-                             disabled={!table.getCanPreviousPage()}
-                        >
-                            Previous
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => table.nextPage()}
-                            disabled={!table.getCanNextPage()}
-                        >
-                            Next
-                        </Button>
-                    </div>
-                </div>
+                {/* Pagination controls are now in the parent WebMediaPage */}
             </div>
 
             {selectedMedia && (
@@ -442,7 +389,6 @@ export default function MediaTable({ data }: MediaTableProps) {
                     media={selectedMedia}
                     onSuccess={() => {
                          setIsEditOpen(false);
-                         // Table data will be refetched by the query invalidation in the hook
                     }}
                 />
             )}

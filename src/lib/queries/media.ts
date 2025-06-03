@@ -10,6 +10,7 @@ import {
     updateWebMedia,
     deleteMediaAndFile,
     getMediaFileDetailsById,
+    type FetchMediaFilesParams, // Import params type
 } from '@/lib/services/media';
 import type {
     CombinedMediaData,
@@ -18,29 +19,34 @@ import type {
     WebMedia,
     Media,
 } from '@/types/media';
+import type { FindMany } from '@/types/strapi_response'; // Import FindMany
 import { AxiosError } from 'axios';
 import { useCurrentUser } from './user';
 
 
-const MEDIA_QUERY_KEY = (userKey?: string) => ['mediaFiles', userKey || 'all'];
+const MEDIA_QUERY_KEY = (userKey?: string, options?: Omit<FetchMediaFilesParams, 'userTenentId'>) =>
+    ['mediaFiles', userKey || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder, options?.categoryFilter, options?.nameFilter];
+
 const MEDIA_DETAIL_QUERY_KEY = (id: number) => ['mediaFileDetail', id];
 
-export function useFetchMedia(userKey?: string) {
-    const { isLoading: isLoadingUser } = useCurrentUser();
+export function useFetchMedia(options?: Omit<FetchMediaFilesParams, 'userTenentId'>) {
+    const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
+    const userTenentId = currentUser?.tenent_id;
+    const { page, pageSize, sortField, sortOrder, categoryFilter, nameFilter } = options || {};
 
-    return useQuery<CombinedMediaData[], Error>({
-        queryKey: MEDIA_QUERY_KEY(userKey),
+    return useQuery<FindMany<CombinedMediaData>, Error>({
+        queryKey: MEDIA_QUERY_KEY(userTenentId, { page, pageSize, sortField, sortOrder, categoryFilter, nameFilter }),
         queryFn: () => {
-            if (!userKey) {
-                console.warn("useFetchMedia: User key not provided. Returning empty array.");
-                return Promise.resolve([]);
+            if (!userTenentId) {
+                console.warn("useFetchMedia: User key not provided. Returning empty result.");
+                return Promise.resolve({ data: [], meta: { pagination: { page: 1, pageSize: pageSize || 10, pageCount: 0, total: 0 } } });
             }
-            return fetchMediaFiles(userKey);
+            return fetchMediaFiles({ userTenentId, page, pageSize, sortField, sortOrder, categoryFilter, nameFilter });
         },
-        enabled: !!userKey && !isLoadingUser,
-        staleTime: 1000 * 60 * 5,
-         gcTime: 1000 * 60 * 30,
-         retry: 1,
+        enabled: !!userTenentId && !isLoadingUser,
+        staleTime: 1000 * 60 * 2, // 2 minutes
+        gcTime: 1000 * 60 * 10, // 10 minutes
+        retry: 1,
     });
 }
 
@@ -49,8 +55,8 @@ export function useUploadMediaMutation() {
     const { data: currentUser } = useCurrentUser();
     const userKey = currentUser?.tenent_id;
 
-    return useMutation<WebMedia, Error, { file: File; name: string; alt: string | null }>({
-        mutationFn: async ({ file, name, alt }) => {
+    return useMutation<WebMedia, Error, { file: File; name: string; alt: string | null; category?: string | null, tags?: {tag_value: string}[] | null }>({
+        mutationFn: async ({ file, name, alt, category, tags }) => {
              if (!userKey) {
                 throw new Error('User key is not available. Cannot upload media.');
             }
@@ -78,8 +84,10 @@ export function useUploadMediaMutation() {
              const createPayload: CreateWebMediaPayload = {
                 name: name || uploadedFile.name,
                 alt: alt || name || uploadedFile.name || null,
-                tenent_id: userKey, // Ensure tenent_id is included
-                media: uploadedFile.id, // This is the numeric Media ID
+                tenent_id: userKey,
+                media: uploadedFile.id,
+                category: category || null,
+                tags: tags || null,
             };
             console.log(`[useUploadMediaMutation] Payload for createWebMedia service:`, createPayload);
 
@@ -91,7 +99,6 @@ export function useUploadMediaMutation() {
         onSuccess: (data) => {
             console.log(`[useUploadMediaMutation] onSuccess: Invalidating media queries for userKey: ${userKey}`);
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
-             // Toast for success is handled by the upload button component itself after this mutation succeeds
         },
         onError: (error: unknown) => {
             let message = 'Could not upload the media file.';
@@ -127,6 +134,8 @@ export function useUpdateMediaMutation() {
                 description: `Media "${data.name}" updated successfully.`,
             });
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
+            // Optionally invalidate specific detail query if you have one for WebMedia by numeric ID
+            // queryClient.invalidateQueries({ queryKey: ['webMediaDetail', data.id] });
         },
         onError: (error: unknown, variables) => {
              let message = `Could not update media (ID: ${variables.webMediaId}).`;
@@ -212,5 +221,3 @@ export function useGetMediaFileDetailsById(id: number | null) {
         },
     });
 }
-
-    

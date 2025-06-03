@@ -87,7 +87,7 @@ export interface UpdateWebMediaPayload {
   name?: string;
   alt?: string | null;
   category?: string | null;
-  tags?: number[]; // Assuming tags are updated by their numeric IDs if they have one
+  tags?: { tag_value: string }[];
 }
 
 // Type for creating a web media entry after upload
@@ -97,7 +97,7 @@ export interface CreateWebMediaPayload {
     tenent_id: string;
     media: number; // The ID of the uploaded file (Media.id), now number
     category?: string | null;
-    tags?: number[];
+    tags?: { tag_value: string }[];
 }
 
 // Re-export UploadFile as Media for broader compatibility if needed,

@@ -22,36 +22,57 @@ async function getAuthHeader() {
     return { Authorization: `Bearer ${token}` };
 }
 
-export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMediaData[]> {
+export interface FetchMediaFilesParams {
+    userTenentId: string;
+    page?: number;
+    pageSize?: number;
+    sortField?: string;
+    sortOrder?: 'asc' | 'desc';
+    categoryFilter?: string | null;
+    nameFilter?: string | null; // For consistency with other services, though filtering name on server might be complex for WebMedia.name + Media.name
+}
+
+export async function fetchMediaFiles(params: FetchMediaFilesParams): Promise<FindMany<CombinedMediaData>> {
+    const { userTenentId, page = 1, pageSize = 10, sortField = 'createdAt', sortOrder = 'desc', categoryFilter, nameFilter } = params;
+
     if (!userTenentId) {
         console.error('[Service fetchMediaFiles]: userTenentId is missing. Cannot fetch media.');
         throw new Error('User tenent_id is required to fetch media files.');
     }
-    console.log(`[Service fetchMediaFiles]: Fetching web media entries with tenent_id '${userTenentId}'...`);
+    console.log(`[Service fetchMediaFiles]: Fetching web media entries for tenent_id '${userTenentId}' with params:`, params);
     const headers = await getAuthHeader();
-    const params = {
+
+    const strapiParams: any = {
         'filters[tenent_id][$eq]': userTenentId,
         'populate': ['media', 'tags', 'user'],
+        'pagination[page]': page,
+        'pagination[pageSize]': pageSize,
     };
+
+    if (sortField && sortOrder) {
+        strapiParams['sort[0]'] = `${sortField}:${sortOrder}`;
+    }
+    if (categoryFilter) {
+        strapiParams['filters[category][$containsi]'] = categoryFilter;
+    }
+    if (nameFilter) {
+        // Filtering by name might need to target WebMedia.name or Media.name (file name)
+        // For simplicity, let's assume we filter by WebMedia.name here.
+        // If Strapi supports OR filters easily or if you have a combined searchable field, that would be better.
+        strapiParams['filters[name][$containsi]'] = nameFilter;
+    }
+
+
     const url = '/web-medias';
-    console.log(`[fetchMediaFiles] Fetching URL: ${url} with params:`, JSON.stringify(params));
+    console.log(`[fetchMediaFiles] Fetching URL: ${url} with Strapi params:`, JSON.stringify(strapiParams));
 
     try {
-        const response = await axiosInstance.get<FindMany<WebMedia>>(url, { headers, params });
+        const response = await axiosInstance.get<FindMany<WebMedia>>(url, { headers, params: strapiParams });
         console.log('[Service fetchMediaFiles]: Raw API Response Status:', response.status);
 
-        if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
-            console.error('[Service fetchMediaFiles]: Unexpected API response structure. Expected "data" array, received:', response.data);
-            if (response.data === null || response.data === undefined || (response.data && !response.data.data)) {
-                console.warn('[Service fetchMediaFiles]: API returned null, undefined, or no "data" property. Returning empty array.');
-                return [];
-            }
-            throw new Error('Unexpected API response structure. Expected an array within a "data" property.');
-        }
-
-        if (response.data.data.length === 0) {
-            console.log(`[Service fetchMediaFiles]: API returned an empty array for tenent_id '${userTenentId}'. No media found.`);
-            return [];
+        if (!response.data || !response.data.data || !Array.isArray(response.data.data) || !response.data.meta?.pagination) {
+            console.error('[Service fetchMediaFiles]: Unexpected API response structure. Expected "data" array and "meta.pagination", received:', response.data);
+            return { data: [], meta: { pagination: { page: 1, pageSize, pageCount: 0, total: 0 } } };
         }
 
         const combinedData: CombinedMediaData[] = response.data.data.map((item: WebMedia) => {
@@ -77,7 +98,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
             const sizeInBytes = typeof mediaFile.size === 'number' ? mediaFile.size * 1024 : null;
 
             return {
-                webMediaId: item.id, // Numeric WebMedia.id
+                webMediaId: item.id,
                 webMediaDocumentId: item.documentId || String(item.id),
                 name: item.name || mediaFile.name || 'Unnamed Media',
                 alt: item.alt || null,
@@ -85,7 +106,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
                 createdAt: item.createdAt!,
                 updatedAt: item.updatedAt!,
                 publishedAt: item.publishedAt || null,
-                fileId: mediaFile.id, // Numeric Media.id
+                fileId: mediaFile.id,
                 fileDocumentId: mediaFile.documentId || String(mediaFile.id),
                 fileUrl: constructUrl(mediaFile.url),
                 fileName: mediaFile.name ?? 'N/A',
@@ -98,7 +119,7 @@ export async function fetchMediaFiles(userTenentId: string): Promise<CombinedMed
         }).filter((item): item is CombinedMediaData => item !== null);
 
         console.log(`[Service fetchMediaFiles]: Successfully transformed ${combinedData.length} items for tenent_id '${userTenentId}'.`);
-        return combinedData;
+        return { data: combinedData, meta: response.data.meta };
 
     } catch (error: unknown) {
         let message = `Failed to fetch media files for tenent_id '${userTenentId}'.`;
@@ -131,7 +152,6 @@ export async function uploadFile(formData: FormData): Promise<UploadFile[]> {
         if (!Array.isArray(response.data) || response.data.length === 0) {
             throw new Error("Upload response was empty or not an array.");
         }
-        // Ensure IDs are numbers
         return response.data.map(file => ({ ...file, id: Number(file.id) }));
     } catch (error: unknown) {
         let detailedMessage = 'File upload failed.';
@@ -235,7 +255,7 @@ export async function createWebMedia(payload: CreateWebMediaPayload): Promise<We
 
 export async function updateWebMedia(webMediaId: number, payload: UpdateWebMediaPayload): Promise<WebMedia> {
     console.log(`[Service updateWebMedia]: Attempting to update web media entry with ID ${webMediaId} using payload:`, payload);
-    const { tenent_id, ...updateData } = payload as any;
+    const { tenent_id, ...updateData } = payload as any; // tenent_id should not be in update payload to Strapi
     if (tenent_id) {
         console.warn(`[Service updateWebMedia]: tenent_id was present in update payload for WebMedia ${webMediaId} but is being excluded. tenent_id should not be updated.`);
     }
@@ -280,7 +300,7 @@ export async function deleteUploadFile(fileId: number): Promise<Media | void> {
             return { ...response.data, id: Number(response.data.id) };
         } else if (response.status === 204) {
              console.log(`[Service deleteUploadFile]: File ${fileId} deleted successfully (204 No Content).`);
-             return; // Explicitly return undefined for void
+             return;
         } else {
             const errorMsg = `Unexpected success response (status ${response.status}) after deleting file ${fileId}. Data: ${JSON.stringify(response.data)}`;
             console.error(`[Service deleteUploadFile]: ${errorMsg}`);
@@ -319,7 +339,7 @@ export async function deleteWebMedia(webMediaId: number): Promise<WebMedia | voi
             return { ...response.data.data, id: Number(response.data.data.id) };
         } else if (response.status === 204) {
             console.log(`[Service deleteWebMedia]: Web media entry ${webMediaId} deleted successfully (204 No Content).`);
-            return; // Explicitly return undefined for void
+            return;
         } else {
             const errorMsg = `Unexpected success response (status ${response.status}) after deleting web media ${webMediaId}. Data: ${JSON.stringify(response.data)}`;
             console.error(`[Service deleteWebMedia]: ${errorMsg}`);
@@ -328,6 +348,8 @@ export async function deleteWebMedia(webMediaId: number): Promise<WebMedia | voi
     } catch (error: unknown) {
         let detailedMessage = `Failed to delete web media entry ${webMediaId}`;
         let loggableErrorData: any = error;
+        const errorResponseData = error instanceof AxiosError ? error.response?.data : null;
+
 
         if (error instanceof AxiosError) {
             loggableErrorData = error.response?.data || error.message;
@@ -360,11 +382,9 @@ export async function deleteMediaAndFile(webMediaId: number, fileId: number | nu
         console.log(`[Service deleteMediaAndFile]: Web media entry ${webMediaId} deleted successfully.`);
     } catch (error) {
         console.error(`[Service deleteMediaAndFile]: Error deleting web media entry ${webMediaId}:`, error);
-        // Propagate the error specific to WebMedia deletion
         throw new Error(`Failed to delete web media entry ${webMediaId}. Associated file (ID: ${fileId}) was not attempted to be deleted. Original error: ${(error as Error).message}`);
     }
 
-    // Only attempt to delete file if WebMedia entry deletion was successful AND a fileId is provided
     if (webMediaDeleted && fileId !== null) {
         console.log(`[Service deleteMediaAndFile]: WebMedia entry ${webMediaId} deleted. Proceeding to delete file with ID: ${fileId}`);
         try {
@@ -372,8 +392,6 @@ export async function deleteMediaAndFile(webMediaId: number, fileId: number | nu
             fileDeleted = true;
             console.log(`[Service deleteMediaAndFile]: Associated file ${fileId} deleted successfully.`);
         } catch (error) {
-            // Log this error but do not re-throw if WebMedia was deleted, as the primary entity is gone.
-            // The returned object will indicate fileDeleted: false.
             console.error(`[Service deleteMediaAndFile]: Error deleting associated file ${fileId} (WebMedia entry ${webMediaId} was already deleted):`, error);
         }
     } else if (webMediaDeleted && fileId === null) {
@@ -389,17 +407,16 @@ export async function getMediaFileDetailsById(id: number): Promise<Media | null>
         console.warn('[Service getMediaFileDetailsById]: id is missing.');
         return null;
     }
-    const url = `/upload/files/${id}`; // Use numeric ID
+    const url = `/upload/files/${id}`;
     console.log(`[getMediaFileDetailsById] Fetching media details for ID: ${id} from URL: ${url}`);
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.get<Media>(url, { headers }); // Strapi /upload/files/:id directly returns the Media object
+        const response = await axiosInstance.get<Media>(url, { headers });
         console.log("[getMediaFileDetailsById] Raw Response:", response)
         if (!response.data || typeof response.data !== 'object' || response.data === null) {
             console.error(`[getMediaFileDetailsById] Unexpected API response structure for media ${id}. Expected an object, received:`, response.data);
             return null;
         }
-        // Ensure ID is number
         const mediaData = { ...response.data, id: Number(response.data.id) };
         console.log(`[getMediaFileDetailsById] Fetched Media ${id} Data:`, mediaData);
         return mediaData;
@@ -422,9 +439,7 @@ export async function getMediaFileDetailsById(id: number): Promise<Media | null>
         } else {
             console.error(`[getMediaFileDetailsById] Unknown Error for media ${id}:`, error);
         }
-        console.error(message); // Log the error before returning null or throwing
-        return null; // Or re-throw if you want the query hook to show an error state: throw new Error(message);
+        console.error(message);
+        return null;
     }
 }
-
-    
