@@ -30,6 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import ArrayFieldRenderer from '@/app/dashboard/extra-content/_components/array-field-renderer';
 import type { CombinedMediaData } from '@/types/media';
+import { AxiosError } from 'axios';
 
 // Helper to generate a unique field name for RHF
 const getFieldName = (component: FormFormatComponent): string => {
@@ -155,12 +156,12 @@ const generateRandomHandle = (length = 12) => {
   for (let i = 0; i < length; i++) {
     result += characters.charAt(Math.floor(Math.random() * characters.length));
   }
-  // Ensure it starts with a letter for better practice, though not strictly required by the regex
-  if (!/^[a-z]/.test(result)) {
-    result = 'h' + result.substring(1); // Prepend 'h' if it starts with a number
+  if (!/^[a-z]/.test(result) && result.length > 0) {
+    result = 'h' + result.substring(1);
+  } else if (result.length === 0) {
+     result = 'h' + Array(length -1).fill(0).map(() => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
   }
-  // Replace sequences of hyphens if any were allowed in characters (currently not)
-  return result.replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+  return result;
 };
 
 
@@ -217,7 +218,6 @@ export default function RenderExtraContentPage() {
                     }).filter((d: Date | null) => d !== null);
                 } else if (component.__component === 'dynamic-component.media-field' && Array.isArray(initialValues[fieldName])) {
                   initialValues[fieldName] = initialValues[fieldName].map((val: any) => {
-                    // Ensure value is string or number before attempting conversion for backwards compatibility
                     const idVal = (typeof val === 'number' || typeof val === 'string') ? String(val) : null;
                     if (idVal === null && val !== null) {
                       console.warn(`[RenderExtraContentPage Edit] Media field array item has unexpected type:`, val, `for field ${fieldName}. Setting to null.`);
@@ -230,11 +230,10 @@ export default function RenderExtraContentPage() {
                 const parsedDate = parseISO(String(entryValue));
                 initialValues[fieldName] = isValid(parsedDate) ? parsedDate : null;
               } else if (component.__component === 'dynamic-component.media-field') {
-                 // For non-array media field, value should be numeric ID
                  if (typeof entryValue === 'number') {
                    initialValues[fieldName] = Number(entryValue);
                  } else if (typeof entryValue === 'string' && !isNaN(Number(entryValue))) {
-                    initialValues[fieldName] = Number(entryValue); // Convert string numbers
+                    initialValues[fieldName] = Number(entryValue);
                  } else {
                    console.warn(`[RenderExtraContentPage Edit] Media field has unexpected non-numeric type:`, entryValue, `for field ${fieldName}. Setting to null.`);
                    initialValues[fieldName] = null;
@@ -261,7 +260,7 @@ export default function RenderExtraContentPage() {
 
 
  const handleMediaSelect = (selectedMedia: CombinedMediaData) => {
-    const mediaIdToSet = selectedMedia.fileId; // This is numeric Media.id
+    const mediaIdToSet = selectedMedia.fileId; 
 
     console.log("[RenderExtraContentPage] handleMediaSelect. Target:", currentMediaFieldTarget, "Selected Media (numeric ID):", mediaIdToSet);
 
@@ -333,6 +332,25 @@ export default function RenderExtraContentPage() {
     });
     console.log("Processed Form Data (meta_data part):", JSON.stringify(processedData, null, 2));
 
+    const commonErrorHandling = (error: any, submittedHandle: string) => {
+        if (error instanceof AxiosError && error.response?.data?.error?.details?.errorCode === 'DUPLICATE_ENTRY') {
+            const errorHandle = error.response.data.error.details.details?.handle;
+            if (errorHandle && errorHandle === submittedHandle) {
+                methods.setError('handle', {
+                    type: 'manual',
+                    message: 'This handle is already taken. Please choose a different one.'
+                });
+                 toast({ variant: "destructive", title: "Duplicate Handle", description: "This handle is already in use. Please try another." });
+            } else {
+                 toast({ variant: "destructive", title: "Duplicate Entry", description: error.response.data.error.message || "A similar entry already exists." });
+            }
+        } else {
+             const message = error.message || (action === 'create' ? "Failed to create data entry." : "Failed to update data entry.");
+             toast({ variant: "destructive", title: "Submission Error", description: message });
+        }
+         console.error("MetaData submission error:", error.response?.data || error);
+    };
+
 
     if (action === 'create') {
       const payload: CreateMetaDataPayload = {
@@ -349,6 +367,7 @@ export default function RenderExtraContentPage() {
           toast({ title: "Success", description: "Data entry created." });
           router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`);
         },
+        onError: (error: any) => commonErrorHandling(error, payload.handle),
       });
     } else if (action === 'edit' && metaDataEntryDocumentIdParam) {
         const updatePayload: Partial<Omit<CreateMetaDataPayload, 'meta_format' | 'tenent_id' | 'user'>> & {handle: string} = {
@@ -361,6 +380,7 @@ export default function RenderExtraContentPage() {
                 toast({ title: "Success", description: "Data entry updated." });
                 router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`);
             },
+            onError: (error: any) => commonErrorHandling(error, updatePayload.handle),
         });
     }
   };
@@ -456,7 +476,6 @@ export default function RenderExtraContentPage() {
     } else {
         value = formValues[fieldName];
     }
-    // Ensure that if value is an array, we map its items to numbers. If it's a single value, try to convert it.
     return Array.isArray(value) 
         ? value.map(v => (typeof v === 'number' ? v : (typeof v === 'string' && !isNaN(Number(v)) ? Number(v) : null)))
         : (typeof value === 'number' ? [value] : (typeof value === 'string' && !isNaN(Number(value)) ? [Number(value)] : []));
@@ -702,3 +721,4 @@ export default function RenderExtraContentPage() {
   );
 }
 
+    
