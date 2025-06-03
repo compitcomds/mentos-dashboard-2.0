@@ -15,32 +15,54 @@ async function getAuthHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
-export const getQueryForms = async (userTenentId: string): Promise<QueryForm[]> => {
+export interface GetQueryFormsParams {
+  userTenentId: string;
+  type?: string | null;
+  group_id?: string | null;
+  page?: number;
+  pageSize?: number;
+}
+
+export const getQueryForms = async (params: GetQueryFormsParams): Promise<FindMany<QueryForm>> => {
+    const { userTenentId, type, group_id, page = 1, pageSize = 10 } = params;
+
     if (!userTenentId) {
         console.error('[Service getQueryForms]: userTenentId is missing.');
         throw new Error('User tenent_id is required to fetch query forms.');
     }
-    const params = {
+
+    const strapiParams: any = {
         'filters[tenent_id][$eq]': userTenentId,
         'sort[0]': 'createdAt:desc',
+        'populate': ['user', 'media'], // Populate user and media relations
+        'pagination[page]': page,
+        'pagination[pageSize]': pageSize,
     };
+
+    if (type) {
+      strapiParams['filters[type][$eq]'] = type;
+    }
+    if (group_id) {
+      strapiParams['filters[group_id][$eq]'] = group_id;
+    }
+
     const url = '/query-forms';
-    console.log(`[getQueryForms] Fetching URL: ${url} with params:`, params);
+    console.log(`[getQueryForms] Fetching URL: ${url} with params:`, strapiParams);
 
     try {
         const headers = await getAuthHeader();
-        const response = await axiosInstance.get<FindMany<QueryForm>>(url, { params, headers });
+        const response = await axiosInstance.get<FindMany<QueryForm>>(url, { params: strapiParams, headers });
 
-        if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
-            console.error(`[getQueryForms] Unexpected API response structure for tenent_id ${userTenentId}. Expected 'data' array, received:`, response.data);
+        if (!response.data || !response.data.data || !Array.isArray(response.data.data) || !response.data.meta?.pagination) {
+            console.error(`[getQueryForms] Unexpected API response structure for tenent_id ${userTenentId}. Expected 'data' array and 'meta.pagination', received:`, response.data);
             if (response.data === null || response.data === undefined || (response.data && !response.data.data)) {
-                console.warn(`[getQueryForms] API returned null, undefined, or no 'data' property for tenent_id ${userTenentId}. Returning empty array.`);
-                return [];
+                console.warn(`[getQueryForms] API returned null, undefined, or no 'data' property for tenent_id ${userTenentId}. Returning empty result.`);
+                return { data: [], meta: { pagination: { page: 1, pageSize, pageCount: 0, total: 0 } } };
             }
-            throw new Error("Unexpected API response structure. Expected 'data' array.");
+            throw new Error("Unexpected API response structure. Expected 'data' array and 'meta.pagination'.");
         }
-        console.log(`[getQueryForms] Fetched ${response.data.data.length} Query Forms for tenent_id ${userTenentId}.`);
-        return response.data.data;
+        console.log(`[getQueryForms] Fetched ${response.data.data.length} Query Forms for tenent_id ${userTenentId}. Pagination:`, response.data.meta.pagination);
+        return response.data;
 
     } catch (error: unknown) {
         let message = `Failed to fetch query forms for tenent_id ${userTenentId}.`;
@@ -66,7 +88,7 @@ export const getQueryForm = async (id: string, userTenentId: string): Promise<Qu
         throw new Error('User tenent_id is required to verify fetched query form.');
     }
     const params = {
-      // No specific population needed unless relations are added to QueryForm type and required
+      'populate': ['user', 'media'], // Populate user and media relations
     };
 
     const url = `/query-forms/${id}`;
@@ -80,11 +102,10 @@ export const getQueryForm = async (id: string, userTenentId: string): Promise<Qu
             console.error(`[getQueryForm] Unexpected API response structure for query form ${id} from ${url}. Expected 'data' object, received:`, response.data);
             return null;
         }
-        
-        // Verify tenent_id after fetching
+
         if (response.data.data.tenent_id !== userTenentId) {
             console.warn(`[getQueryForm] Fetched query form ${id} tenent_id (${response.data.data.tenent_id}) does not match requested userTenentId (${userTenentId}). Access denied.`);
-            return null; 
+            return null;
         }
 
         console.log(`[getQueryForm] Fetched Query Form ${id} Data for tenent_id ${userTenentId}:`, response.data.data);
@@ -114,9 +135,3 @@ export const getQueryForm = async (id: string, userTenentId: string): Promise<Qu
         throw new Error(message);
     }
 };
-
-// Note: Create, Update, Delete for Query Forms are not implemented.
-// If they were, they would follow a similar pattern as other content types:
-// - Create: Include tenent_id in payload.
-// - Update/Delete: Do not send tenent_id in API request, rely on backend policies. Service function uses userTenentId for context/logging.
-//   - Update: Exclude tenent_id from the data object in PUT payload.
