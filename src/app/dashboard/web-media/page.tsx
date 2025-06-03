@@ -20,7 +20,15 @@ import { getStoredPreference, setStoredPreference } from '@/lib/storage';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { CombinedMediaData } from '@/types/media';
-import { Label } from '@/components/ui/label'; // Added import for Label
+import { Label } from '@/components/ui/label';
+import {
+    Table,
+    TableHeader,
+    TableRow,
+    TableHead,
+    TableBody,
+    TableCell,
+} from "@/components/ui/table"; // Added missing table imports
 
 type ViewMode = 'table' | 'card';
 type SortField = 'name' | 'category' | 'createdAt' | 'updatedAt' | 'publishedAt';
@@ -261,3 +269,5 @@ function WebMediaPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, page
       </div>
     );
 }
+
+    
