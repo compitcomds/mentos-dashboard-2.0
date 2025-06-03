@@ -6,12 +6,23 @@ import {
   getCategory as getCategoryService,
   getCategories as getCategoriesService,
   updateCategory as updateCategoryService,
+  type GetCategoriesParams,
 } from "@/lib/services/category";
 import type { CreateCategoryPayload, Categorie } from "@/types/category"; // Changed Category to Categorie
+import type { FindMany } from "@/types/strapi_response";
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from "./user";
 
-const CATEGORIES_QUERY_KEY = (userTenentId?: string) => ['categories', userTenentId || 'all'];
+export interface UseGetCategoriesOptions {
+  page?: number;
+  pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+const CATEGORIES_QUERY_KEY = (userTenentId?: string, options?: UseGetCategoriesOptions) =>
+  ['categories', userTenentId || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder];
+
 const CATEGORY_DETAIL_QUERY_KEY = (identifier?: string, userTenentId?: string) => ['category', identifier || 'new', userTenentId || 'all'];
 
 export const useCreateCategory = () => {
@@ -47,20 +58,22 @@ export const useCreateCategory = () => {
   });
 };
 
-export const useGetCategories = (userTenentId?: string) => {
+export const useGetCategories = (options?: UseGetCategoriesOptions) => {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
-  const keyToUse = userTenentId || currentUser?.tenent_id;
+  const userTenentId = currentUser?.tenent_id;
+  const { page, pageSize, sortField, sortOrder } = options || {};
 
-  return useQuery<Categorie[], Error>({ // Changed Category to Categorie
-    queryKey: CATEGORIES_QUERY_KEY(keyToUse),
+  return useQuery<FindMany<Categorie>, Error>({ // Changed Category to Categorie and return type
+    queryKey: CATEGORIES_QUERY_KEY(userTenentId, { page, pageSize, sortField, sortOrder }),
     queryFn: () => {
-        if (!keyToUse) {
-            console.warn("useGetCategories: User tenent_id not available. Returning empty array.");
-            return Promise.resolve([]);
+        if (!userTenentId) {
+            console.warn("useGetCategories: User tenent_id not available. Returning empty result.");
+            return Promise.resolve({ data: [], meta: { pagination: { page: 1, pageSize: pageSize || 10, pageCount: 0, total: 0 } } });
         }
-        return getCategoriesService(keyToUse);
+        const params: GetCategoriesParams = { userTenentId, page, pageSize, sortField, sortOrder };
+        return getCategoriesService(params);
     },
-    enabled: !!keyToUse && !isLoadingUser,
+    enabled: !!userTenentId && !isLoadingUser,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });

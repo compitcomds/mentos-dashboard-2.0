@@ -15,31 +15,48 @@ async function getAuthHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
-export const getCategories = async (userTenentId: string): Promise<Categorie[]> => {
+export interface GetCategoriesParams {
+  userTenentId: string;
+  page?: number;
+  pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export const getCategories = async (params: GetCategoriesParams): Promise<FindMany<Categorie>> => {
+  const { userTenentId, page = 1, pageSize = 10, sortField = 'name', sortOrder = 'asc' } = params;
+
   if (!userTenentId) {
     console.error('[Service getCategories]: userTenentId is missing.');
     throw new Error('User tenent_id is required to fetch categories.');
   }
-  const params = {
+  const strapiParams: any = {
     'filters[tenent_id][$eq]': userTenentId,
     'populate': '*',
+    'pagination[page]': page,
+    'pagination[pageSize]': pageSize,
   };
+
+  if (sortField && sortOrder) {
+    strapiParams['sort[0]'] = `${sortField}:${sortOrder}`;
+  }
+
   const url = '/blog-sets';
-  console.log(`[getCategories] Fetching URL: ${url} with params:`, params);
+  console.log(`[getCategories] Fetching URL: ${url} with params:`, strapiParams);
   try {
     const headers = await getAuthHeader();
-    const response = await axiosInstance.get<FindMany<Categorie>>(url, { params, headers });
+    const response = await axiosInstance.get<FindMany<Categorie>>(url, { params: strapiParams, headers });
 
-    if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
-      console.error(`[getCategories] Unexpected API response structure for tenent_id ${userTenentId}. Expected 'data' array, received:`, response.data);
+    if (!response.data || !response.data.data || !Array.isArray(response.data.data) || !response.data.meta?.pagination) {
+      console.error(`[getCategories] Unexpected API response structure for tenent_id ${userTenentId}. Expected 'data' array and 'meta.pagination', received:`, response.data);
       if (response.data === null || response.data === undefined || (response.data && !response.data.data)) {
-        console.warn(`[getCategories] API returned null, undefined, or no 'data' property for tenent_id ${userTenentId}. Returning empty array.`);
-        return [];
+        console.warn(`[getCategories] API returned null, undefined, or no 'data' property for tenent_id ${userTenentId}. Returning empty result.`);
+        return { data: [], meta: { pagination: { page: 1, pageSize, pageCount: 0, total: 0 } } };
       }
-      throw new Error('Unexpected API response structure. Expected an array within a "data" property.');
+      throw new Error('Unexpected API response structure. Expected an array within a "data" property and pagination metadata.');
     }
-    console.log(`[getCategories] Fetched ${response.data.data.length} Categories for tenent_id ${userTenentId}.`);
-    return response.data.data;
+    console.log(`[getCategories] Fetched ${response.data.data.length} Categories for tenent_id ${userTenentId}. Pagination:`, response.data.meta.pagination);
+    return response.data;
 
   } catch (error: unknown) {
     let message = `Failed to fetch categories for tenent_id ${userTenentId}.`;
@@ -283,3 +300,4 @@ export const deleteCategory = async (documentId: string, userTenentIdAuthContext
     throw new Error(message);
   }
 };
+
