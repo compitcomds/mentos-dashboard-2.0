@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon, RefreshCcw } from 'lucide-react'; // Added RefreshCcw
 import { format, isValid, parseISO } from 'date-fns';
 import type { FormFormatComponent, MetaFormat } from '@/types/meta-format';
 import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog';
@@ -147,6 +147,17 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
   });
 
   return { schema: z.object(schemaShape), defaultValues };
+};
+
+const generateRandomHandle = () => {
+  const now = new Date();
+  const timestamp = now.toISOString()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/--+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const randomSuffix = Math.random().toString(36).substring(2, 7);
+  return `${timestamp}-${randomSuffix}`;
 };
 
 
@@ -290,39 +301,20 @@ export default function RenderExtraContentPage() {
     console.log("Raw Form Data before processing:", JSON.stringify(data, null, 2));
     console.log("Form Errors:", JSON.stringify(methods.formState.errors, null, 2));
 
-    if (Object.keys(methods.formState.errors).length > 0) {
-        toast({
-            variant: "destructive",
-            title: "Validation Error",
-            description: "Please check the form for errors and ensure all required fields are filled.",
-        });
-        Object.entries(methods.formState.errors).forEach(([fieldName, error]: [string, any]) => {
-            console.error(`Validation Error - ${fieldName}:`, error?.message, 'Field Value:', data[fieldName]);
-            if (error?.type === 'invalid_type' && Array.isArray(data[fieldName])) {
-              console.error(`  ↳ Error for field '${fieldName}' which is an array. Check individual item errors or array-level validation.`);
-            } else if (Array.isArray(error)) {
-               error.forEach((itemError, i) => {
-                 if (itemError && typeof itemError === 'object') {
-                   Object.entries(itemError).forEach(([subFieldName, subError] : [string, any]) => {
-                     console.error(`  ↳ Validation Error - ${fieldName}[${i}].${subFieldName}:`, subError?.message, 'Item Value:', data[fieldName]?.[i]);
-                   });
-                 } else if (itemError) {
-                    console.error(`  ↳ Validation Error - ${fieldName}[${i}]:`, itemError?.message, 'Item Value:', data[fieldName]?.[i]);
-                 }
-               });
-            }
-        });
-        return;
-    }
-
     if (!currentUser || !currentUser.tenent_id || currentUser.id === undefined) {
       toast({ variant: "destructive", title: "Error", description: "User information is missing." });
       return;
     }
     
-    const { handle, ...dynamicData } = data; // Separate handle from the rest of the dynamic data
+    let currentSubmitHandle = data.handle;
+    if (!currentSubmitHandle || String(currentSubmitHandle).trim() === '') {
+      currentSubmitHandle = generateRandomHandle();
+      methods.setValue('handle', currentSubmitHandle, { shouldValidate: true, shouldDirty: true });
+    }
+    
+    const { handle, ...dynamicData } = data; 
 
-    const processedData = { ...dynamicData }; // Start with dynamic data
+    const processedData = { ...dynamicData }; 
     metaFormat?.from_formate?.forEach(component => {
         const fieldName = getFieldName(component);
          if (component.is_array && (processedData[fieldName] === undefined || processedData[fieldName] === null)) {
@@ -344,9 +336,9 @@ export default function RenderExtraContentPage() {
         tenent_id: currentUser.tenent_id,
         meta_format: metaFormatDocumentId,
         user: currentUser.id,
-        meta_data: processedData, // Use processed dynamic data
+        meta_data: processedData, 
         publishedAt: new Date().toISOString(),
-        handle: handle, // Add the handle
+        handle: currentSubmitHandle, 
       };
       console.log("Create MetaData Payload:", JSON.stringify(payload, null, 2));
       createMetaDataMutation.mutate(payload, {
@@ -357,8 +349,8 @@ export default function RenderExtraContentPage() {
       });
     } else if (action === 'edit' && metaDataEntryDocumentIdParam) {
         const updatePayload: Partial<Omit<CreateMetaDataPayload, 'meta_format' | 'tenent_id' | 'user'>> & {handle: string} = {
-            meta_data: processedData, // Use processed dynamic data
-            handle: handle, // Add the handle
+            meta_data: processedData, 
+            handle: currentSubmitHandle, 
         };
          console.log("Update MetaData Payload (for entry " + metaDataEntryDocumentIdParam + "):", JSON.stringify(updatePayload, null, 2));
         updateMetaDataMutation.mutate({ documentId: metaDataEntryDocumentIdParam, payload: updatePayload as any }, { 
@@ -487,9 +479,24 @@ export default function RenderExtraContentPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Handle <span className="text-destructive">*</span></FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., my-unique-page-handle" {...field} disabled={isSubmitting} />
-                    </FormControl>
+                    <div className="flex items-center gap-2">
+                        <FormControl>
+                        <Input placeholder="e.g., my-unique-page-handle" {...field} disabled={isSubmitting} />
+                        </FormControl>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                                const newHandle = generateRandomHandle();
+                                methods.setValue('handle', newHandle, { shouldValidate: true });
+                            }}
+                            disabled={isSubmitting}
+                            aria-label="Generate random handle"
+                        >
+                            <RefreshCcw className="h-4 w-4" />
+                        </Button>
+                    </div>
                     <FormDescription>Unique identifier for this entry (for SEO/routing). Lowercase alphanumeric and hyphens only.</FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -691,3 +698,4 @@ export default function RenderExtraContentPage() {
     </div>
   );
 }
+
