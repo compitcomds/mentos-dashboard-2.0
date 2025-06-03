@@ -22,8 +22,7 @@ export const getCardDetails = async (userTenentId: string): Promise<CardDetail[]
   }
   const params = {
     'filters[tenent_id][$eq]': userTenentId,
-    'populate[user]': '*', // Populate user if needed, though likely not for card display
-    'sort[0]': 'createdAt:desc',
+    'populate[user]': 'true', // Populate user if needed, though likely not for card display
   };
   const url = '/card-details';
   console.log(`[getCardDetails] Fetching URL: ${url} for tenent_id ${userTenentId} with params:`, params);
@@ -107,11 +106,76 @@ export const createCardDetail = async (payload: CreateCardDetailPayload): Promis
   }
 };
 
-// Placeholder for deleteCardDetail, can be implemented later
-export const deleteCardDetail = async (documentId: string, userTenentId: string): Promise<void> => {
-  console.warn(`[deleteCardDetail] Called for documentId ${documentId}, userTenentId ${userTenentId}. Delete functionality not fully implemented.`);
-  // const headers = await getAuthHeader();
-  // await axiosInstance.delete(`/card-details/${documentId}`, { headers });
-  // For now, this is a placeholder.
-  return Promise.resolve();
+// // Placeholder for deleteCardDetail, can be implemented later
+// export const deleteCardDetail = async (documentId: string, userTenentId: string): Promise<void> => {
+//   if (!documentId) {
+//     throw new Error('Document ID is required to delete a category.');
+//   }
+//   const url = `/api/card-details/${documentId}`; 
+  
+  
+//   return Promise.resolve();
+// };
+
+export const deleteCardDetail = async (documentId: string, userTenentId: string): Promise<CardDetail | void> => {
+  // userTenentId is for query invalidation or logging
+  if (!documentId) {
+    throw new Error('Document ID is required to delete a Card Detail.');
+  }
+  const url = `/card-details/${documentId}`; 
+  console.log(`[deleteCategory] Deleting Card Detail with documentId ${documentId} (Auth context tenent_id: ${userTenentId})`);
+  try {
+    const headers = await getAuthHeader();
+    const response = await axiosInstance.delete<FindOne<CardDetail>>(url, { headers });
+
+    if (response.status === 200 && response.data?.data) {
+      console.log(`[deleteCategory] Successfully deleted Card Detail ${documentId}.`);
+      return response.data.data;
+    } else if (response.status === 204) {
+      console.log(`[deleteCategory] Successfully deleted Card Detail ${documentId} (no content returned).`);
+      return;
+    }
+    console.warn(`[deleteCategory] Unexpected response status ${response.status} after deleting Card Detail ${documentId}. Data:`, response.data);
+    return response.data?.data;
+  } catch (error: unknown) {
+    let message = `Failed to delete Card Detail ${documentId}.`;
+    let loggableErrorData: any = error;
+
+    if (error instanceof AxiosError) {
+      loggableErrorData = error.response?.data || error.message;
+      const status = error.response?.status;
+      const strapiError = error.response?.data?.error;
+
+      if (strapiError && typeof strapiError === 'object') {
+        let mainMsg = strapiError.message || "Unknown API error from Strapi.";
+        if (strapiError.name) {
+          mainMsg = `${strapiError.name}: ${mainMsg}`;
+        }
+        message = `API Error (Status ${status || strapiError.status || 'unknown'}): ${mainMsg}`;
+        if (strapiError.details && Object.keys(strapiError.details).length > 0) {
+          try {
+            message += ` Details: ${JSON.stringify(strapiError.details)}`;
+          } catch (e) { /* ignore */ }
+        }
+      } else if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+        message = `API Error (Status ${status || 'unknown'}): ${error.response.data.message}`;
+      } else if (typeof error.response?.data === 'string' && error.response.data.trim() !== '') {
+        message = `API Error (Status ${status || 'unknown'}): ${error.response.data}`;
+      } else {
+        message = `API Error (Status ${status || 'unknown'}): ${error.message}.`;
+      }
+
+      if (status === 500 ) {
+        message = `Internal Server Error. Please check Strapi server logs for details on deleting Card Detail ${documentId}. Raw response: ${JSON.stringify(loggableErrorData)}`;
+      } else if (status === 403) {
+        message = `Forbidden: You do not have permission to delete Card Detail ${documentId}.`;
+      } else if (status === 404) {
+        message = `Card Detail with documentId ${documentId} not found.`;
+      }
+    } else if (error instanceof Error) {
+      message = error.message;
+    }
+    console.error(`[deleteCategory] Failed for documentId ${documentId}, user tenent_id ${userTenentId}. Error: ${message}`, "Full error object/data logged:", loggableErrorData);
+    throw new Error(message);
+  }
 };

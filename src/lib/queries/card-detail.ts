@@ -74,10 +74,11 @@ export function useDeleteCardDetail() {
       // For now, this is a placeholder and might not actually delete from backend
       // return deleteCardDetailService(documentId, currentUser.tenent_id);
       console.warn(`Placeholder deleteCardDetail called for ${documentId}`);
+      deleteCardDetailService(documentId, currentUser.tenent_id);
       return Promise.resolve();
     },
     onSuccess: (_, variables) => {
-      toast({ title: "Card Deleted (Placeholder)", description: `Card ${variables.documentId} removal simulated.` });
+      toast({ title: "Card Deleted", description: `Card Details Deleted Successfully` });
       queryClient.invalidateQueries({ queryKey: CARD_DETAILS_QUERY_KEY(currentUser?.tenent_id) });
     },
     onError: (error: any) => {
