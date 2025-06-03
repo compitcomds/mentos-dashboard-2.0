@@ -71,9 +71,15 @@ export const createMetaDataEntry = async (payload: CreateMetaDataPayload): Promi
     let message = `Failed to create MetaData entry.`;
     if (error instanceof AxiosError) {
       const status = error.response?.status;
-      const errorDetails = error.response?.data?.error?.details;
-      const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || error.message;
-      message = `API Error (Status ${status}): ${errorMessage}. ${errorDetails ? 'Details: ' + JSON.stringify(errorDetails) : ''}`;
+      const errorBody = error.response?.data?.error; // Strapi error object
+      const errorMessage = errorBody?.message || error.response?.data?.message || error.message;
+      
+      if (errorBody?.details?.errorCode === 'DUPLICATE_ENTRY' && errorBody?.details?.details?.handle) {
+        // Construct a specific message for duplicate handle errors
+        message = `DUPLICATE_HANDLE_ERROR: Handle '${errorBody.details.details.handle}' is already taken.`;
+      } else {
+        message = `API Error (Status ${status}): ${errorMessage}. ${errorBody?.details ? 'Details: ' + JSON.stringify(errorBody.details) : ''}`;
+      }
       console.error(`[createMetaDataEntry] Failed (${status}):`, error.response?.data);
     } else if (error instanceof Error) {
       message = error.message;
@@ -122,9 +128,14 @@ export const updateMetaDataEntry = async (documentId: string, payload: Partial<O
     let message = `Failed to update MetaData entry ${documentId}.`;
      if (error instanceof AxiosError) {
       const status = error.response?.status;
-      const errorDetails = error.response?.data?.error?.details;
-      const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || error.message;
-      message = `API Error (Status ${status}): ${errorMessage}. ${errorDetails ? 'Details: ' + JSON.stringify(errorDetails) : ''}`;
+      const errorBody = error.response?.data?.error; // Strapi error object
+      const errorMessage = errorBody?.message || error.response?.data?.message || error.message;
+      
+      if (errorBody?.details?.errorCode === 'DUPLICATE_ENTRY' && errorBody?.details?.details?.handle) {
+        message = `DUPLICATE_HANDLE_ERROR: Handle '${errorBody.details.details.handle}' is already taken.`;
+      } else {
+        message = `API Error (Status ${status}): ${errorMessage}. ${errorBody?.details ? 'Details: ' + JSON.stringify(errorBody.details) : ''}`;
+      }
       console.error(`[updateMetaDataEntry] Failed (${status}):`, error.response?.data);
     } else if (error instanceof Error) {
       message = error.message;
@@ -166,3 +177,4 @@ export const deleteMetaDataEntry = async (documentId: string, userTenentId: stri
     throw new Error(message);
   }
 };
+

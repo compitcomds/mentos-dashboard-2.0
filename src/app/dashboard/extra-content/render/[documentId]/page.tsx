@@ -156,9 +156,10 @@ const generateRandomHandle = (length = 12) => {
   for (let i = 0; i < length; i++) {
     result += characters.charAt(Math.floor(Math.random() * characters.length));
   }
+  // Ensure it starts with a letter if the regex requires it (current one doesn't strictly, but good practice)
   if (!/^[a-z]/.test(result) && result.length > 0) {
-    result = 'h' + result.substring(1);
-  } else if (result.length === 0) {
+     result = 'h' + result.substring(1); // Prepend 'h' if starts with number
+  } else if (result.length === 0) { // Should not happen with length=12, but safe
      result = 'h' + Array(length -1).fill(0).map(() => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
   }
   return result;
@@ -298,6 +299,38 @@ export default function RenderExtraContentPage() {
   };
 
 
+  const commonErrorHandling = (error: any, submittedHandle: string) => {
+    // 'error' here is the Error object thrown by the service layer.
+    // 'error.message' contains the string constructed by the service.
+    const errorMessageString = error.message || "";
+    const isCreateAction = action === 'create';
+
+    if (errorMessageString.startsWith('DUPLICATE_HANDLE_ERROR:')) {
+      // Extract the handle from the message for comparison, though comparison might be redundant if backend guarantees it.
+      // Example: "DUPLICATE_HANDLE_ERROR: Handle 'the-handle' is already taken."
+      // We can directly use the fact that it's this specific error.
+      const handleInError = errorMessageString.match(/'([^']+)'/)?.[1];
+      if (handleInError && handleInError === submittedHandle) {
+        methods.setError('handle', {
+            type: 'manual',
+            message: 'This handle is already taken. Please choose a different one.'
+        });
+        toast({ variant: "destructive", title: "Duplicate Handle", description: "This handle is already in use. Please try another." });
+      } else {
+        // This case should ideally not be hit if the service correctly identifies the handle.
+        // But as a fallback:
+        toast({ variant: "destructive", title: "Duplicate Entry", description: "A similar entry (possibly with this handle) already exists." });
+      }
+    } else {
+        // For all other errors, display the message from the service layer.
+        const toastMessage = errorMessageString || (isCreateAction ? "Failed to create data entry." : "Failed to update data entry.");
+        toast({ variant: "destructive", title: "Submission Error", description: toastMessage });
+    }
+    // The console.error in the service layer already logged the detailed error.
+    console.error("MetaData submission error on client (see service logs for more):", error.message);
+  };
+
+
   const onSubmit = (data: FieldValues) => {
     console.log("Dynamic Form onSubmit triggered. Action:", action);
     console.log("Raw Form Data before processing:", JSON.stringify(data, null, 2));
@@ -311,7 +344,7 @@ export default function RenderExtraContentPage() {
     let currentSubmitHandle = data.handle;
     if (!currentSubmitHandle || String(currentSubmitHandle).trim() === '') {
       currentSubmitHandle = generateRandomHandle();
-      methods.setValue('handle', currentSubmitHandle, { shouldValidate: true, shouldDirty: true });
+      methods.setValue('handle', currentSubmitHandle, { shouldValidate: true, shouldDirty: true }); // Update form state for user
     }
     
     const { handle, ...dynamicData } = data; 
@@ -331,25 +364,6 @@ export default function RenderExtraContentPage() {
          }
     });
     console.log("Processed Form Data (meta_data part):", JSON.stringify(processedData, null, 2));
-
-    const commonErrorHandling = (error: any, submittedHandle: string) => {
-        if (error instanceof AxiosError && error.response?.data?.error?.details?.errorCode === 'DUPLICATE_ENTRY') {
-            const errorHandle = error.response.data.error.details.details?.handle;
-            if (errorHandle && errorHandle === submittedHandle) {
-                methods.setError('handle', {
-                    type: 'manual',
-                    message: 'This handle is already taken. Please choose a different one.'
-                });
-                 toast({ variant: "destructive", title: "Duplicate Handle", description: "This handle is already in use. Please try another." });
-            } else {
-                 toast({ variant: "destructive", title: "Duplicate Entry", description: error.response.data.error.message || "A similar entry already exists." });
-            }
-        } else {
-             const message = error.message || (action === 'create' ? "Failed to create data entry." : "Failed to update data entry.");
-             toast({ variant: "destructive", title: "Submission Error", description: message });
-        }
-         console.error("MetaData submission error:", error.response?.data || error);
-    };
 
 
     if (action === 'create') {
