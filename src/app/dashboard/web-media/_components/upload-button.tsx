@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { PlusCircle, UploadCloud, X, Loader2, Edit } from "lucide-react";
+import { PlusCircle, UploadCloud, X, Loader2, Edit, Tag } from "lucide-react"; // Added Tag icon
 import { useDropzone } from "react-dropzone";
 
 import { Button } from "@/components/ui/button";
@@ -23,15 +23,14 @@ import { useUploadMediaMutation } from "@/lib/queries/media";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-// Import the new TUI editor wrapper
 import ToastUIImageEditorWrapper from './toast-ui-image-editor-wrapper';
+import { Badge } from "@/components/ui/badge"; // Import Badge
 
 interface UploadButtonProps {
   onUploadSuccess?: () => void;
   disabled?: boolean;
 }
 
-// Helper function to format bytes
 const formatBytesLocal = (bytes: number | null, decimals = 2): string => {
   if (bytes === null || bytes === 0) return "0 Bytes";
   const k = 1024;
@@ -46,26 +45,31 @@ const formatBytesLocal = (bytes: number | null, decimals = 2): string => {
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
+const PREDEFINED_TAGS = ["profile", "banner", "gallery", "product", "icon", "document", "archive", "logo", "background", "avatar"];
+
+
 export default function UploadButton({ onUploadSuccess, disabled }: UploadButtonProps) {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = React.useState(false);
-  const [isEditorOpen, setIsEditorOpen] = React.useState(false); // State to control editor visibility
+  const [isEditorOpen, setIsEditorOpen] = React.useState(false);
   const [fileToUpload, setFileToUpload] = React.useState<File | Blob | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-  const [originalFileName, setOriginalFileName] = React.useState<string | null>(null); // Store original name
+  const [originalFileName, setOriginalFileName] = React.useState<string | null>(null);
   const [mediaName, setMediaName] = React.useState("");
   const [altText, setAltText] = React.useState("");
   const [uploadProgress, setUploadProgress] = React.useState<number | null>(null);
+  const [category, setCategory] = React.useState(""); // State for category
+  const [tagInput, setTagInput] = React.useState(""); // State for current tag input
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]); // State for selected tags
+
 
   const { toast } = useToast();
   const uploadMutation = useUploadMediaMutation();
 
-  // Revoke object URLs when component unmounts or previewUrl changes
   React.useEffect(() => {
-    const currentPreview = previewUrl; // Capture current preview URL
+    const currentPreview = previewUrl;
     return () => {
       if (currentPreview && currentPreview.startsWith('blob:')) {
         URL.revokeObjectURL(currentPreview);
-        console.log("Revoked blob URL:", currentPreview);
       }
     };
   }, [previewUrl]);
@@ -80,7 +84,10 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
     setMediaName("");
     setAltText("");
     setUploadProgress(null);
-    setIsEditorOpen(false); // Ensure editor is closed on full reset
+    setCategory(""); // Reset category
+    setSelectedTags([]); // Reset tags
+    setTagInput(""); // Reset tag input
+    setIsEditorOpen(false);
   };
 
   const onDrop = React.useCallback((acceptedFiles: File[], fileRejections: any[]) => {
@@ -108,60 +115,70 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
     if (acceptedFiles && acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
       const fileNameBase = file.name.split(".").slice(0, -1).join(".");
-
-      // Reset previous state FIRST
       resetAllStates();
-
-      setOriginalFileName(file.name); // Store original name
+      setOriginalFileName(file.name);
       setFileToUpload(file);
       setMediaName(fileNameBase);
-      setAltText("");
-
-      // Create a preview URL
       const objectUrl = URL.createObjectURL(file);
-      console.log("Created blob URL:", objectUrl);
       setPreviewUrl(objectUrl);
-
       setIsUploadDialogOpen(true);
       setUploadProgress(null);
-      setIsEditorOpen(false); // Start in detail view, not editor
+      setIsEditorOpen(false);
     }
   }, [toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    // Removed specific accept prop to allow more file types
-    // Strapi will handle server-side validation for allowed types
-    maxSize: MAX_FILE_SIZE_BYTES, // 10MB limit
+    maxSize: MAX_FILE_SIZE_BYTES,
     multiple: false,
   });
 
-  // Function to open the TUI Editor
   const openEditor = () => {
     if (fileToUpload && fileToUpload.type.startsWith("image/") && previewUrl) {
-      setIsEditorOpen(true); // Set state to show the editor wrapper
+      setIsEditorOpen(true);
     } else {
       toast({ variant: "destructive", title: "Cannot Edit", description: "Only image files can be edited." });
     }
   };
 
-  // Called when TUI editor wrapper saves
   const handleEditorSave = (blob: Blob, filename: string) => {
-    console.log("TUI Editor saved Blob:", blob);
-    setFileToUpload(blob); // Set the edited blob as the file to upload
-    setMediaName(filename.split('.').slice(0, -1).join('.') || filename); // Update name
-
-    // Update preview URL for the main dialog preview
+    setFileToUpload(blob);
+    setMediaName(filename.split('.').slice(0, -1).join('.') || filename);
     if (previewUrl && previewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(previewUrl);
     }
     const newPreviewUrl = URL.createObjectURL(blob);
-    console.log("Created new blob URL after edit:", newPreviewUrl);
     setPreviewUrl(newPreviewUrl);
-
-    setIsEditorOpen(false); // Close the editor view and return to the details/upload view
+    setIsEditorOpen(false);
   };
 
+  const handleAddTag = (tagValue: string) => {
+    const newTag = tagValue.trim().toLowerCase();
+    if (newTag && !selectedTags.includes(newTag) && selectedTags.length < 10) {
+        setSelectedTags(prevTags => [...prevTags, newTag]);
+    } else if (selectedTags.length >= 10) {
+        toast({ variant: "destructive", title: "Tag Limit", description: "Maximum 10 tags allowed." });
+    }
+    setTagInput(""); // Clear input after adding
+  };
+
+  const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTagInput(e.target.value);
+  };
+
+  const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.key === "," || e.key === "Enter") && tagInput) {
+        e.preventDefault();
+        handleAddTag(tagInput);
+    } else if (e.key === "Backspace" && !tagInput && selectedTags.length > 0) {
+        e.preventDefault();
+        setSelectedTags(prevTags => prevTags.slice(0, -1));
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setSelectedTags(prevTags => prevTags.filter(tag => tag !== tagToRemove));
+  };
 
   const handleUpload = async () => {
     if (!fileToUpload) {
@@ -173,7 +190,6 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
         return;
     }
 
-    // Determine filename (use original if available and no edits, otherwise use mediaName or default)
      const filename = fileToUpload instanceof File
          ? fileToUpload.name
          : `${mediaName || 'edited-image'}.${fileToUpload.type.split('/')[1] || 'png'}`;
@@ -194,6 +210,8 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
         file: fileToUpload instanceof File ? fileToUpload : new File([fileToUpload], filename, { type: fileToUpload.type }),
         name: mediaName || filename.split('.').slice(0, -1).join('.'),
         alt: altText || null,
+        category: category || null,
+        tags: selectedTags.length > 0 ? selectedTags.map(tag => ({ tag_value: tag })) : [], // Send empty array if no tags
       },
       {
         onSuccess: () => {
@@ -212,7 +230,6 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
         onError: (error) => {
           clearInterval(interval);
           setUploadProgress(null);
-          // Error handled by mutation hook
         },
       }
     );
@@ -225,43 +242,34 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
     }
   };
 
-  const displayFile = fileToUpload; // Use the current file/blob state
+  const displayFile = fileToUpload;
   const isImageFile = displayFile?.type.startsWith("image/");
   const isUploading = uploadMutation.isPending || (uploadProgress !== null && uploadProgress < 100);
 
   return (
     <>
-      {/* Main Dialog Trigger */}
       <Dialog open={isUploadDialogOpen} onOpenChange={handleUploadDialogOpenChange} >
         <DialogTrigger asChild>
           <Button disabled={disabled}>
             <PlusCircle className="mr-2 h-4 w-4" /> Upload New Media
           </Button>
         </DialogTrigger>
-        {/* Adjust content width and height based on whether editor is open */}
         <DialogContent className={cn(
             "sm:max-w-[525px] transition-all duration-300",
-            isEditorOpen && "scale-95 sm:max-w-fit h-[95vh] flex flex-col " // Editor styles
+            isEditorOpen && "scale-95 sm:max-w-fit h-[95vh] flex flex-col "
             )}>
-
-            {/* Conditional Rendering: Editor or Upload Details */}
             {isEditorOpen && previewUrl ? (
-                // Render Editor Wrapper
                 <>
-                    
-                    <div className="flex-1 overflow-auto "> {/* Make editor area scrollable if needed */}
+                    <div className="flex-1 overflow-auto ">
                         <ToastUIImageEditorWrapper
                             imageUrl={previewUrl}
                             imageName={originalFileName || undefined}
                             onSave={handleEditorSave}
-                            onClose={() => setIsEditorOpen(false)} // Go back to detail view
+                            onClose={() => setIsEditorOpen(false)}
                         />
                     </div>
-                    {/* Footer is handled within the wrapper for editor actions */}
                 </>
-
             ) : (
-                // Render Upload Details Form
                 <>
                     <DialogHeader>
                         <DialogTitle>Upload Media</DialogTitle>
@@ -269,8 +277,6 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
                         Review the file details and add metadata. Max file size: {MAX_FILE_SIZE_MB}MB.
                         </DialogDescription>
                     </DialogHeader>
-
-                    {/* Dropzone Area (only show if no file selected yet) */}
                     {!displayFile && (
                         <div
                         {...getRootProps()}
@@ -299,11 +305,8 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
                         </p>
                         </div>
                     )}
-
-                    {/* File Preview and Actions (Show AFTER a file is selected) */}
                     {displayFile && (
                         <div className="mt-4 space-y-4">
-                            {/* File Preview and Info */}
                             <div className="flex items-start space-x-4 p-4 border rounded-md relative">
                                 {previewUrl && isImageFile ? (
                                 <Image
@@ -311,16 +314,16 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
                                     alt="Preview"
                                     width={80}
                                     height={80}
-                                    className="rounded-md object-cover flex-shrink-0" // Prevent shrinking
-                                    unoptimized // If using blob URLs
+                                    className="rounded-md object-cover flex-shrink-0"
+                                    unoptimized
                                 />
                                 ) : (
                                 <div className="w-20 h-20 flex-shrink-0 flex items-center justify-center bg-muted rounded-md text-muted-foreground text-xs uppercase">
                                     {displayFile.type?.split("/")[1] || 'File'}
                                 </div>
                                 )}
-                                <div className="flex-1 min-w-0"> {/* Prevent text overflow issues */}
-                                    <p className="text-sm font-medium break-words"> {/* Allow words to break */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium break-words">
                                         {mediaName || (displayFile instanceof File ? displayFile.name : 'edited-image')}
                                     </p>
                                     <p className="text-xs text-muted-foreground">
@@ -342,7 +345,6 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
                                         </Button>
                                     )}
                                 </div>
-                                {/* Remove file button */}
                                 <Button
                                     type="button"
                                     variant="ghost"
@@ -356,7 +358,6 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
                                 </Button>
                             </div>
 
-                            {/* Metadata Inputs */}
                             <div className="grid gap-2">
                                 <Label htmlFor="media-name">Name</Label>
                                 <Input
@@ -376,6 +377,61 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
                                 placeholder="Describe the image (optional)"
                                 disabled={!isImageFile || isUploading}
                                 />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="category">Category</Label>
+                                <Input
+                                    id="category"
+                                    value={category}
+                                    onChange={(e) => setCategory(e.target.value)}
+                                    placeholder="e.g., general, blog, product"
+                                    disabled={isUploading}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="tags">Tags (max 10)</Label>
+                                <div className="flex flex-wrap items-center gap-2 p-2 border border-input rounded-md min-h-[40px]">
+                                    {selectedTags.map((tag) => (
+                                    <Badge key={tag} variant="secondary" className="flex items-center gap-1">
+                                        {tag}
+                                        <button
+                                        type="button"
+                                        onClick={() => removeTag(tag)}
+                                        className="ml-1 rounded-full outline-none focus:ring-1 focus:ring-ring"
+                                        disabled={isUploading}
+                                        >
+                                        <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                    ))}
+                                    <Input
+                                        id="tags-input"
+                                        type="text"
+                                        value={tagInput}
+                                        onChange={handleTagInputChange}
+                                        onKeyDown={handleTagInputKeyDown}
+                                        placeholder={selectedTags.length === 0 ? "Add tags (comma/Enter)..." : ""}
+                                        className="flex-1 bg-transparent outline-none text-sm min-w-[150px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto p-0 shadow-none"
+                                        disabled={isUploading || selectedTags.length >= 10}
+                                    />
+                                </div>
+                                {selectedTags.length < 10 && PREDEFINED_TAGS.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                        {PREDEFINED_TAGS.filter(pt => !selectedTags.includes(pt)).map(tag => (
+                                            <Button
+                                                key={tag}
+                                                type="button"
+                                                variant="outline"
+                                                size="xs" // Custom smaller size for tag buttons
+                                                onClick={() => handleAddTag(tag)}
+                                                disabled={isUploading}
+                                                className="px-2 py-0.5 h-auto text-xs"
+                                            >
+                                                <Tag className="mr-1 h-3 w-3" /> {tag}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {uploadProgress !== null && (
@@ -417,7 +473,6 @@ export default function UploadButton({ onUploadSuccess, disabled }: UploadButton
                     )}
                 </>
              )}
-
         </DialogContent>
       </Dialog>
     </>

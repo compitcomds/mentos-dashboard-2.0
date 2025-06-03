@@ -10,7 +10,7 @@ import {
     updateWebMedia,
     deleteMediaAndFile,
     getMediaFileDetailsById,
-    type FetchMediaFilesParams, // Import params type
+    type FetchMediaFilesParams,
 } from '@/lib/services/media';
 import type {
     CombinedMediaData,
@@ -19,7 +19,7 @@ import type {
     WebMedia,
     Media,
 } from '@/types/media';
-import type { FindMany } from '@/types/strapi_response'; // Import FindMany
+import type { FindMany } from '@/types/strapi_response';
 import { AxiosError } from 'axios';
 import { useCurrentUser } from './user';
 
@@ -44,8 +44,8 @@ export function useFetchMedia(options?: Omit<FetchMediaFilesParams, 'userTenentI
             return fetchMediaFiles({ userTenentId, page, pageSize, sortField, sortOrder, categoryFilter, nameFilter });
         },
         enabled: !!userTenentId && !isLoadingUser,
-        staleTime: 1000 * 60 * 2, // 2 minutes
-        gcTime: 1000 * 60 * 10, // 10 minutes
+        staleTime: 1000 * 60 * 2,
+        gcTime: 1000 * 60 * 10,
         retry: 1,
     });
 }
@@ -87,7 +87,7 @@ export function useUploadMediaMutation() {
                 tenent_id: userKey,
                 media: uploadedFile.id,
                 category: category || null,
-                tags: tags || null,
+                tags: tags || [], // Ensure tags is an array, defaults to empty if null/undefined
             };
             console.log(`[useUploadMediaMutation] Payload for createWebMedia service:`, createPayload);
 
@@ -134,8 +134,6 @@ export function useUpdateMediaMutation() {
                 description: `Media "${data.name}" updated successfully.`,
             });
             queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY(userKey) });
-            // Optionally invalidate specific detail query if you have one for WebMedia by numeric ID
-            // queryClient.invalidateQueries({ queryKey: ['webMediaDetail', data.id] });
         },
         onError: (error: unknown, variables) => {
              let message = `Could not update media (ID: ${variables.webMediaId}).`;
