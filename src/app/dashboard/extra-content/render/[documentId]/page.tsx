@@ -1,101 +1,171 @@
+"use client";
 
-'use client';
-
-import * as React from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useForm, FormProvider, Controller, FieldValues } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useGetMetaFormat } from '@/lib/queries/meta-format';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { AlertCircle, CalendarIcon, Loader2, Image as ImageIcon, RefreshCcw } from 'lucide-react'; // Added RefreshCcw
-import { format, isValid, parseISO } from 'date-fns';
-import type { FormFormatComponent, MetaFormat, DynamicComponentTextField, DynamicComponentNumberField, DynamicComponentEnumField, DynamicComponentDateField, DynamicComponentBooleanField, DynamicComponentMediaField } from '@/types/meta-format';
-import MediaSelectorDialog from '@/app/dashboard/web-media/_components/media-selector-dialog';
-import TipTapEditor from '@/components/ui/tiptap';
-import { useCreateMetaDataEntry, useGetMetaDataEntry, useUpdateMetaDataEntry } from '@/lib/queries/meta-data';
-import { useCurrentUser } from '@/lib/queries/user';
-import type { CreateMetaDataPayload, MetaData } from '@/types/meta-data';
-import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
-import ArrayFieldRenderer from '@/app/dashboard/extra-content/_components/array-field-renderer';
-import type { CombinedMediaData } from '@/types/media';
-import { AxiosError } from 'axios';
+import * as React from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import {
+  useForm,
+  FormProvider,
+  Controller,
+  FieldValues,
+} from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useGetMetaFormat } from "@/lib/queries/meta-format";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  AlertCircle,
+  CalendarIcon,
+  Loader2,
+  Image as ImageIcon,
+  RefreshCcw,
+} from "lucide-react"; // Added RefreshCcw
+import { format, isValid, parseISO } from "date-fns";
+import type {
+  FormFormatComponent,
+  MetaFormat,
+  DynamicComponentTextField,
+  DynamicComponentNumberField,
+  DynamicComponentEnumField,
+  DynamicComponentDateField,
+  DynamicComponentBooleanField,
+  DynamicComponentMediaField,
+} from "@/types/meta-format";
+import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
+import TipTapEditor from "@/components/ui/tiptap";
+import {
+  useCreateMetaDataEntry,
+  useGetMetaDataEntry,
+  useUpdateMetaDataEntry,
+} from "@/lib/queries/meta-data";
+import { useCurrentUser } from "@/lib/queries/user";
+import type { CreateMetaDataPayload, MetaData } from "@/types/meta-data";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import ArrayFieldRenderer from "@/app/dashboard/extra-content/_components/array-field-renderer";
+import type { CombinedMediaData } from "@/types/media";
+import { AxiosError } from "axios";
 
 // Helper to generate a unique field name for RHF
 const getFieldName = (component: FormFormatComponent): string => {
-  if (component.label && component.label.trim() !== '') {
+  if (component.label && component.label.trim() !== "") {
     const slugifiedLabel = component.label
       .toLowerCase()
-      .replace(/\s+/g, '_')
-      .replace(/[^a-z0-9_]/g, '');
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "");
     return slugifiedLabel; // ID suffix removed
   }
   // Fallback if no label
-  return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
+  return `component_${component.__component.replace(
+    "dynamic-component.",
+    ""
+  )}_${component.id}`;
 };
 
-const getDefaultValueForComponent = (componentType: string, component?: FormFormatComponent): any => {
+const getDefaultValueForComponent = (
+  componentType: string,
+  component?: FormFormatComponent
+): any => {
   // Check if component itself is defined before trying to access properties on it
-  const compDef = component as (FormFormatComponent | undefined);
+  const compDef = component as FormFormatComponent | undefined;
 
   switch (componentType) {
-    case 'dynamic-component.text-field':
-      return (compDef as DynamicComponentTextField)?.default || '';
-    case 'dynamic-component.number-field':
+    case "dynamic-component.text-field":
+      return (compDef as DynamicComponentTextField)?.default || "";
+    case "dynamic-component.number-field":
       const numDefault = (compDef as DynamicComponentNumberField)?.default;
-      return numDefault !== undefined && numDefault !== null && numDefault !== '' ? Number(numDefault) : null;
-    case 'dynamic-component.media-field':
+      return numDefault !== undefined &&
+        numDefault !== null &&
+        numDefault !== ""
+        ? Number(numDefault)
+        : null;
+    case "dynamic-component.media-field":
       return null; // Media field stores string documentId or array of documentIds
-    case 'dynamic-component.enum-field':
-      if ((compDef as DynamicComponentEnumField)?.type === 'multi-select') return [];
+    case "dynamic-component.enum-field":
+      if ((compDef as DynamicComponentEnumField)?.type === "multi-select")
+        return [];
       return (compDef as DynamicComponentEnumField)?.default || null;
-    case 'dynamic-component.date-field':
+    case "dynamic-component.date-field":
       const dateDefault = (compDef as DynamicComponentDateField)?.default;
       return dateDefault ? new Date(dateDefault) : null;
-    case 'dynamic-component.boolean-field':
+    case "dynamic-component.boolean-field":
       const boolDefault = (compDef as DynamicComponentBooleanField)?.default;
-      return boolDefault === 'true' || boolDefault === true || false;
+      return boolDefault === "true" || false;
     default:
       return null;
   }
 };
 
-const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined) => {
+const generateFormSchemaAndDefaults = (
+  metaFormat: MetaFormat | null | undefined
+) => {
   let schemaShape: Record<string, z.ZodTypeAny> = {
-    handle: z.string().min(1, { message: "Handle is required." })
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: "Handle must be lowercase alphanumeric with hyphens." })
+    handle: z
+      .string()
+      .min(1, { message: "Handle is required." })
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+        message: "Handle must be lowercase alphanumeric with hyphens.",
+      }),
   };
   let defaultValues: Record<string, any> = {
-    handle: ''
+    handle: "",
   };
 
   if (!metaFormat?.from_formate) {
     return { schema: z.object(schemaShape), defaultValues };
   }
 
-  metaFormat.from_formate.forEach(component => {
+  metaFormat.from_formate.forEach((component) => {
     const fieldName = getFieldName(component);
     let baseSchema: z.ZodTypeAny;
-    let componentDefaultValue = getDefaultValueForComponent(component.__component, component);
+    let componentDefaultValue = getDefaultValueForComponent(
+      component.__component,
+      component
+    );
 
     switch (component.__component) {
-      case 'dynamic-component.text-field':
+      case "dynamic-component.text-field":
         {
           const comp = component as DynamicComponentTextField;
           let textSchema = z.string();
-          if (comp.inputType === 'email') {
-            textSchema = textSchema.email({ message: "Invalid email address." });
+          if (comp.inputType === "email") {
+            textSchema = textSchema.email({
+              message: "Invalid email address.",
+            });
           }
           if (comp.min !== null && comp.min !== undefined) {
             textSchema = textSchema.min(comp.min);
@@ -103,60 +173,99 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
           if (comp.max !== null && comp.max !== undefined) {
             textSchema = textSchema.max(comp.max);
           }
-          baseSchema = comp.required ? textSchema.min(1, { message: `${comp.label || 'Field'} is required.` }) : textSchema.optional().nullable();
-          componentDefaultValue = comp.default ?? '';
+          baseSchema = comp.required
+            ? textSchema.min(1, {
+                message: `${comp.label || "Field"} is required.`,
+              })
+            : textSchema.optional().nullable();
+          componentDefaultValue = comp.default ?? "";
         }
         break;
-      case 'dynamic-component.number-field':
+      case "dynamic-component.number-field":
         {
           const comp = component as DynamicComponentNumberField;
-          let numSchema = z.preprocess(
-            (val) => (val === "" || val === null || val === undefined ? null : Number(val)),
-            z.number().nullable()
-          );
-          if (comp.required) {
-             numSchema = z.preprocess((val) => Number(val), z.number({ required_error: `${comp.label || 'Field'} is required.` }));
-          }
+          let numberSchema = z.number();
+
+          numberSchema = z.preprocess(
+            (val) => Number(val),
+            z.number({ required_error: "Required" })
+          ) as unknown as z.ZodNumber;
+
           if (comp.min !== null && comp.min !== undefined) {
-            numSchema = numSchema.min(comp.min);
+            numberSchema = numberSchema.min(comp.min);
           }
           if (comp.max !== null && comp.max !== undefined) {
-            numSchema = numSchema.max(comp.max);
+            numberSchema = numberSchema.max(comp.max);
           }
-          baseSchema = numSchema;
-          componentDefaultValue = comp.default !== undefined && comp.default !== null && comp.default !== '' ? Number(comp.default) : null;
+          baseSchema = numberSchema; // not numSchema
+          componentDefaultValue =
+            comp.default !== undefined &&
+            comp.default !== null &&
+            comp.default !== ""
+              ? Number(comp.default)
+              : null;
         }
         break;
-      case 'dynamic-component.media-field':
+      case "dynamic-component.media-field":
         baseSchema = z.number().nullable().optional();
-        if (component.required) baseSchema = z.number({ required_error: `${component.label || 'Media'} is required.` }).min(1);
+        if (component.required)
+          baseSchema = z
+            .number({
+              required_error: `${component.label || "Media"} is required.`,
+            })
+            .min(1);
         componentDefaultValue = null;
         break;
-      case 'dynamic-component.enum-field':
+      case "dynamic-component.enum-field":
         {
           const comp = component as DynamicComponentEnumField;
-          const enumOptions = comp.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
-          if (comp.type === 'multi-select') {
-               baseSchema = z.array(z.string()).optional().default([]);
-               if(comp.required) baseSchema = z.array(z.string()).nonempty({ message: `${comp.label || 'Field'} requires at least one selection.` });
-              componentDefaultValue = comp.default ? comp.default.split(',').map(s => s.trim()).filter(Boolean) : [];
+          const enumOptions =
+            (comp.Values?.map((v) => v.tag_value).filter(
+              Boolean
+            ) as string[]) || [];
+          if (comp.type === "multi-select") {
+            baseSchema = z.array(z.string()).optional().default([]);
+            if (comp.required)
+              baseSchema = z.array(z.string()).nonempty({
+                message: `${
+                  comp.label || "Field"
+                } requires at least one selection.`,
+              });
+            componentDefaultValue = comp.default
+              ? comp.default
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+              : [];
           } else {
-              baseSchema = z.string().optional().nullable();
-              if (comp.required) baseSchema = z.string().min(1, `${comp.label || 'Field'} is required.`);
-              componentDefaultValue = comp.default ?? null;
+            baseSchema = z.string().optional().nullable();
+            if (comp.required)
+              baseSchema = z
+                .string()
+                .min(1, `${comp.label || "Field"} is required.`);
+            componentDefaultValue = comp.default ?? null;
           }
         }
         break;
-      case 'dynamic-component.date-field':
+      case "dynamic-component.date-field":
         baseSchema = z.date().nullable().optional();
-        if (component.required) baseSchema = z.date({ required_error: `${component.label || 'Date'} is required.` });
-        componentDefaultValue = (component as DynamicComponentDateField).default ? new Date((component as DynamicComponentDateField).default!) : null;
+        if (component.required)
+          baseSchema = z.date({
+            required_error: `${component.label || "Date"} is required.`,
+          });
+        componentDefaultValue = (component as DynamicComponentDateField).default
+          ? new Date((component as DynamicComponentDateField).default!)
+          : null;
         break;
-      case 'dynamic-component.boolean-field':
+      case "dynamic-component.boolean-field":
         baseSchema = z.boolean().optional();
-        if (component.required) baseSchema = z.boolean({ required_error: `${component.label || 'Field'} is required.`});
-        const boolDefaultStr = (component as DynamicComponentBooleanField).default;
-        componentDefaultValue = boolDefaultStr === 'true' || boolDefaultStr === true || false;
+        if (component.required)
+          baseSchema = z.boolean({
+            required_error: `${component.label || "Field"} is required.`,
+          });
+        const boolDefaultStr = (component as DynamicComponentBooleanField)
+          .default;
+        componentDefaultValue = boolDefaultStr === "true" || false;
         break;
       default:
         baseSchema = z.any().optional();
@@ -176,20 +285,27 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
 };
 
 const generateRandomHandle = (length = 12) => {
-  const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
+  const characters = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
   for (let i = 0; i < length; i++) {
     result += characters.charAt(Math.floor(Math.random() * characters.length));
   }
   // Ensure it starts with a letter if the regex requires it (current one doesn't strictly, but good practice)
   if (!/^[a-z]/.test(result) && result.length > 0) {
-     result = 'h' + result.substring(1); // Prepend 'h' if starts with number
-  } else if (result.length === 0) { // Should not happen with length=12, but safe
-     result = 'h' + Array(length -1).fill(0).map(() => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
+    result = "h" + result.substring(1); // Prepend 'h' if starts with number
+  } else if (result.length === 0) {
+    // Should not happen with length=12, but safe
+    result =
+      "h" +
+      Array(length - 1)
+        .fill(0)
+        .map(() =>
+          characters.charAt(Math.floor(Math.random() * characters.length))
+        )
+        .join("");
   }
   return result;
 };
-
 
 export default function RenderExtraContentPage() {
   const router = useRouter();
@@ -198,19 +314,35 @@ export default function RenderExtraContentPage() {
   const { toast } = useToast();
 
   const metaFormatDocumentId = params.documentId as string;
-  const action = searchParams.get('action') || 'create';
-  const metaDataEntryDocumentIdParam = searchParams.get('entry');
+  const action = searchParams.get("action") || "create";
+  const metaDataEntryDocumentIdParam = searchParams.get("entry");
 
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
-  const { data: metaFormat, isLoading: isLoadingMetaFormat, isError: isErrorMetaFormat, error: errorMetaFormat } = useGetMetaFormat(metaFormatDocumentId);
+  const {
+    data: metaFormat,
+    isLoading: isLoadingMetaFormat,
+    isError: isErrorMetaFormat,
+    error: errorMetaFormat,
+  } = useGetMetaFormat(metaFormatDocumentId);
 
-  const { data: metaDataEntry, isLoading: isLoadingMetaDataEntry, isError: isErrorMetaDataEntry, error: errorMetaDataEntry } = useGetMetaDataEntry(action === 'edit' ? metaDataEntryDocumentIdParam : null);
+  const {
+    data: metaDataEntry,
+    isLoading: isLoadingMetaDataEntry,
+    isError: isErrorMetaDataEntry,
+    error: errorMetaDataEntry,
+  } = useGetMetaDataEntry(
+    action === "edit" ? metaDataEntryDocumentIdParam : null
+  );
 
   const createMetaDataMutation = useCreateMetaDataEntry();
   const updateMetaDataMutation = useUpdateMetaDataEntry();
 
-  const [formSchema, setFormSchema] = React.useState<z.ZodObject<any, any, any>>(z.object({handle: z.string().min(1)}));
-  const [formDefaultValues, setFormDefaultValues] = React.useState<FieldValues>({handle: ''});
+  const [formSchema, setFormSchema] = React.useState<
+    z.ZodObject<any, any, any>
+  >(z.object({ handle: z.string().min(1) }));
+  const [formDefaultValues, setFormDefaultValues] = React.useState<FieldValues>(
+    { handle: "" }
+  );
   const [isFormInitialized, setIsFormInitialized] = React.useState(false);
 
   const methods = useForm({
@@ -219,51 +351,88 @@ export default function RenderExtraContentPage() {
     mode: "onSubmit",
   });
 
- React.useEffect(() => {
+  React.useEffect(() => {
     if (metaFormat && !isLoadingMetaFormat && !isFormInitialized) {
-      if (action === 'create' || (action === 'edit' && (metaDataEntry !== undefined || isErrorMetaDataEntry))) {
-        const { schema, defaultValues: generatedDefaults } = generateFormSchemaAndDefaults(metaFormat);
+      if (
+        action === "create" ||
+        (action === "edit" &&
+          (metaDataEntry !== undefined || isErrorMetaDataEntry))
+      ) {
+        const { schema, defaultValues: generatedDefaults } =
+          generateFormSchemaAndDefaults(metaFormat);
         setFormSchema(schema);
 
         let initialValues = { ...generatedDefaults };
 
-        if (action === 'edit' && metaDataEntry && !isLoadingMetaDataEntry) {
-          initialValues.handle = metaDataEntry.handle || '';
-          metaFormat.from_formate?.forEach(component => {
+        if (action === "edit" && metaDataEntry && !isLoadingMetaDataEntry) {
+          initialValues.handle = metaDataEntry.handle || "";
+          metaFormat.from_formate?.forEach((component) => {
             const fieldName = getFieldName(component);
             let entryValue = metaDataEntry.meta_data?.[fieldName];
 
             if (entryValue !== undefined && entryValue !== null) {
               if (component.is_array) {
-                initialValues[fieldName] = Array.isArray(entryValue) ? entryValue : [entryValue];
-                 if (component.__component === 'dynamic-component.date-field' && Array.isArray(initialValues[fieldName])) {
-                    initialValues[fieldName] = initialValues[fieldName].map((dateStr: string | Date) => {
-                       if (!dateStr) return null;
-                       const parsedDate = parseISO(String(dateStr));
-                       return isValid(parsedDate) ? parsedDate : null;
-                    }).filter((d: Date | null) => d !== null);
-                } else if (component.__component === 'dynamic-component.media-field' && Array.isArray(initialValues[fieldName])) {
-                  initialValues[fieldName] = initialValues[fieldName].map((val: any) => {
-                    const idVal = (typeof val === 'number' || typeof val === 'string') ? String(val) : null;
-                    if (idVal === null && val !== null) {
-                      console.warn(`[RenderExtraContentPage Edit] Media field array item has unexpected type:`, val, `for field ${fieldName}. Setting to null.`);
-                    }
-                    return idVal;
-                  }
-                  ).filter((v: string | null) => v !== null);
+                initialValues[fieldName] = Array.isArray(entryValue)
+                  ? entryValue
+                  : [entryValue];
+                if (
+                  component.__component === "dynamic-component.date-field" &&
+                  Array.isArray(initialValues[fieldName])
+                ) {
+                  initialValues[fieldName] = initialValues[fieldName]
+                    .map((dateStr: string | Date) => {
+                      if (!dateStr) return null;
+                      const parsedDate = parseISO(String(dateStr));
+                      return isValid(parsedDate) ? parsedDate : null;
+                    })
+                    .filter((d: Date | null) => d !== null);
+                } else if (
+                  component.__component === "dynamic-component.media-field" &&
+                  Array.isArray(initialValues[fieldName])
+                ) {
+                  initialValues[fieldName] = initialValues[fieldName]
+                    .map((val: any) => {
+                      const idVal =
+                        typeof val === "number" || typeof val === "string"
+                          ? String(val)
+                          : null;
+                      if (idVal === null && val !== null) {
+                        console.warn(
+                          `[RenderExtraContentPage Edit] Media field array item has unexpected type:`,
+                          val,
+                          `for field ${fieldName}. Setting to null.`
+                        );
+                      }
+                      return idVal;
+                    })
+                    .filter((v: string | null) => v !== null);
                 }
-              } else if (component.__component === 'dynamic-component.date-field' && entryValue) {
+              } else if (
+                component.__component === "dynamic-component.date-field" &&
+                entryValue
+              ) {
                 const parsedDate = parseISO(String(entryValue));
-                initialValues[fieldName] = isValid(parsedDate) ? parsedDate : null;
-              } else if (component.__component === 'dynamic-component.media-field') {
-                 if (typeof entryValue === 'number') {
-                   initialValues[fieldName] = Number(entryValue);
-                 } else if (typeof entryValue === 'string' && !isNaN(Number(entryValue))) {
-                    initialValues[fieldName] = Number(entryValue);
-                 } else {
-                   console.warn(`[RenderExtraContentPage Edit] Media field has unexpected non-numeric type:`, entryValue, `for field ${fieldName}. Setting to null.`);
-                   initialValues[fieldName] = null;
-                 }
+                initialValues[fieldName] = isValid(parsedDate)
+                  ? parsedDate
+                  : null;
+              } else if (
+                component.__component === "dynamic-component.media-field"
+              ) {
+                if (typeof entryValue === "number") {
+                  initialValues[fieldName] = Number(entryValue);
+                } else if (
+                  typeof entryValue === "string" &&
+                  !isNaN(Number(entryValue))
+                ) {
+                  initialValues[fieldName] = Number(entryValue);
+                } else {
+                  console.warn(
+                    `[RenderExtraContentPage Edit] Media field has unexpected non-numeric type:`,
+                    entryValue,
+                    `for field ${fieldName}. Setting to null.`
+                  );
+                  initialValues[fieldName] = null;
+                }
               } else {
                 initialValues[fieldName] = entryValue;
               }
@@ -277,114 +446,192 @@ export default function RenderExtraContentPage() {
         setIsFormInitialized(true);
       }
     }
-  }, [metaFormat, isLoadingMetaFormat, action, metaDataEntry, isLoadingMetaDataEntry, metaDataEntryDocumentIdParam, methods, isErrorMetaDataEntry, isFormInitialized]);
-
+  }, [
+    metaFormat,
+    isLoadingMetaFormat,
+    action,
+    metaDataEntry,
+    isLoadingMetaDataEntry,
+    metaDataEntryDocumentIdParam,
+    methods,
+    isErrorMetaDataEntry,
+    isFormInitialized,
+  ]);
 
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = React.useState(false);
-  const [currentMediaFieldTarget, setCurrentMediaFieldTarget] = React.useState<string | { fieldName: string; index: number } | null>(null);
-  const [currentMediaFieldDefinition, setCurrentMediaFieldDefinition] = React.useState<FormFormatComponent | null>(null);
+  const [currentMediaFieldTarget, setCurrentMediaFieldTarget] = React.useState<
+    string | { fieldName: string; index: number } | null
+  >(null);
+  const [currentMediaFieldDefinition, setCurrentMediaFieldDefinition] =
+    React.useState<FormFormatComponent | null>(null);
 
+  const handleMediaSelect = (selectedMedia: CombinedMediaData) => {
+    const mediaIdToSet = selectedMedia.fileId;
 
- const handleMediaSelect = (selectedMedia: CombinedMediaData) => {
-    const mediaIdToSet = selectedMedia.fileId; 
-
-    console.log("[RenderExtraContentPage] handleMediaSelect. Target:", currentMediaFieldTarget, "Selected Media (numeric ID):", mediaIdToSet);
+    console.log(
+      "[RenderExtraContentPage] handleMediaSelect. Target:",
+      currentMediaFieldTarget,
+      "Selected Media (numeric ID):",
+      mediaIdToSet
+    );
 
     if (!currentMediaFieldTarget) {
-        toast({ variant: "destructive", title: "Error", description: "Media target field is not set." });
-        setIsMediaSelectorOpen(false);
-        return;
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Media target field is not set.",
+      });
+      setIsMediaSelectorOpen(false);
+      return;
     }
     if (mediaIdToSet === null || mediaIdToSet === undefined) {
-        toast({ variant: "destructive", title: "Error", description: "Selected media item is invalid or has no file ID." });
-        setIsMediaSelectorOpen(false);
-        return;
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Selected media item is invalid or has no file ID.",
+      });
+      setIsMediaSelectorOpen(false);
+      return;
     }
-    if (typeof mediaIdToSet !== 'number') {
-        toast({ variant: "destructive", title: "Error", description: "Media ID from selector is not a number." });
-        setIsMediaSelectorOpen(false);
-        return;
+    if (typeof mediaIdToSet !== "number") {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Media ID from selector is not a number.",
+      });
+      setIsMediaSelectorOpen(false);
+      return;
     }
 
-    if (typeof currentMediaFieldTarget === 'string') {
-      methods.setValue(currentMediaFieldTarget, mediaIdToSet, { shouldValidate: true });
-    } else if (typeof currentMediaFieldTarget === 'object' && currentMediaFieldTarget.fieldName && currentMediaFieldTarget.index !== undefined) {
+    if (typeof currentMediaFieldTarget === "string") {
+      methods.setValue(currentMediaFieldTarget, mediaIdToSet, {
+        shouldValidate: true,
+      });
+    } else if (
+      typeof currentMediaFieldTarget === "object" &&
+      currentMediaFieldTarget.fieldName &&
+      currentMediaFieldTarget.index !== undefined
+    ) {
       const { fieldName, index } = currentMediaFieldTarget;
-      methods.setValue(`${fieldName}.${index}`, mediaIdToSet, { shouldValidate: true });
+      methods.setValue(`${fieldName}.${index}`, mediaIdToSet, {
+        shouldValidate: true,
+      });
     }
     setIsMediaSelectorOpen(false);
     setCurrentMediaFieldTarget(null);
     setCurrentMediaFieldDefinition(null);
   };
 
-  const openMediaSelector = (target: string | { fieldName: string; index: number }, componentDef: FormFormatComponent) => {
+  const openMediaSelector = (
+    target: string | { fieldName: string; index: number },
+    componentDef: FormFormatComponent
+  ) => {
     setCurrentMediaFieldTarget(target);
     setCurrentMediaFieldDefinition(componentDef);
     setIsMediaSelectorOpen(true);
   };
 
-
   const commonErrorHandling = (error: any, submittedHandle: string) => {
     const errorMessageString = error.message || ""; // error is now a generic Error
-    const isCreateAction = action === 'create';
+    const isCreateAction = action === "create";
 
-    if (errorMessageString.startsWith('DUPLICATE_HANDLE_ERROR:')) {
-        methods.setError('handle', {
-            type: 'manual',
-            message: 'This handle is already taken. Please choose a different one.'
-        });
-        toast({ variant: "destructive", title: "Duplicate Handle", description: "This handle is already in use. Please try another." });
+    if (errorMessageString.startsWith("DUPLICATE_HANDLE_ERROR:")) {
+      methods.setError("handle", {
+        type: "manual",
+        message: "This handle is already taken. Please choose a different one.",
+      });
+      toast({
+        variant: "destructive",
+        title: "Duplicate Handle",
+        description: "This handle is already in use. Please try another.",
+      });
     } else {
-        const toastMessage = errorMessageString || (isCreateAction ? "Failed to create data entry." : "Failed to update data entry.");
-        toast({ variant: "destructive", title: "Submission Error", description: toastMessage });
+      const toastMessage =
+        errorMessageString ||
+        (isCreateAction
+          ? "Failed to create data entry."
+          : "Failed to update data entry.");
+      toast({
+        variant: "destructive",
+        title: "Submission Error",
+        description: toastMessage,
+      });
     }
-    console.error("MetaData submission error on client (see service logs for more):", error.message);
+    console.error(
+      "MetaData submission error on client (see service logs for more):",
+      error.message
+    );
   };
-
 
   const onSubmit = (data: FieldValues) => {
     console.log("Dynamic Form onSubmit triggered. Action:", action);
-    console.log("Raw Form Data before processing:", JSON.stringify(data, null, 2));
-    console.log("Form Errors:", JSON.stringify(methods.formState.errors, null, 2));
+    console.log(
+      "Raw Form Data before processing:",
+      JSON.stringify(data, null, 2)
+    );
+    console.log(
+      "Form Errors:",
+      JSON.stringify(methods.formState.errors, null, 2)
+    );
 
-    if (!currentUser || !currentUser.tenent_id || currentUser.id === undefined) {
-      toast({ variant: "destructive", title: "Error", description: "User information is missing." });
+    if (
+      !currentUser ||
+      !currentUser.tenent_id ||
+      currentUser.id === undefined
+    ) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "User information is missing.",
+      });
       return;
     }
-    
+
     let currentSubmitHandle = data.handle;
-    if (!currentSubmitHandle || String(currentSubmitHandle).trim() === '') {
+    if (!currentSubmitHandle || String(currentSubmitHandle).trim() === "") {
       currentSubmitHandle = generateRandomHandle();
-      methods.setValue('handle', currentSubmitHandle, { shouldValidate: true, shouldDirty: true }); // Update form state for user
+      methods.setValue("handle", currentSubmitHandle, {
+        shouldValidate: true,
+        shouldDirty: true,
+      }); // Update form state for user
     }
-    
-    const { handle, ...dynamicData } = data; 
 
-    const processedData = { ...dynamicData }; 
-    metaFormat?.from_formate?.forEach(component => {
-        const fieldName = getFieldName(component);
-         if (component.is_array && (processedData[fieldName] === undefined || processedData[fieldName] === null)) {
-            processedData[fieldName] = [];
+    const { handle, ...dynamicData } = data;
+
+    const processedData = { ...dynamicData };
+    metaFormat?.from_formate?.forEach((component) => {
+      const fieldName = getFieldName(component);
+      if (
+        component.is_array &&
+        (processedData[fieldName] === undefined ||
+          processedData[fieldName] === null)
+      ) {
+        processedData[fieldName] = [];
+      }
+      if (component.__component === "dynamic-component.date-field") {
+        if (component.is_array && Array.isArray(processedData[fieldName])) {
+          processedData[fieldName] = processedData[fieldName].map(
+            (dateVal: string | Date | null) =>
+              dateVal instanceof Date ? dateVal.toISOString() : dateVal
+          );
+        } else if (processedData[fieldName] instanceof Date) {
+          processedData[fieldName] = processedData[fieldName].toISOString();
         }
-         if (component.__component === 'dynamic-component.date-field') {
-           if (component.is_array && Array.isArray(processedData[fieldName])) {
-             processedData[fieldName] = processedData[fieldName].map((dateVal: string | Date | null) => dateVal instanceof Date ? dateVal.toISOString() : dateVal);
-           } else if (processedData[fieldName] instanceof Date) {
-             processedData[fieldName] = processedData[fieldName].toISOString();
-           }
-         }
+      }
     });
-    console.log("Processed Form Data (meta_data part):", JSON.stringify(processedData, null, 2));
+    console.log(
+      "Processed Form Data (meta_data part):",
+      JSON.stringify(processedData, null, 2)
+    );
 
-
-    if (action === 'create') {
+    if (action === "create") {
       const payload: CreateMetaDataPayload = {
         tenent_id: currentUser.tenent_id,
         meta_format: metaFormatDocumentId,
         user: currentUser.id,
-        meta_data: processedData, 
+        meta_data: processedData,
         publishedAt: new Date().toISOString(),
-        handle: currentSubmitHandle, 
+        handle: currentSubmitHandle,
       };
       console.log("Create MetaData Payload:", JSON.stringify(payload, null, 2));
       createMetaDataMutation.mutate(payload, {
@@ -394,27 +641,51 @@ export default function RenderExtraContentPage() {
         },
         onError: (error: any) => commonErrorHandling(error, payload.handle),
       });
-    } else if (action === 'edit' && metaDataEntryDocumentIdParam) {
-        const updatePayload: Partial<Omit<CreateMetaDataPayload, 'meta_format' | 'tenent_id' | 'user'>> & {handle: string} = {
-            meta_data: processedData, 
-            handle: currentSubmitHandle, 
-        };
-         console.log("Update MetaData Payload (for entry " + metaDataEntryDocumentIdParam + "):", JSON.stringify(updatePayload, null, 2));
-        updateMetaDataMutation.mutate({ documentId: metaDataEntryDocumentIdParam, payload: updatePayload as any }, { 
-            onSuccess: () => {
-                toast({ title: "Success", description: "Data entry updated." });
-                router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`);
-            },
-            onError: (error: any) => commonErrorHandling(error, updatePayload.handle),
-        });
+    } else if (action === "edit" && metaDataEntryDocumentIdParam) {
+      const updatePayload: Partial<
+        Omit<CreateMetaDataPayload, "meta_format" | "tenent_id" | "user">
+      > & { handle: string } = {
+        meta_data: processedData,
+        handle: currentSubmitHandle,
+      };
+      console.log(
+        "Update MetaData Payload (for entry " +
+          metaDataEntryDocumentIdParam +
+          "):",
+        JSON.stringify(updatePayload, null, 2)
+      );
+      updateMetaDataMutation.mutate(
+        {
+          documentId: metaDataEntryDocumentIdParam,
+          payload: updatePayload as any,
+        },
+        {
+          onSuccess: () => {
+            toast({ title: "Success", description: "Data entry updated." });
+            router.push(
+              `/dashboard/extra-content/data/${metaFormatDocumentId}`
+            );
+          },
+          onError: (error: any) =>
+            commonErrorHandling(error, updatePayload.handle),
+        }
+      );
     }
   };
 
-  const isLoadingPage = isLoadingUser || isLoadingMetaFormat || (action === 'edit' && isLoadingMetaDataEntry) || (!isFormInitialized && !isErrorMetaFormat);
-  const isErrorPage = isErrorMetaFormat || (action === 'edit' && isErrorMetaDataEntry);
-  const pageError = errorMetaFormat || (action === 'edit' ? errorMetaDataEntry : null);
-  const isSubmitting = createMetaDataMutation.isPending || updateMetaDataMutation.isPending || methods.formState.isSubmitting;
-
+  const isLoadingPage =
+    isLoadingUser ||
+    isLoadingMetaFormat ||
+    (action === "edit" && isLoadingMetaDataEntry) ||
+    (!isFormInitialized && !isErrorMetaFormat);
+  const isErrorPage =
+    isErrorMetaFormat || (action === "edit" && isErrorMetaDataEntry);
+  const pageError =
+    errorMetaFormat || (action === "edit" ? errorMetaDataEntry : null);
+  const isSubmitting =
+    createMetaDataMutation.isPending ||
+    updateMetaDataMutation.isPending ||
+    methods.formState.isSubmitting;
 
   if (isLoadingPage) {
     return (
@@ -422,20 +693,26 @@ export default function RenderExtraContentPage() {
         <Skeleton className="h-8 w-1/4 mb-2" />
         <Skeleton className="h-6 w-1/2 mb-4" />
         <Card>
-          <CardHeader><Skeleton className="h-7 w-1/3" /></CardHeader>
+          <CardHeader>
+            <Skeleton className="h-7 w-1/3" />
+          </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2"> {/* Skeleton for Handle */}
-                <Skeleton className="h-4 w-1/4" />
-                <Skeleton className="h-10 w-full" />
+            <div className="space-y-2">
+              {" "}
+              {/* Skeleton for Handle */}
+              <Skeleton className="h-4 w-1/4" />
+              <Skeleton className="h-10 w-full" />
             </div>
-            {[...Array(2)].map((_, i) => ( 
+            {[...Array(2)].map((_, i) => (
               <div key={i} className="space-y-2">
                 <Skeleton className="h-4 w-1/4" />
                 <Skeleton className="h-10 w-full" />
               </div>
             ))}
           </CardContent>
-          <CardFooter><Skeleton className="h-10 w-28" /></CardFooter>
+          <CardFooter>
+            <Skeleton className="h-10 w-28" />
+          </CardFooter>
         </Card>
       </div>
     );
@@ -447,7 +724,10 @@ export default function RenderExtraContentPage() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>{(pageError as Error)?.message || 'Could not load required data for the form.'}</AlertDescription>
+          <AlertDescription>
+            {(pageError as Error)?.message ||
+              "Could not load required data for the form."}
+          </AlertDescription>
         </Alert>
       </div>
     );
@@ -458,276 +738,526 @@ export default function RenderExtraContentPage() {
       <div className="p-6">
         <Alert>
           <AlertTitle>Extra Content Definition Not Found</AlertTitle>
-          <AlertDescription>The requested extra content definition (ID: {metaFormatDocumentId}) could not be found.</AlertDescription>
+          <AlertDescription>
+            The requested extra content definition (ID: {metaFormatDocumentId})
+            could not be found.
+          </AlertDescription>
         </Alert>
       </div>
     );
   }
-   if (action === 'edit' && !metaDataEntry && !isLoadingMetaDataEntry && metaDataEntryDocumentIdParam) {
-     return (
-       <div className="p-6">
-         <Alert variant="destructive">
-           <AlertTitle>Error: Data Entry Not Found</AlertTitle>
-           <AlertDescription>
-             The specific data entry you are trying to edit (ID: {metaDataEntryDocumentIdParam}) could not be found.
-           </AlertDescription>
-           <Button variant="outline" onClick={() => router.back()} className="mt-4">
+  if (
+    action === "edit" &&
+    !metaDataEntry &&
+    !isLoadingMetaDataEntry &&
+    metaDataEntryDocumentIdParam
+  ) {
+    return (
+      <div className="p-6">
+        <Alert variant="destructive">
+          <AlertTitle>Error: Data Entry Not Found</AlertTitle>
+          <AlertDescription>
+            The specific data entry you are trying to edit (ID:{" "}
+            {metaDataEntryDocumentIdParam}) could not be found.
+          </AlertDescription>
+          <Button
+            variant="outline"
+            onClick={() => router.back()}
+            className="mt-4"
+          >
             Go Back
-           </Button>
-         </Alert>
-       </div>
-     );
-   }
+          </Button>
+        </Alert>
+      </div>
+    );
+  }
 
-  const getExpectedMediaTypesForField = (componentDef: FormFormatComponent): string[] => {
-    if (componentDef.__component === 'dynamic-component.media-field') {
-        const mediaComp = componentDef as DynamicComponentMediaField;
-        if (mediaComp.type) {
-            switch (mediaComp.type) {
-                case 'image': return ['image'];
-                case 'video': return ['video'];
-                case 'pdf': return ['application/pdf'];
-                case 'media':
-                case 'other':
-                default: return [];
-            }
+  const getExpectedMediaTypesForField = (
+    componentDef: FormFormatComponent
+  ): string[] => {
+    if (componentDef.__component === "dynamic-component.media-field") {
+      const mediaComp = componentDef as DynamicComponentMediaField;
+      if (mediaComp.type) {
+        switch (mediaComp.type) {
+          case "image":
+            return ["image"];
+          case "video":
+            return ["video"];
+          case "pdf":
+            return ["application/pdf"];
+          case "media":
+          case "other":
+          default:
+            return [];
         }
+      }
     }
     return [];
   };
 
-  const getCurrentSelectionIds = (fieldName: string, isArrayField: boolean, itemIndex?: number): (number | null)[] => {
+  const getCurrentSelectionIds = (
+    fieldName: string,
+    isArrayField: boolean,
+    itemIndex?: number
+  ): (number | null)[] => {
     const formValues = methods.getValues();
     let value;
     if (isArrayField && itemIndex !== undefined) {
-        value = formValues[fieldName]?.[itemIndex];
+      value = formValues[fieldName]?.[itemIndex];
     } else {
-        value = formValues[fieldName];
+      value = formValues[fieldName];
     }
-    return Array.isArray(value) 
-        ? value.map(v => (typeof v === 'number' ? v : (typeof v === 'string' && !isNaN(Number(v)) ? Number(v) : null)))
-        : (typeof value === 'number' ? [value] : (typeof value === 'string' && !isNaN(Number(value)) ? [Number(value)] : []));
+    return Array.isArray(value)
+      ? value.map((v) =>
+          typeof v === "number"
+            ? v
+            : typeof v === "string" && !isNaN(Number(v))
+            ? Number(v)
+            : null
+        )
+      : typeof value === "number"
+      ? [value]
+      : typeof value === "string" && !isNaN(Number(value))
+      ? [Number(value)]
+      : [];
   };
-
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      <Button variant="outline" onClick={() => router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`)}>
-        &larr; Back to Entries for {metaFormat.name || 'this Extra Content'}
+      <Button
+        variant="outline"
+        onClick={() =>
+          router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`)
+        }
+      >
+        &larr; Back to Entries for {metaFormat.name || "this Extra Content"}
       </Button>
       <FormProvider {...methods}>
         <form onSubmit={methods.handleSubmit(onSubmit)}>
           <Card>
             <CardHeader>
-              <CardTitle>{action === 'edit' ? `Edit Entry for: ${metaFormat.name}` : `New Entry for: ${metaFormat.name}`}</CardTitle>
-              {metaFormat.description && <CardDescription>{metaFormat.description}</CardDescription>}
+              <CardTitle>
+                {action === "edit"
+                  ? `Edit Entry for: ${metaFormat.name}`
+                  : `New Entry for: ${metaFormat.name}`}
+              </CardTitle>
+              {metaFormat.description && (
+                <CardDescription>{metaFormat.description}</CardDescription>
+              )}
             </CardHeader>
             <CardContent className="space-y-6">
-            <FormField
+              <FormField
                 control={methods.control}
                 name="handle"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Handle <span className="text-destructive">*</span></FormLabel>
+                    <FormLabel>
+                      Handle <span className="text-destructive">*</span>
+                    </FormLabel>
                     <div className="flex items-center gap-2">
-                        <FormControl>
-                        <Input placeholder="e.g., my-unique-page-handle" {...field} disabled={isSubmitting} />
-                        </FormControl>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => {
-                                const newHandle = generateRandomHandle();
-                                methods.setValue('handle', newHandle, { shouldValidate: true });
-                            }}
-                            disabled={isSubmitting}
-                            aria-label="Generate random handle"
-                        >
-                            <RefreshCcw className="h-4 w-4" />
-                        </Button>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g., my-unique-page-handle"
+                          {...field}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          const newHandle = generateRandomHandle();
+                          methods.setValue("handle", newHandle, {
+                            shouldValidate: true,
+                          });
+                        }}
+                        disabled={isSubmitting}
+                        aria-label="Generate random handle"
+                      >
+                        <RefreshCcw className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <FormDescription>Unique identifier for this entry (for SEO/routing). Lowercase alphanumeric and hyphens only.</FormDescription>
+                    <FormDescription>
+                      Unique identifier for this entry (for SEO/routing).
+                      Lowercase alphanumeric and hyphens only.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
               {metaFormat.from_formate && metaFormat.from_formate.length > 0 ? (
-                metaFormat.from_formate.map((component) => {
-                  const fieldName = getFieldName(component);
-                  const label = component.label || fieldName;
-                  const placeholder = component.placeholder || '';
-                  const isRequired = component.required || false;
+                metaFormat.from_formate.map(
+                  (component: FormFormatComponent) => {
+                    const fieldName = getFieldName(component);
+                    const label = component.label || fieldName;
+                    const placeholder = component.placeholder || "";
+                    const isRequired = component.required || false;
 
-                  if (component.is_array) {
+                    if (component.is_array) {
+                      return (
+                        <ArrayFieldRenderer
+                          key={fieldName}
+                          fieldName={fieldName as any}
+                          componentDefinition={component}
+                          control={methods.control}
+                          methods={methods}
+                          isSubmitting={isSubmitting}
+                          openMediaSelector={(target, fieldComponentDef) =>
+                            openMediaSelector(target, fieldComponentDef)
+                          }
+                          getDefaultValueForComponent={
+                            getDefaultValueForComponent
+                          }
+                        />
+                      );
+                    }
+
                     return (
-                      <ArrayFieldRenderer
+                      <FormField
                         key={fieldName}
-                        fieldName={fieldName as any}
-                        componentDefinition={component}
                         control={methods.control}
-                        methods={methods}
-                        isSubmitting={isSubmitting}
-                        openMediaSelector={(target, fieldComponentDef) => openMediaSelector(target, fieldComponentDef)}
-                        getDefaultValueForComponent={getDefaultValueForComponent}
-                      />
-                    );
-                  }
-
-                  return (
-                    <FormField
-                      key={fieldName}
-                      control={methods.control}
-                      name={fieldName as any}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{label} {isRequired && <span className="text-destructive">*</span>}</FormLabel>
-                          <FormControl>
-                            {(() => {
-                              switch (component.__component) {
-                                case 'dynamic-component.text-field':
-                                  const textComp = component as DynamicComponentTextField;
-                                  if (textComp.inputType === 'tip-tap') {
+                        name={fieldName as any}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {label}{" "}
+                              {isRequired && (
+                                <span className="text-destructive">*</span>
+                              )}
+                            </FormLabel>
+                            <FormControl>
+                              {(() => {
+                                switch (component.__component) {
+                                  case "dynamic-component.text-field":
+                                    const textComp =
+                                      component as DynamicComponentTextField;
+                                    if (textComp.inputType === "tip-tap") {
+                                      return (
+                                        <TipTapEditor
+                                          key={`${fieldName}-${action}-${
+                                            metaDataEntry?.documentId || "new"
+                                          }`}
+                                          content={
+                                            field.value ||
+                                            textComp.default ||
+                                            ""
+                                          }
+                                          onContentChange={(html) =>
+                                            methods.setValue(
+                                              fieldName as any,
+                                              html,
+                                              { shouldValidate: true }
+                                            )
+                                          }
+                                          className="min-h-[200px]"
+                                        />
+                                      );
+                                    }
                                     return (
-                                      <TipTapEditor
-                                        key={`${fieldName}-${action}-${metaDataEntry?.documentId || 'new'}`}
-                                        content={field.value || textComp.default || ''}
-                                        onContentChange={(html) => methods.setValue(fieldName as any, html, {shouldValidate: true})}
-                                        className="min-h-[200px]"
+                                      <Input
+                                        type={
+                                          textComp.inputType === "email"
+                                            ? "email"
+                                            : "text"
+                                        }
+                                        placeholder={placeholder}
+                                        {...field}
+                                        value={field.value ?? ""}
+                                        disabled={isSubmitting}
                                       />
                                     );
-                                  }
-                                  return <Input type={textComp.inputType === 'email' ? 'email' : 'text'} placeholder={placeholder} {...field} value={field.value ?? ''} disabled={isSubmitting}/>;
-                                case 'dynamic-component.number-field':
-                                  const numComp = component as DynamicComponentNumberField;
-                                  return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={numComp.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
-                                case 'dynamic-component.media-field':
-                                  const currentMediaId = typeof field.value === 'number' ? field.value : null;
-                                  return (
-                                    <div className="flex items-center gap-2">
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => openMediaSelector(fieldName, component)}
+                                  case "dynamic-component.number-field":
+                                    const numComp =
+                                      component as DynamicComponentNumberField;
+                                    return (
+                                      <Input
+                                        type="number"
+                                        placeholder={placeholder}
+                                        {...field}
+                                        value={field.value ?? ""}
+                                        step={
+                                          numComp.type === "integer"
+                                            ? "1"
+                                            : "any"
+                                        }
+                                        disabled={isSubmitting}
+                                      />
+                                    );
+                                  case "dynamic-component.media-field":
+                                    const currentMediaId =
+                                      typeof field.value === "number"
+                                        ? field.value
+                                        : null;
+                                    return (
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          onClick={() =>
+                                            openMediaSelector(
+                                              fieldName,
+                                              component
+                                            )
+                                          }
+                                          disabled={isSubmitting}
+                                        >
+                                          <ImageIcon className="mr-2 h-4 w-4" />
+                                          {currentMediaId
+                                            ? `ID: ${currentMediaId} (Change)`
+                                            : placeholder || `Select Media`}
+                                        </Button>
+                                        {currentMediaId && (
+                                          <p className="text-xs text-muted-foreground">
+                                            ID: {currentMediaId}
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  case "dynamic-component.enum-field":
+                                    const enumComp =
+                                      component as DynamicComponentEnumField;
+                                    const options =
+                                      (enumComp.Values?.map(
+                                        (v) => v.tag_value
+                                      ).filter(Boolean) as string[]) || [];
+                                    if (enumComp.type === "multi-select") {
+                                      return (
+                                        <div className="space-y-2 p-2 border rounded-md">
+                                          {options.map((option) => (
+                                            <FormItem
+                                              key={option}
+                                              className="flex flex-row items-center space-x-3 space-y-0"
+                                            >
+                                              <FormControl>
+                                                <Switch
+                                                  checked={(Array.isArray(
+                                                    field.value
+                                                  )
+                                                    ? field.value
+                                                    : []
+                                                  ).includes(option)}
+                                                  onCheckedChange={(
+                                                    checked
+                                                  ) => {
+                                                    const currentValues =
+                                                      Array.isArray(field.value)
+                                                        ? field.value
+                                                        : [];
+                                                    const newValues = checked
+                                                      ? [
+                                                          ...currentValues,
+                                                          option,
+                                                        ]
+                                                      : currentValues.filter(
+                                                          (v: string) =>
+                                                            v !== option
+                                                        );
+                                                    methods.setValue(
+                                                      fieldName as any,
+                                                      newValues,
+                                                      { shouldValidate: true }
+                                                    );
+                                                  }}
+                                                  disabled={isSubmitting}
+                                                />
+                                              </FormControl>
+                                              <FormLabel className="font-normal">
+                                                {option}
+                                              </FormLabel>
+                                            </FormItem>
+                                          ))}
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <Select
+                                        onValueChange={field.onChange}
+                                        value={
+                                          field.value || enumComp.default || ""
+                                        }
                                         disabled={isSubmitting}
                                       >
-                                         <ImageIcon className="mr-2 h-4 w-4" />
-                                        {currentMediaId ? `ID: ${currentMediaId} (Change)` : placeholder || `Select Media`}
-                                      </Button>
-                                       {currentMediaId && <p className="text-xs text-muted-foreground">ID: {currentMediaId}</p>}
-                                    </div>
-                                  );
-                                case 'dynamic-component.enum-field':
-                                  const enumComp = component as DynamicComponentEnumField;
-                                  const options = enumComp.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
-                                  if (enumComp.type === 'multi-select') {
+                                        <SelectTrigger>
+                                          <SelectValue
+                                            placeholder={
+                                              placeholder || "Select an option"
+                                            }
+                                          />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {options.map((option) => (
+                                            <SelectItem
+                                              key={option}
+                                              value={option}
+                                            >
+                                              {option}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    );
+                                  case "dynamic-component.date-field":
+                                    const dateComp =
+                                      component as DynamicComponentDateField;
+                                    const dateValue = field.value
+                                      ? typeof field.value === "string"
+                                        ? parseISO(field.value)
+                                        : field.value
+                                      : null;
                                     return (
-                                      <div className="space-y-2 p-2 border rounded-md">
-                                        {options.map(option => (
-                                          <FormItem key={option} className="flex flex-row items-center space-x-3 space-y-0">
-                                            <FormControl>
-                                              <Switch
-                                                checked={(Array.isArray(field.value) ? field.value : []).includes(option)}
-                                                onCheckedChange={(checked) => {
-                                                  const currentValues = Array.isArray(field.value) ? field.value : [];
-                                                  const newValues = checked
-                                                    ? [...currentValues, option]
-                                                    : currentValues.filter((v: string) => v !== option);
-                                                  methods.setValue(fieldName as any, newValues, {shouldValidate: true});
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                              "w-full md:w-[280px] justify-start text-left font-normal",
+                                              !dateValue &&
+                                                "text-muted-foreground"
+                                            )}
+                                            disabled={isSubmitting}
+                                          >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dateValue && isValid(dateValue) ? (
+                                              format(
+                                                dateValue,
+                                                dateComp.type === "time"
+                                                  ? "HH:mm"
+                                                  : dateComp.type ===
+                                                      "data&time" ||
+                                                    dateComp.type === "datetime"
+                                                  ? "PPP HH:mm"
+                                                  : "PPP"
+                                              )
+                                            ) : (
+                                              <span>
+                                                {placeholder || "Pick a date"}
+                                              </span>
+                                            )}
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                          <Calendar
+                                            mode="single"
+                                            selected={
+                                              dateValue && isValid(dateValue)
+                                                ? dateValue
+                                                : undefined
+                                            }
+                                            onSelect={(date) =>
+                                              field.onChange(date || null)
+                                            }
+                                            initialFocus
+                                            disabled={isSubmitting}
+                                          />
+                                          {(dateComp.type === "time" ||
+                                            dateComp.type === "data&time" ||
+                                            dateComp.type === "datetime") && (
+                                            <div className="p-3 border-t border-border">
+                                              <FormLabel>
+                                                Time (HH:mm)
+                                              </FormLabel>
+                                              <Input
+                                                type="time"
+                                                value={
+                                                  dateValue &&
+                                                  isValid(dateValue)
+                                                    ? format(dateValue, "HH:mm")
+                                                    : ""
+                                                }
+                                                onChange={(e) => {
+                                                  const [hours, minutes] =
+                                                    e.target.value
+                                                      .split(":")
+                                                      .map(Number);
+                                                  const newDate =
+                                                    dateValue &&
+                                                    isValid(dateValue)
+                                                      ? new Date(dateValue)
+                                                      : new Date();
+                                                  if (
+                                                    isNaN(newDate.getTime())
+                                                  ) {
+                                                    const todayWithTime =
+                                                      new Date();
+                                                    todayWithTime.setHours(
+                                                      hours,
+                                                      minutes,
+                                                      0,
+                                                      0
+                                                    );
+                                                    field.onChange(
+                                                      todayWithTime
+                                                    );
+                                                  } else {
+                                                    newDate.setHours(
+                                                      hours,
+                                                      minutes
+                                                    );
+                                                    field.onChange(newDate);
+                                                  }
                                                 }}
                                                 disabled={isSubmitting}
                                               />
-                                            </FormControl>
-                                            <FormLabel className="font-normal">{option}</FormLabel>
-                                          </FormItem>
-                                        ))}
-                                      </div>
+                                            </div>
+                                          )}
+                                        </PopoverContent>
+                                      </Popover>
                                     );
-                                  }
-                                  return (
-                                    <Select onValueChange={field.onChange} value={field.value || enumComp.default || ""} disabled={isSubmitting} >
-                                      <SelectTrigger><SelectValue placeholder={placeholder || 'Select an option'} /></SelectTrigger>
-                                      <SelectContent>
-                                        {options.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
-                                      </SelectContent>
-                                    </Select>
-                                  );
-                                case 'dynamic-component.date-field':
-                                   const dateComp = component as DynamicComponentDateField;
-                                   const dateValue = field.value ? (typeof field.value === 'string' ? parseISO(field.value) : field.value) : null;
-                                  return (
-                                    <Popover>
-                                      <PopoverTrigger asChild>
-                                        <Button
-                                          variant={"outline"}
-                                          className={cn("w-full md:w-[280px] justify-start text-left font-normal", !dateValue && "text-muted-foreground")}
-                                          disabled={isSubmitting}
-                                        >
-                                          <CalendarIcon className="mr-2 h-4 w-4" />
-                                          {dateValue && isValid(dateValue) ? format(dateValue, (dateComp.type === 'time' ? 'HH:mm' : dateComp.type === 'data&time' || dateComp.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
-                                        </Button>
-                                      </PopoverTrigger>
-                                      <PopoverContent className="w-auto p-0">
-                                        <Calendar
-                                          mode="single"
-                                          selected={dateValue && isValid(dateValue) ? dateValue : undefined}
-                                          onSelect={(date) => field.onChange(date || null)}
-                                          initialFocus
+                                  case "dynamic-component.boolean-field":
+                                    return (
+                                      <div className="flex items-center space-x-2 pt-2">
+                                        <Switch
+                                          id={fieldName}
+                                          checked={field.value || false}
+                                          onCheckedChange={field.onChange}
                                           disabled={isSubmitting}
                                         />
-                                         {(dateComp.type === 'time' || dateComp.type === 'data&time' || dateComp.type === 'datetime') && (
-                                            <div className="p-3 border-t border-border">
-                                                <FormLabel>Time (HH:mm)</FormLabel>
-                                                <Input
-                                                    type="time"
-                                                    value={dateValue && isValid(dateValue) ? format(dateValue, 'HH:mm') : ''}
-                                                    onChange={(e) => {
-                                                        const [hours, minutes] = e.target.value.split(':').map(Number);
-                                                        const newDate = dateValue && isValid(dateValue) ? new Date(dateValue) : new Date();
-                                                        if (isNaN(newDate.getTime())) {
-                                                            const todayWithTime = new Date();
-                                                            todayWithTime.setHours(hours, minutes, 0, 0);
-                                                            field.onChange(todayWithTime);
-                                                        } else {
-                                                            newDate.setHours(hours, minutes);
-                                                            field.onChange(newDate);
-                                                        }
-                                                    }}
-                                                    disabled={isSubmitting}
-                                                />
-                                            </div>
-                                        )}
-                                      </PopoverContent>
-                                    </Popover>
-                                  );
-                                case 'dynamic-component.boolean-field':
-                                  return (
-                                    <div className="flex items-center space-x-2 pt-2">
-                                      <Switch id={fieldName} checked={field.value || false} onCheckedChange={field.onChange} disabled={isSubmitting} />
-                                      <FormLabel htmlFor={fieldName} className="text-sm font-normal">{placeholder || 'Enable'}</FormLabel>
-                                    </div>
-                                  );
-                                default:
-                                  return <Input placeholder={`Unsupported component: ${component.__component}`} {...field} value={field.value ?? ''} disabled />;
-                              }
-                            })()}
-                          </FormControl>
-                          {component.description && <FormDescription>{component.description}</FormDescription>}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  );
-                })
+                                        <FormLabel
+                                          htmlFor={fieldName}
+                                          className="text-sm font-normal"
+                                        >
+                                          {placeholder || "Enable"}
+                                        </FormLabel>
+                                      </div>
+                                    );
+                                  default:
+                                    return (
+                                      <Input
+                                        placeholder={`Unsupported component: ${component.__component}`}
+                                        {...field}
+                                        value={field.value ?? ""}
+                                        disabled
+                                      />
+                                    );
+                                }
+                              })()}
+                            </FormControl>
+                            {component.description && (
+                              <FormDescription>
+                                {component.description}
+                              </FormDescription>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    );
+                  }
+                )
               ) : (
-                <p className="text-muted-foreground">No form fields defined for this Extra Content format.</p>
+                <p className="text-muted-foreground">
+                  No form fields defined for this Extra Content format.
+                </p>
               )}
             </CardContent>
             <CardFooter>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {action === 'edit' ? 'Update Entry' : 'Create Entry'}
+                {isSubmitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {action === "edit" ? "Update Entry" : "Create Entry"}
               </Button>
             </CardFooter>
           </Card>
@@ -739,14 +1269,23 @@ export default function RenderExtraContentPage() {
         onOpenChange={setIsMediaSelectorOpen}
         onMediaSelect={handleMediaSelect}
         returnType="id"
-        expectedMediaTypes={currentMediaFieldDefinition ? getExpectedMediaTypesForField(currentMediaFieldDefinition) : []}
+        expectedMediaTypes={
+          currentMediaFieldDefinition
+            ? getExpectedMediaTypesForField(currentMediaFieldDefinition)
+            : []
+        }
         currentSelectionIds={
-            currentMediaFieldTarget && currentMediaFieldDefinition ?
-            getCurrentSelectionIds(
-                typeof currentMediaFieldTarget === 'string' ? currentMediaFieldTarget : currentMediaFieldTarget.fieldName,
-                !!(currentMediaFieldDefinition.is_array), // Pass boolean indicating if field is array type
-                typeof currentMediaFieldTarget !== 'string' ? currentMediaFieldTarget.index : undefined
-            ) : []
+          currentMediaFieldTarget && currentMediaFieldDefinition
+            ? getCurrentSelectionIds(
+                typeof currentMediaFieldTarget === "string"
+                  ? currentMediaFieldTarget
+                  : currentMediaFieldTarget.fieldName,
+                !!currentMediaFieldDefinition.is_array, // Pass boolean indicating if field is array type
+                typeof currentMediaFieldTarget !== "string"
+                  ? currentMediaFieldTarget.index
+                  : undefined
+              )
+            : []
         }
       />
     </div>

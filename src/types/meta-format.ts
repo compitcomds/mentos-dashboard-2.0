@@ -84,9 +84,10 @@ export interface MetaFormat {
   tenent_id?: string | null; // Making optional as not all fields are 'required' in Strapi schema
   user?: User | null;
   description?: string | null;
-  from_formate?: FormFormatComponent[] | null; // Dynamic zone is an array of components
   url?: string | null;
   placing?: "sidebar" | "page" | "both" | null;
+  from_formate: FormFormatComponent[]; // <--- This must be an array of FormFormatComponent
+
 }
 
 // Payload for creating/updating MetaFormat entities
