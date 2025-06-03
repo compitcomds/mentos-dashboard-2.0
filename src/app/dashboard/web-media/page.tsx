@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { CombinedMediaData } from '@/types/media';
 import { Label } from '@/components/ui/label';
-import { TagFilterControl } from '@/components/ui/tag-filter-control'; // Import the new component
+import { TagFilterControl } from '@/components/ui/tag-filter-control';
 import {
     Table,
     TableHeader,
@@ -29,7 +29,7 @@ import {
     TableHead,
     TableBody,
     TableCell,
-} from "@/components/ui/table"; 
+} from "@/components/ui/table";
 
 type ViewMode = 'table' | 'card';
 type SortField = 'name' | 'category' | 'createdAt' | 'updatedAt' | 'publishedAt';
@@ -72,15 +72,21 @@ export default function WebMediaPage() {
 
     const [viewMode, setViewMode] = React.useState<ViewMode>(() => getStoredPreference('webMediaViewMode', 'table'));
     const [currentPage, setCurrentPage] = React.useState(1);
-    const [pageSize, setPageSize] = React.useState(() => 
+    const [pageSize, setPageSize] = React.useState(() =>
         getStoredPreference('webMediaPageSize', viewMode === 'table' ? DEFAULT_PAGE_SIZE_TABLE : DEFAULT_PAGE_SIZE_CARD)
     );
     const [sortField, setSortField] = React.useState<SortField>(() => getStoredPreference('webMediaSortField', 'createdAt'));
     const [sortOrder, setSortOrder] = React.useState<SortOrder>(() => getStoredPreference('webMediaSortOrder', 'desc'));
+    
+    // Active filters for API query
     const [categoryFilter, setCategoryFilter] = React.useState('');
     const [nameFilter, setNameFilter] = React.useState('');
 
-    // State for tag filtering
+    // Local state for input fields, updated on every keystroke
+    const [localCategoryFilter, setLocalCategoryFilter] = React.useState('');
+    const [localNameFilter, setLocalNameFilter] = React.useState('');
+
+
     const [userDefinedTags, setUserDefinedTags] = React.useState<string[]>(() => getStoredPreference(USER_DEFINED_TAGS_STORAGE_KEY, []));
     const [selectedFilterTags, setSelectedFilterTags] = React.useState<string[]>(() => getStoredPreference(SELECTED_TAGS_STORAGE_KEY, []));
     const allAvailableTagsForFilter = React.useMemo(() => {
@@ -107,35 +113,35 @@ export default function WebMediaPage() {
     React.useEffect(() => { setStoredPreference('webMediaPageSize', pageSize); setCurrentPage(1); }, [pageSize]);
     React.useEffect(() => { setStoredPreference('webMediaSortField', sortField); setCurrentPage(1); }, [sortField]);
     React.useEffect(() => { setStoredPreference('webMediaSortOrder', sortOrder); setCurrentPage(1); }, [sortOrder]);
-    React.useEffect(() => { setCurrentPage(1); }, [categoryFilter, nameFilter, selectedFilterTags]); 
+    React.useEffect(() => { setCurrentPage(1); }, [categoryFilter, nameFilter, selectedFilterTags]);
 
-    // Persist user-defined tags
     React.useEffect(() => {
         setStoredPreference(USER_DEFINED_TAGS_STORAGE_KEY, userDefinedTags);
     }, [userDefinedTags]);
 
-    // Persist selected filter tags
     React.useEffect(() => {
         setStoredPreference(SELECTED_TAGS_STORAGE_KEY, selectedFilterTags);
     }, [selectedFilterTags]);
 
-
     const handleUploadSuccess = () => {
         refetch();
+    };
+
+    const applyTextFilters = () => {
+        setNameFilter(localNameFilter);
+        setCategoryFilter(localCategoryFilter);
+        // setCurrentPage(1) will be handled by the useEffect watching nameFilter and categoryFilter
     };
 
     const handleAddNewUserTag = (newTag: string) => {
         if (!userDefinedTags.includes(newTag)) {
             setUserDefinedTags(prev => [...prev, newTag].sort());
         }
-        // Optionally auto-select new tag:
-        // setSelectedFilterTags(prev => Array.from(new Set([...prev, newTag])));
     };
 
     const handleTagSelectionChange = (newSelectedTags: string[]) => {
         setSelectedFilterTags(newSelectedTags);
     };
-
 
     const isLoading = isLoadingUser || isLoadingMedia || isLoadingUserResource;
     const isError = isUserError || isMediaError;
@@ -163,41 +169,48 @@ export default function WebMediaPage() {
                     </div>
                 </div>
 
-                 <Card>
+                <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center gap-2"><Filter className="h-5 w-5"/>Filters & Sorting</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-end pt-2">
-                        <div className="relative">
-                            <Label htmlFor="name-filter" className="text-xs text-muted-foreground">Filter by Name</Label>
-                            <Input id="name-filter" type="search" placeholder="Media name..." value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} className="h-9 text-xs" disabled={isLoadingMedia || isFetching}/>
-                             {nameFilter && (<Button variant="ghost" size="icon" className="absolute right-0 top-1/2 h-7 w-7 mt-1" onClick={() => setNameFilter('')}><X className="h-4 w-4" /><span className="sr-only">Clear</span></Button>)}
+                    <CardContent className="space-y-4 pt-2">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                            <div className="relative md:col-span-1">
+                                <Label htmlFor="name-filter-input" className="text-xs text-muted-foreground">Filter by Name</Label>
+                                <Input id="name-filter-input" type="search" placeholder="Media name..." value={localNameFilter} onChange={(e) => setLocalNameFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs pr-8" disabled={isLoadingMedia || isFetching}/>
+                                {localNameFilter && (<Button variant="ghost" size="icon" className="absolute right-0 top-1/2 h-7 w-7 mt-1" onClick={() => { setLocalNameFilter(''); setNameFilter(''); }}><X className="h-4 w-4" /><span className="sr-only">Clear Name</span></Button>)}
+                            </div>
+                            <div className="relative md:col-span-1">
+                                <Label htmlFor="category-filter-input" className="text-xs text-muted-foreground">Filter by Category</Label>
+                                <Input id="category-filter-input" type="search" placeholder="Category..." value={localCategoryFilter} onChange={(e) => setLocalCategoryFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs pr-8" disabled={isLoadingMedia || isFetching} />
+                                {localCategoryFilter && (<Button variant="ghost" size="icon" className="absolute right-0 top-1/2 h-7 w-7 mt-1" onClick={() => { setLocalCategoryFilter(''); setCategoryFilter(''); }}><X className="h-4 w-4" /><span className="sr-only">Clear Category</span></Button>)}
+                            </div>
+                            <Button onClick={applyTextFilters} className="w-full md:w-auto h-9 text-xs" disabled={isLoadingMedia || isFetching}>
+                                <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Filters
+                            </Button>
                         </div>
-                        <div className="relative">
-                            <Label htmlFor="category-filter" className="text-xs text-muted-foreground">Filter by Category</Label>
-                            <Input id="category-filter" type="search" placeholder="Category..." value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="h-9 text-xs" disabled={isLoadingMedia || isFetching} />
-                            {categoryFilter && (<Button variant="ghost" size="icon" className="absolute right-0 top-1/2 h-7 w-7 mt-1" onClick={() => setCategoryFilter('')}><X className="h-4 w-4" /><span className="sr-only">Clear</span></Button>)}
-                        </div>
-                        <div>
-                            <Label className="text-xs text-muted-foreground">Sort By</Label>
-                            <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingMedia || isFetching}>
-                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
-                                <SelectContent>{SORT_FIELD_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                             <Label className="text-xs text-muted-foreground">Order</Label>
-                            <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingMedia || isFetching}>
-                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
-                                <SelectContent>{SORT_ORDER_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                             <Label className="text-xs text-muted-foreground">Items/Page</Label>
-                            <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingMedia || isFetching}>
-                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
-                                <SelectContent>{PAGE_SIZE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
-                            </Select>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                            <div>
+                                <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingMedia || isFetching}>
+                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                    <SelectContent>{SORT_FIELD_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-muted-foreground">Order</Label>
+                                <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingMedia || isFetching}>
+                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                    <SelectContent>{SORT_ORDER_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingMedia || isFetching}>
+                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                    <SelectContent>{PAGE_SIZE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
                         </div>
                     </CardContent>
                      <CardContent className="pt-3 border-t">
@@ -230,7 +243,6 @@ export default function WebMediaPage() {
                         ) : (<p className="text-sm text-muted-foreground">Storage information not available.</p>)}
                     </CardContent>
                 </Card>
-
 
                 {(isLoading && !mediaDataResponse) || (isFetching && !mediaDataResponse) ? <WebMediaPageSkeleton viewMode={viewMode} pageSize={pageSize} /> : null}
 
@@ -293,14 +305,30 @@ function WebMediaPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, page
     const skeletonItemsCount = pageSize;
     return (
       <div className="space-y-4">
-        <Card><CardHeader className="pb-2"><Skeleton className="h-5 w-1/4" /></CardHeader><CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-end pt-2">{[...Array(5)].map((_,i)=><Skeleton key={i} className="h-16 w-full"/>)}</CardContent><CardContent className="pt-3 border-t"><Skeleton className="h-5 w-1/4 mb-2" /><Skeleton className="h-16 w-full" /></CardContent></Card>
+        <Card>
+            <CardHeader className="pb-2"><Skeleton className="h-5 w-1/4" /></CardHeader>
+            <CardContent className="space-y-4 pt-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                    <div className="md:col-span-1 space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
+                    <div className="md:col-span-1 space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
+                    <Skeleton className="h-9 w-full md:w-auto"/>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                    <div className="space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
+                    <div className="space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
+                    <div className="space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
+                </div>
+            </CardContent>
+            <CardContent className="pt-3 border-t">
+                <Skeleton className="h-5 w-1/4 mb-2" />
+                <Skeleton className="h-16 w-full" />
+            </CardContent>
+        </Card>
         <Card><CardHeader className="pb-2"><Skeleton className="h-5 w-1/4" /></CardHeader><CardContent><Skeleton className="h-4 w-1/2 mb-1" /><Skeleton className="h-2 w-full" /></CardContent></Card>
         
         {viewMode === 'table' ? (
           <Card><CardHeader><Skeleton className="h-6 w-1/3"/><Skeleton className="h-4 w-1/2 mt-1"/></CardHeader><CardContent>
-            {/* <div className="flex items-center py-4"><Skeleton className="h-10 w-1/3" /></div> */}
             <div className="rounded-md border"><Table><TableHeader><TableRow>{[...Array(7)].map((_, i) => <TableHead key={i}><Skeleton className="h-5 w-full" /></TableHead>)}<TableHead className="text-right"><Skeleton className="h-5 w-16" /></TableHead></TableRow></TableHeader><TableBody>{[...Array(skeletonItemsCount)].map((_, i) => (<TableRow key={i}><TableCell><Skeleton className="h-10 w-10 rounded" /></TableCell>{[...Array(6)].map((_,j)=><TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}<TableCell className="text-right"><div className="flex justify-end"><Skeleton className="h-8 w-8" /></div></TableCell></TableRow>))}</TableBody></Table></div>
-            <div className="flex items-center justify-end space-x-2 py-4"><Skeleton className="h-8 w-20" /><Skeleton className="h-8 w-20" /></div>
           </CardContent></Card>
         ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
@@ -313,3 +341,5 @@ function WebMediaPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, page
       </div>
     );
 }
+
+    
