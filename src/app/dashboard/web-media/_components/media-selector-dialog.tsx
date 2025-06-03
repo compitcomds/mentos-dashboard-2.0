@@ -16,14 +16,15 @@ import {
     DialogClose,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle } from "@/components/ui/alert"; // Aliased AlertDescription
+import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle } from "@/components/ui/alert";
 import { useFetchMedia } from '@/lib/queries/media';
 import { useCurrentUser } from '@/lib/queries/user';
 import type { CombinedMediaData } from '@/types/media';
 import { cn } from '@/lib/utils';
 import { TagFilterControl } from '@/components/ui/tag-filter-control';
 import { Input } from '@/components/ui/input';
-import { PREDEFINED_TAGS_FOR_WEB_MEDIA } from '@/types/media'; // Import from types/media
+import { PREDEFINED_TAGS_FOR_WEB_MEDIA } from '@/types/media';
+import { Label } from '@/components/ui/label'; // Added Label import
 
 interface MediaSelectorDialogProps {
     isOpen: boolean;
@@ -43,7 +44,7 @@ const getFileTypeRenderIcon = (mime: string | null, className?: string): React.R
     return <FileQuestion className={iconClasses} />;
 };
 
-const DIALOG_PAGE_SIZE = 12; // Number of items per page in the dialog
+const DIALOG_PAGE_SIZE = 12;
 
 export default function MediaSelectorDialog({
     isOpen,
@@ -59,7 +60,7 @@ export default function MediaSelectorDialog({
     const [currentPage, setCurrentPage] = React.useState(1);
     const [nameFilter, setNameFilter] = React.useState('');
     const [selectedFilterTags, setSelectedFilterTags] = React.useState<string[]>([]);
-    const [userDefinedTags, setUserDefinedTags] = React.useState<string[]>([]); // Tags added by user in this dialog session
+    const [userDefinedTags, setUserDefinedTags] = React.useState<string[]>([]);
 
     const allAvailableTagsForDialog = React.useMemo(() => {
       return Array.from(new Set([...PREDEFINED_TAGS_FOR_WEB_MEDIA, ...userDefinedTags])).sort();
@@ -75,8 +76,8 @@ export default function MediaSelectorDialog({
         tagsFilter: selectedFilterTags.length > 0 ? selectedFilterTags : null,
     });
 
-    const allMediaData = allMediaDataResponse; // allMediaDataResponse is the {data, meta} object
-    const pagination = allMediaDataResponse?.meta?.pagination;
+    const allMediaData = allMediaDataResponse;
+    const pagination = allMediaData?.meta?.pagination;
 
 
     const [selectedMedia, setSelectedMedia] = React.useState<CombinedMediaData | null>(null);
@@ -84,7 +85,7 @@ export default function MediaSelectorDialog({
     const isLoading = isLoadingUser || isLoadingMedia;
 
     const filteredMediaData = React.useMemo(() => {
-        if (!allMediaData?.data) return []; // Correctly access .data and provide fallback
+        if (!allMediaData?.data) return [];
         if (expectedMediaTypes.length === 0) return allMediaData.data;
 
         return allMediaData.data.filter(media => {
@@ -118,10 +119,6 @@ export default function MediaSelectorDialog({
         onOpenChange(open);
         if (!open) {
             setSelectedMedia(null);
-            // Reset filters if desired when dialog closes, or persist them
-            // setNameFilter('');
-            // setSelectedFilterTags([]);
-            // setCurrentPage(1);
         }
     };
 
@@ -137,7 +134,7 @@ export default function MediaSelectorDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-4xl md:max-w-5xl lg:max-w-6xl max-h-[90vh] flex flex-col">
+            <DialogContent className="sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Select Media</DialogTitle>
                     <DialogDescription>
@@ -148,32 +145,37 @@ export default function MediaSelectorDialog({
                 </DialogHeader>
 
                 {/* Filters */}
-                <div className="p-1 border-b mb-2 flex flex-col sm:flex-row gap-2 items-center">
-                    <div className="relative flex-grow w-full sm:w-auto">
-                        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            type="search"
-                            placeholder="Filter by name..."
-                            value={nameFilter}
-                            onChange={(e) => { setNameFilter(e.target.value); setCurrentPage(1); }}
-                            className="pl-8 h-9 text-xs w-full"
-                            disabled={isLoading}
-                        />
+                <div className="px-0 py-3 border-b flex flex-col md:flex-row gap-4 items-start md:items-end">
+                    <div className="flex-grow w-full md:w-auto space-y-1.5">
+                        <Label htmlFor="media-name-filter-dialog" className="text-xs font-medium">Filter by Name</Label>
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                id="media-name-filter-dialog"
+                                type="search"
+                                placeholder="Search by media name..."
+                                value={nameFilter}
+                                onChange={(e) => { setNameFilter(e.target.value); setCurrentPage(1); }}
+                                className="pl-8 h-9 text-xs w-full"
+                                disabled={isLoading}
+                            />
+                        </div>
                     </div>
-                    <div className="w-full sm:max-w-xs md:max-w-sm">
+                    <div className="w-full md:flex-initial md:min-w-[280px] md:max-w-md space-y-1.5">
+                         <Label className="text-xs font-medium mb-1 block">Filter by Tags</Label>
                          <TagFilterControl
                             allAvailableTags={allAvailableTagsForDialog}
                             selectedTags={selectedFilterTags}
                             onTagSelectionChange={(tags) => { setSelectedFilterTags(tags); setCurrentPage(1); }}
                             onAddNewTag={handleAddNewUserTagForDialog}
                             isLoading={isLoading}
-                            predefinedTags={PREDEFINED_TAGS_FOR_WEB_MEDIA} // Pass predefined tags
+                            predefinedTags={PREDEFINED_TAGS_FOR_WEB_MEDIA}
                          />
                     </div>
                 </div>
 
 
-                <ScrollArea className="flex-1 pr-4 -mr-4">
+                <ScrollArea className="flex-1 pr-1 -mr-2 mt-2"> {/* Adjusted pr and -mr for scrollbar spacing */}
                     <div className="py-4">
                         {isLoading && !allMediaDataResponse && (
                             <div className="flex items-center justify-center h-64">
@@ -216,11 +218,11 @@ export default function MediaSelectorDialog({
                                         }}
                                         disabled={!hasValidIdForSelection}
                                         className={cn(
-                                            "relative group border rounded-md overflow-hidden aspect-square focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 flex flex-col items-center justify-center text-center",
-                                            isDialogSelected ? 'ring-2 ring-primary ring-offset-2' : 'border-border',
+                                            "relative group border rounded-md overflow-hidden aspect-square focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 flex flex-col items-center justify-center text-center transition-all duration-150",
+                                            isDialogSelected ? 'ring-2 ring-primary ring-offset-2 shadow-lg scale-105' : 'border-border hover:border-primary/50',
                                             isCurrentlySelectedInParentForm && !isDialogSelected && 'border-green-500 ring-1 ring-green-500',
-                                            !hasValidIdForSelection && 'opacity-50 cursor-not-allowed bg-muted/50',
-                                            hasValidIdForSelection && 'bg-muted hover:bg-muted/80 transition-colors'
+                                            !hasValidIdForSelection && 'opacity-60 cursor-not-allowed bg-muted/30 hover:border-destructive/50',
+                                            hasValidIdForSelection && 'bg-card hover:shadow-md'
                                         )}
                                         aria-label={`Select ${media.name}${!hasValidIdForSelection ? ` (Invalid for selection type: ${returnType})` : ''}`}
                                     >
@@ -242,21 +244,21 @@ export default function MediaSelectorDialog({
                                             </div>
                                         )}
                                         {isDialogSelected && hasValidIdForSelection && (
-                                            <div className="absolute inset-0 bg-primary/60 flex items-center justify-center">
-                                                <CheckCircle className="w-8 h-8 text-primary-foreground" />
+                                            <div className="absolute inset-0 bg-primary/70 flex items-center justify-center">
+                                                <CheckCircle className="w-10 h-10 text-primary-foreground" />
                                             </div>
                                         )}
                                         {isCurrentlySelectedInParentForm && !isDialogSelected && hasValidIdForSelection && (
-                                            <div className="absolute top-1 right-1 p-0.5 bg-green-500 rounded-full">
-                                                <CheckCircle className="w-3 h-3 text-white" />
+                                            <div className="absolute top-1.5 right-1.5 p-0.5 bg-green-600 rounded-full shadow-md">
+                                                <CheckCircle className="w-3.5 h-3.5 text-white" />
                                             </div>
                                         )}
-                                        <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-gradient-to-t from-black/70 to-transparent">
-                                            <p className="text-xs text-white truncate font-medium">{media.name}</p>
+                                        <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-gradient-to-t from-black/80 via-black/50 to-transparent">
+                                            <p className="text-xs text-white truncate font-semibold">{media.name}</p>
                                         </div>
                                         {!hasValidIdForSelection && (
-                                            <div className="absolute inset-0 bg-destructive/30 flex items-center justify-center p-1">
-                                                <span className="text-xs text-destructive-foreground font-semibold">
+                                            <div className="absolute inset-0 bg-destructive/40 flex items-center justify-center p-1 backdrop-blur-sm">
+                                                <span className="text-xs text-destructive-foreground font-semibold text-center leading-tight">
                                                     {returnType === 'id' ? 'No File ID' : 'No URL'}
                                                 </span>
                                             </div>
@@ -268,7 +270,7 @@ export default function MediaSelectorDialog({
                     </div>
                 </ScrollArea>
 
-                <DialogFooter className="mt-4 flex-shrink-0 flex-col sm:flex-row justify-between items-center gap-2 pt-3 border-t">
+                <DialogFooter className="mt-auto flex-shrink-0 flex-col sm:flex-row justify-between items-center gap-3 pt-4 border-t">
                     <div className="text-xs text-muted-foreground">
                         {pagination && pagination.total > 0 ? (
                             `Page ${pagination.page} of ${pagination.pageCount} (Total: ${pagination.total} items)`
@@ -294,8 +296,8 @@ export default function MediaSelectorDialog({
                             Next <ChevronRight className="ml-1 h-4 w-4" />
                         </Button>
                     </div>
-                    <div className="flex gap-2 mt-2 sm:mt-0">
-                        <DialogClose asChild>
+                    <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
+                        <DialogClose asChild className="w-full sm:w-auto">
                             <Button type="button" variant="outline">
                                 Cancel
                             </Button>
@@ -304,6 +306,7 @@ export default function MediaSelectorDialog({
                             type="button"
                             onClick={handleSelect}
                             disabled={!canSelectMedia || isLoading || isFetching}
+                            className="w-full sm:w-auto"
                         >
                             Select Media
                         </Button>
