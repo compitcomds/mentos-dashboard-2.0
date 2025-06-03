@@ -23,7 +23,7 @@ import type { CombinedMediaData } from '@/types/media';
 import { cn } from '@/lib/utils';
 import { TagFilterControl } from '@/components/ui/tag-filter-control';
 import { Input } from '@/components/ui/input';
-import { PREDEFINED_TAGS_FOR_WEB_MEDIA } from '@/app/dashboard/web-media/page'; // Import from main page
+import { PREDEFINED_TAGS_FOR_WEB_MEDIA } from '@/types/media'; // Import from types/media
 
 interface MediaSelectorDialogProps {
     isOpen: boolean;
@@ -75,7 +75,7 @@ export default function MediaSelectorDialog({
         tagsFilter: selectedFilterTags.length > 0 ? selectedFilterTags : null,
     });
 
-    const allMediaData = allMediaDataResponse?.data;
+    const allMediaData = allMediaDataResponse; // allMediaDataResponse is the {data, meta} object
     const pagination = allMediaDataResponse?.meta?.pagination;
 
 
@@ -84,10 +84,10 @@ export default function MediaSelectorDialog({
     const isLoading = isLoadingUser || isLoadingMedia;
 
     const filteredMediaData = React.useMemo(() => {
-        if (!allMediaData) return []; // Ensure allMediaData (the array) is used
-        if (expectedMediaTypes.length === 0) return allMediaData;
+        if (!allMediaData?.data) return []; // Correctly access .data and provide fallback
+        if (expectedMediaTypes.length === 0) return allMediaData.data;
 
-        return allMediaData.filter(media => {
+        return allMediaData.data.filter(media => {
             if (!media.mime) return false;
             return expectedMediaTypes.some(type => {
                 if (type === 'image' && media.mime!.startsWith('image/')) return true;

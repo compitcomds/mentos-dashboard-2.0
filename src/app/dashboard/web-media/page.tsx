@@ -31,6 +31,7 @@ import {
     TableCell,
 } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { PREDEFINED_TAGS_FOR_WEB_MEDIA } from '@/types/media'; // Import from types/media
 
 type ViewMode = 'table' | 'card';
 type SortField = 'name' | 'category' | 'createdAt' | 'updatedAt' | 'publishedAt';
@@ -41,7 +42,7 @@ const DEFAULT_PAGE_SIZE_CARD = 12;
 const USER_DEFINED_TAGS_STORAGE_KEY = 'webMediaUserDefinedTags';
 const SELECTED_TAGS_STORAGE_KEY = 'webMediaSelectedFilterTags';
 
-const PREDEFINED_TAGS_FOR_WEB_MEDIA = ["featured", "gallery", "banner", "product", "avatar", "icon", "document"];
+// PREDEFINED_TAGS_FOR_WEB_MEDIA is now imported from types/media
 
 const PAGE_SIZE_OPTIONS = [
     { label: "10 per page", value: "10" }, { label: "12 per page", value: "12" },
@@ -347,4 +348,3 @@ function WebMediaPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, page
 }
 
     
-

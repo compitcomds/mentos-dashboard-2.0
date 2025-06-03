@@ -103,3 +103,5 @@ export interface CreateWebMediaPayload {
 // Re-export UploadFile as Media for broader compatibility if needed,
 // but prefer using Media directly.
 export type UploadFile = Media;
+
+export const PREDEFINED_TAGS_FOR_WEB_MEDIA = ["featured", "gallery", "banner", "product", "avatar", "icon", "document"];
