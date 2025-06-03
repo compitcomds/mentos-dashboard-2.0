@@ -5,15 +5,26 @@ import {
   deleteBlog as deleteBlogService, 
   getBlog as getBlogService,       
   getBlogs as getBlogsService,     
-  updateBlog as updateBlogService  
+  updateBlog as updateBlogService,
+  type GetBlogsParams, // Import params type
 } from "@/lib/services/blog"; 
 import type { CreateBlogPayload, Blog } from "@/types/blog";
+import type { FindMany } from "@/types/strapi_response"; // Import FindMany
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser } from './user'; 
 
-const BLOGS_QUERY_KEY = (userTenentId?: string) => ['blogs', userTenentId || 'all'];
-// Query key for single blog post now uses string documentId
-const BLOG_DETAIL_QUERY_KEY = (documentId?: string, userTenentId?: string) => ['blog', documentId || 'new-detail', userTenentId || 'all'];
+export interface UseGetBlogsOptions {
+  page?: number;
+  pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+const BLOGS_QUERY_KEY = (userTenentId?: string, options?: UseGetBlogsOptions) => 
+  ['blogs', userTenentId || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder];
+
+const BLOG_DETAIL_QUERY_KEY = (documentId?: string, userTenentId?: string) => 
+  ['blog', documentId || 'new-detail', userTenentId || 'all'];
 
 
 export const useCreateBlog = () => {
@@ -31,7 +42,7 @@ export const useCreateBlog = () => {
     },
     onSuccess: (data) => {
        toast({ title: "Success", description: "Blog post created successfully." });
-       queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
+       queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) }); // Invalidate general list
        if (data.documentId) {
         queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(data.documentId, userTenentId) });
        }
@@ -45,18 +56,20 @@ export const useCreateBlog = () => {
   });
 };
 
-export const useGetBlogs = () => {
+export const useGetBlogs = (options?: UseGetBlogsOptions) => {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
+  const { page, pageSize, sortField, sortOrder } = options || {};
 
-  return useQuery<Blog[], Error>({
-    queryKey: BLOGS_QUERY_KEY(userTenentId),
+  return useQuery<FindMany<Blog>, Error>({
+    queryKey: BLOGS_QUERY_KEY(userTenentId, { page, pageSize, sortField, sortOrder }),
     queryFn: () => {
         if (!userTenentId) {
              console.warn("useGetBlogs: User tenent_id not available yet. Returning empty array.");
-             return Promise.resolve([]);
+             return Promise.resolve({ data: [], meta: { pagination: { page: 1, pageSize: pageSize || 10, pageCount: 0, total: 0 } } });
         }
-        return getBlogsService(userTenentId); 
+        const params: GetBlogsParams = { userTenentId, page, pageSize, sortField, sortOrder };
+        return getBlogsService(params); 
     },
     enabled: !!userTenentId && !isLoadingUser, 
     staleTime: 1000 * 60 * 2,
@@ -105,8 +118,7 @@ export const useUpdateBlog = () => {
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post updated successfully." });
-      queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
-      // Invalidate detail query using the string documentId (passed as variables.documentIdForInvalidation)
+      queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) }); // Invalidate general list
       if (variables.documentIdForInvalidation) {
         queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.documentIdForInvalidation, userTenentId) });
       } else if (data.documentId) { 
@@ -140,8 +152,7 @@ export const useDeleteBlog = () => {
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post deleted successfully." });
-      queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
-      // Remove detail query using string documentId (which is variables.documentId or documentIdForInvalidation)
+      queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) }); // Invalidate general list
       const idToInvalidate = variables.documentIdForInvalidation || variables.documentId;
       if (idToInvalidate) {
         queryClient.removeQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(idToInvalidate, userTenentId) });

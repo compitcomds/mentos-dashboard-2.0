@@ -1,3 +1,4 @@
+
 "use server";
 
 import type { Blog, CreateBlogPayload } from "@/types/blog";
@@ -16,53 +17,60 @@ async function getAuthHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
-// Get all blogs for a specific user tenent_id
-export const getBlogs = async (userTenentId: string): Promise<Blog[]> => {
+export interface GetBlogsParams {
+  userTenentId: string;
+  page?: number;
+  pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+// Get all blogs for a specific user tenent_id with pagination and sorting
+export const getBlogs = async (params: GetBlogsParams): Promise<FindMany<Blog>> => {
+  const { userTenentId, page = 1, pageSize = 10, sortField = 'createdAt', sortOrder = 'desc' } = params;
+
   if (!userTenentId) {
     console.error("[Service getBlogs]: userTenentId is missing.");
     throw new Error("User tenent_id is required to fetch blogs.");
   }
-  const params = {
-    "filters[tenent_id][$eq]": userTenentId,
+  const strapiParams: any = {
+    'filters[tenent_id][$eq]': userTenentId,
+    'populate': ['image', 'categories', 'tags', 'seo_blog.metaImage', 'seo_blog.openGraph.ogImage'],
+    'pagination[page]': page,
+    'pagination[pageSize]': pageSize,
   };
+
+  if (sortField && sortOrder) {
+    strapiParams['sort[0]'] = `${sortField}:${sortOrder}`;
+  }
+
   const url = "/blogs";
-  console.log(`[getBlogs] Fetching URL: ${url} with params:`, params);
+  console.log(`[getBlogs] Fetching URL: ${url} with params:`, strapiParams);
 
   try {
     const headers = await getAuthHeader();
     const response = await axiosInstance.get<FindMany<Blog>>(url, {
-      params,
+      params: strapiParams,
       headers,
     });
-    console.log(`[getBlogs] Response Data:`, response.data.data);
+    console.log(`[getBlogs] Response Meta:`, response.data.meta);
     if (
       !response.data ||
       !response.data.data ||
-      !Array.isArray(response.data.data)
+      !Array.isArray(response.data.data) ||
+      !response.data.meta?.pagination // Ensure pagination metadata exists
     ) {
       console.error(
-        `[getBlogs] Unexpected API response structure for tenent_id ${userTenentId}. Expected 'data' array, received:`,
+        `[getBlogs] Unexpected API response structure for tenent_id ${userTenentId}. Expected 'data' array and 'meta.pagination', received:`,
         response.data
       );
-      if (
-        response.data === null ||
-        response.data === undefined ||
-        (response.data && !response.data.data)
-      ) {
-        // Check if response.data.data is missing
-        console.warn(
-          `[getBlogs] API returned null, undefined, or no 'data' property for tenent_id ${userTenentId}. Returning empty array.`
-        );
-        return [];
-      }
-      throw new Error(
-        'Unexpected API response structure. Expected an array within a "data" property.'
-      );
+      // Return a default FindMany structure for error cases to prevent crashes in hooks
+      return { data: [], meta: { pagination: { page: 1, pageSize: 10, pageCount: 0, total: 0 } } };
     }
     console.log(
       `[getBlogs] Fetched ${response.data.data.length} Blogs for tenent_id ${userTenentId}.`
     );
-    return response.data.data;
+    return response.data;
   } catch (error: unknown) {
     let message = `Failed to fetch blogs for tenent_id ${userTenentId}`;
     if (error instanceof AxiosError) {
@@ -89,6 +97,7 @@ export const getBlogs = async (userTenentId: string): Promise<Blog[]> => {
         error
       );
     }
+    // For queries, it's often better to throw to let react-query handle error state
     throw new Error(message);
   }
 };
@@ -115,7 +124,7 @@ export const getBlog = async (
     "populate[categories]": "true",
     "populate[seo_blog][populate]": "metaImage",
   };
-  const url = `/blogs/${documentId}`; // Use string documentId for this GET request path
+  const url = `/blogs/${documentId}`; 
   console.log(
     `[getBlog] Fetching URL: ${url} (using string documentId) with params:`,
     params
