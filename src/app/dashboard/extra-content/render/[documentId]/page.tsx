@@ -54,7 +54,7 @@ import {
   Loader2,
   Image as ImageIcon,
   RefreshCcw,
-} from "lucide-react"; 
+} from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import type {
   FormFormatComponent,
@@ -88,7 +88,7 @@ const getFieldName = (component: FormFormatComponent): string => {
       .toLowerCase()
       .replace(/\s+/g, "_")
       .replace(/[^a-z0-9_]/g, "");
-    return slugifiedLabel; 
+    return slugifiedLabel;
   }
   return `component_${component.__component.replace(
     "dynamic-component.",
@@ -104,7 +104,7 @@ const getDefaultValueForComponent = (
 
   switch (componentType) {
     case "dynamic-component.text-field":
-      return (compDef as DynamicComponentTextField)?.default || "";
+      return (compDef as DynamicComponentTextField)?.default ?? "";
     case "dynamic-component.number-field":
       const numDefault = (compDef as DynamicComponentNumberField)?.default;
       return numDefault !== undefined &&
@@ -113,18 +113,20 @@ const getDefaultValueForComponent = (
         ? Number(numDefault)
         : null;
     case "dynamic-component.media-field":
-      return null; 
+      return null;
     case "dynamic-component.enum-field":
       const enumCompDef = compDef as DynamicComponentEnumField | undefined;
       if (enumCompDef?.type === "multi-select")
-        return [];
-      return enumCompDef?.default || null;
+        return enumCompDef?.default
+        ? enumCompDef.default.split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
+      return enumCompDef?.default ?? null;
     case "dynamic-component.date-field":
       const dateDefault = (compDef as DynamicComponentDateField)?.default;
       return dateDefault ? new Date(dateDefault) : null;
     case "dynamic-component.boolean-field":
       const boolDefault = (compDef as DynamicComponentBooleanField)?.default;
-      return boolDefault === "true" || false;
+      return boolDefault === "true" ? true : boolDefault === "false" ? false : false;
     default:
       return null;
   }
@@ -168,55 +170,66 @@ const generateFormSchemaAndDefaults = (
             });
           }
           if (comp.min !== null && comp.min !== undefined) {
-            textSchema = textSchema.min(comp.min);
+            textSchema = textSchema.min(comp.min, { message: `${comp.label || "Field"} must be at least ${comp.min} characters.` });
           }
           if (comp.max !== null && comp.max !== undefined) {
-            textSchema = textSchema.max(comp.max);
+            textSchema = textSchema.max(comp.max, { message: `${comp.label || "Field"} must be at most ${comp.max} characters.` });
           }
-          baseSchema = comp.required
-            ? textSchema.min(1, {
-                message: `${comp.label || "Field"} is required.`,
-              })
-            : textSchema.optional().nullable();
+          
+          if (comp.required) {
+            baseSchema = textSchema.min(1, { message: `${comp.label || "Field"} is required.` });
+          } else {
+            baseSchema = textSchema.optional().nullable();
+          }
           componentDefaultValue = comp.default ?? "";
         }
         break;
       case "dynamic-component.number-field":
         {
           const comp = component as DynamicComponentNumberField;
-          let numberSchema = z.preprocess(
-            (val) => val === "" || val === null || val === undefined ? null : Number(val),
-            z.number().nullable() 
-          ) as z.ZodNumber | z.ZodNullable<z.ZodNumber>;
+          let coreNumberSchema = z.number(); 
 
           if (comp.min !== null && comp.min !== undefined) {
-            numberSchema = numberSchema.min(comp.min);
+            coreNumberSchema = coreNumberSchema.min(comp.min, { message: `${comp.label || "Number"} must be at least ${comp.min}.` });
           }
           if (comp.max !== null && comp.max !== undefined) {
-            numberSchema = numberSchema.max(comp.max);
+            coreNumberSchema = coreNumberSchema.max(comp.max, { message: `${comp.label || "Number"} must be at most ${comp.max}.` });
           }
+          
           if (comp.required) {
-            baseSchema = numberSchema.refine(val => val !== null, { message: `${comp.label || "Number"} is required.`});
+            baseSchema = z.preprocess(
+              (val) => (val === "" || val === null || val === undefined ? undefined : Number(val)),
+              coreNumberSchema.refine(val => typeof val === 'number' && !isNaN(val), { 
+                  message: `${comp.label || "Number"} is required and must be a valid number.`
+              })
+            );
           } else {
-            baseSchema = numberSchema.optional();
+            baseSchema = z.preprocess(
+              (val) => (val === "" || val === null || val === undefined ? null : Number(val)),
+              coreNumberSchema.nullable().optional() 
+            );
           }
           
           componentDefaultValue =
             comp.default !== undefined &&
             comp.default !== null &&
-            comp.default !== ""
+            String(comp.default).trim() !== "" 
               ? Number(comp.default)
               : null;
         }
         break;
       case "dynamic-component.media-field":
-        baseSchema = z.number().nullable().optional();
-        if (component.required)
+        const mediaComp = component as DynamicComponentMediaField;
+        if (mediaComp.required) {
           baseSchema = z
             .number({
-              required_error: `${component.label || "Media"} is required.`,
-              invalid_type_error: `${component.label || "Media"} must be a number (ID).`
-            });
+              required_error: `${mediaComp.label || "Media"} is required.`,
+              invalid_type_error: `${mediaComp.label || "Media"} must be a number (ID).`
+            })
+            .positive(`${mediaComp.label || "Media"} ID must be positive.`);
+        } else {
+          baseSchema = z.number().positive().nullable().optional();
+        }
         componentDefaultValue = null;
         break;
       case "dynamic-component.enum-field":
@@ -227,13 +240,15 @@ const generateFormSchemaAndDefaults = (
               Boolean
             ) as string[]) || [];
           if (comp.type === "multi-select") {
-            baseSchema = z.array(z.string()).optional().default([]);
-            if (comp.required)
-              baseSchema = z.array(z.string()).nonempty({
+            let multiSelectSchema = z.array(z.string());
+            if (comp.required) {
+              multiSelectSchema = multiSelectSchema.nonempty({
                 message: `${
                   comp.label || "Field"
                 } requires at least one selection.`,
               });
+            }
+            baseSchema = multiSelectSchema.optional().default([]);
             componentDefaultValue = comp.default
               ? comp.default
                   .split(",")
@@ -241,37 +256,41 @@ const generateFormSchemaAndDefaults = (
                   .filter(Boolean)
               : [];
           } else {
-            baseSchema = z.string().optional().nullable();
-            if (comp.required)
-              baseSchema = z
-                .string()
+            let singleSelectSchema = z.string();
+            if (comp.required) {
+              singleSelectSchema = singleSelectSchema
                 .min(1, `${comp.label || "Field"} is required.`);
+            }
+            baseSchema = singleSelectSchema.optional().nullable();
             componentDefaultValue = comp.default ?? null;
           }
         }
         break;
       case "dynamic-component.date-field":
-        baseSchema = z.date().nullable().optional();
-        if (component.required)
+        const dateComp = component as DynamicComponentDateField;
+        if (dateComp.required) {
           baseSchema = z.date({
-            required_error: `${component.label || "Date"} is required.`,
-            invalid_type_error: `${component.label || "Date"} must be a valid date.`
+            required_error: `${dateComp.label || "Date"} is required.`,
+            invalid_type_error: `${dateComp.label || "Date"} must be a valid date.`
           });
-        componentDefaultValue = (component as DynamicComponentDateField).default
-          ? new Date((component as DynamicComponentDateField).default!)
+        } else {
+          baseSchema = z.date().nullable().optional();
+        }
+        componentDefaultValue = dateComp.default
+          ? new Date(dateComp.default!)
           : null;
         break;
       case "dynamic-component.boolean-field":
-        baseSchema = z.boolean().optional();
-        if (component.required && component.default !== "true" && component.default !== "false") {
+        const boolComp = component as DynamicComponentBooleanField;
+        if (boolComp.required && boolComp.default !== "true" && boolComp.default !== "false") {
             baseSchema = z.boolean({
-                required_error: `${component.label || "Field"} is required.`
+                required_error: `${boolComp.label || "Field"} is required.`
             });
-        } else if (component.required) {
-             baseSchema = z.boolean(); // Required, will use default if provided
+        } else {
+             baseSchema = z.boolean().optional();
         }
-        const boolDefaultStr = (component as DynamicComponentBooleanField).default;
-        componentDefaultValue = boolDefaultStr === "true" ? true : boolDefaultStr === "false" ? false : false; // Default to false if not explicitly true/false string
+        const boolDefaultStr = boolComp.default;
+        componentDefaultValue = boolDefaultStr === "true" ? true : boolDefaultStr === "false" ? false : false;
         break;
       default:
         baseSchema = z.any().optional();
@@ -279,12 +298,13 @@ const generateFormSchemaAndDefaults = (
     }
 
     if (component.is_array) {
-      let arraySchema = z.array(baseSchema);
       if (component.required) {
-        arraySchema = arraySchema.nonempty({message: `${component.label || "List"} cannot be empty.`});
+          schemaShape[fieldName] = z.array(baseSchema).nonempty({message: `${component.label || "List"} cannot be empty.`});
+          defaultValues[fieldName] = []; // Default for required non-empty array might need an initial item, but RHF handles append
+      } else {
+          schemaShape[fieldName] = z.array(baseSchema).optional().default([]);
+          defaultValues[fieldName] = [];
       }
-      schemaShape[fieldName] = arraySchema.optional().default([]);
-      defaultValues[fieldName] = [];
     } else {
       schemaShape[fieldName] = baseSchema;
       defaultValues[fieldName] = componentDefaultValue;
@@ -297,20 +317,15 @@ const generateFormSchemaAndDefaults = (
 const generateRandomHandle = (length = 12) => {
   const characters = "abcdefghijklmnopqrstuvwxyz0123456789";
   let result = "";
+  const charactersLength = characters.length;
   for (let i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
   }
+  // Ensure it starts with a letter if that's a requirement (not strictly by regex but good practice)
   if (!/^[a-z]/.test(result) && result.length > 0) {
-    result = "h" + result.substring(1); 
-  } else if (result.length === 0) {
-    result =
-      "h" +
-      Array(length - 1)
-        .fill(0)
-        .map(() =>
-          characters.charAt(Math.floor(Math.random() * characters.length))
-        )
-        .join("");
+    result = "h" + result.substring(1); // Prepend 'h' if starts with number, keep length
+  } else if (result.length === 0 && length > 0) { // Handle if somehow result is empty but length was requested
+    result = 'h' + Array(length - 1).fill(0).map(() => characters.charAt(Math.floor(Math.random() * charactersLength))).join('');
   }
   return result;
 };
@@ -382,7 +397,7 @@ export default function RenderExtraContentPage() {
               if (component.is_array) {
                 initialValues[fieldName] = Array.isArray(entryValue)
                   ? entryValue
-                  : [entryValue];
+                  : entryValue === null || entryValue === undefined ? [] : [entryValue]; // Ensure array, even if single value was stored
                 if (
                   component.__component === "dynamic-component.date-field" &&
                   Array.isArray(initialValues[fieldName])
@@ -401,8 +416,10 @@ export default function RenderExtraContentPage() {
                   initialValues[fieldName] = initialValues[fieldName]
                     .map((val: any) => {
                       const idVal =
-                        typeof val === "number" || typeof val === "string"
-                          ? String(val)
+                        typeof val === "number"
+                          ? val
+                          : typeof val === "string" && !isNaN(Number(val))
+                          ? Number(val)
                           : null;
                       if (idVal === null && val !== null) {
                         console.warn(
@@ -413,7 +430,7 @@ export default function RenderExtraContentPage() {
                       }
                       return idVal;
                     })
-                    .filter((v: string | null) => v !== null);
+                    .filter((v: number | null) => v !== null);
                 }
               } else if (
                 component.__component === "dynamic-component.date-field" &&
@@ -535,44 +552,36 @@ export default function RenderExtraContentPage() {
     componentDef: FormFormatComponent
   ) => {
     setCurrentMediaFieldTarget(target);
-    setCurrentMediaFieldDefinition(componentDef);
+    setCurrentMediaFieldDefinition(componentDef as FormFormatComponent);
     setIsMediaSelectorOpen(true);
   };
 
-  const commonErrorHandling = (error: Error, submittedHandle: string) => { // Changed type to Error
-    const errorMessageString = error.message || ""; 
-    const isCreateAction = action === "create";
+ const commonErrorHandling = (error: Error, submittedHandle: string) => {
+    const errorMessageString = error.message || "";
 
     if (errorMessageString.startsWith("DUPLICATE_HANDLE_ERROR:")) {
-      const actualHandleInError = errorMessageString.split("'")[1]; // Extract handle from message
-      if (actualHandleInError === submittedHandle) {
-        methods.setError("handle", {
-          type: "manual",
-          message: "This handle is already taken. Please choose a different one.",
+        const handleInError = errorMessageString.split("'")[1];
+        if (handleInError === submittedHandle) {
+            methods.setError("handle", {
+                type: "manual",
+                message: "This handle is already taken. Please choose a different one.",
+            });
+        }
+        toast({
+            variant: "destructive",
+            title: "Duplicate Handle",
+            description: "This handle is already in use. Please try another.",
         });
-      }
-      toast({
-        variant: "destructive",
-        title: "Duplicate Handle",
-        description: "This handle is already in use. Please try another.",
-      });
     } else {
-      const toastMessage =
-        errorMessageString ||
-        (isCreateAction
-          ? "Failed to create data entry."
-          : "Failed to update data entry.");
-      toast({
-        variant: "destructive",
-        title: "Submission Error",
-        description: toastMessage,
-      });
+        toast({
+            variant: "destructive",
+            title: "Submission Error",
+            description: errorMessageString || (action === "create" ? "Failed to create data entry." : "Failed to update data entry."),
+        });
     }
-    console.error(
-      "MetaData submission error on client (see service logs for more):",
-      error.message
-    );
-  };
+    console.error("MetaData submission error on client (see service logs for more):", error.message);
+};
+
 
   const onSubmit = (data: FieldValues) => {
     console.log("Dynamic Form onSubmit triggered. Action:", action);
@@ -604,7 +613,7 @@ export default function RenderExtraContentPage() {
       methods.setValue("handle", currentSubmitHandle, {
         shouldValidate: true,
         shouldDirty: true,
-      }); 
+      });
     }
 
     const { handle, ...dynamicData } = data;
@@ -785,10 +794,9 @@ export default function RenderExtraContentPage() {
   const getExpectedMediaTypesForField = (
     componentDef: FormFormatComponent
   ): string[] => {
-    if (componentDef.__component === "dynamic-component.media-field") {
-      const mediaComp = componentDef as DynamicComponentMediaField;
-      if (mediaComp.type) {
-        switch (mediaComp.type) {
+    const mediaComponent = componentDef as DynamicComponentMediaField;
+    if (mediaComponent.__component === "dynamic-component.media-field" && mediaComponent.type) {
+        switch (mediaComponent.type) {
           case "image":
             return ["image"];
           case "video":
@@ -800,7 +808,6 @@ export default function RenderExtraContentPage() {
           default:
             return [];
         }
-      }
     }
     return [];
   };
@@ -939,10 +946,11 @@ export default function RenderExtraContentPage() {
                             </FormLabel>
                             <FormControl>
                               {(() => {
-                                switch (component.__component) {
+                                const currentComponent = component; // Use a new var for switch
+                                switch (currentComponent.__component) {
                                   case "dynamic-component.text-field":
                                     const textComp =
-                                      component as DynamicComponentTextField;
+                                      currentComponent as DynamicComponentTextField;
                                     if (textComp.inputType === "tip-tap") {
                                       return (
                                         <TipTapEditor
@@ -980,7 +988,7 @@ export default function RenderExtraContentPage() {
                                     );
                                   case "dynamic-component.number-field":
                                     const numComp =
-                                      component as DynamicComponentNumberField;
+                                      currentComponent as DynamicComponentNumberField;
                                     return (
                                       <Input
                                         type="number"
@@ -1008,7 +1016,7 @@ export default function RenderExtraContentPage() {
                                           onClick={() =>
                                             openMediaSelector(
                                               fieldName,
-                                              component
+                                              currentComponent as FormFormatComponent
                                             )
                                           }
                                           disabled={isSubmitting}
@@ -1027,7 +1035,7 @@ export default function RenderExtraContentPage() {
                                     );
                                   case "dynamic-component.enum-field":
                                     const enumComp =
-                                      component as DynamicComponentEnumField;
+                                      currentComponent as DynamicComponentEnumField;
                                     const options =
                                       (enumComp.Values?.map(
                                         (v) => v.tag_value
@@ -1110,7 +1118,7 @@ export default function RenderExtraContentPage() {
                                     );
                                   case "dynamic-component.date-field":
                                     const dateComp =
-                                      component as DynamicComponentDateField;
+                                      currentComponent as DynamicComponentDateField;
                                     const dateValue = field.value
                                       ? typeof field.value === "string"
                                         ? parseISO(field.value)
@@ -1216,6 +1224,7 @@ export default function RenderExtraContentPage() {
                                       </Popover>
                                     );
                                   case "dynamic-component.boolean-field":
+                                    const boolCompCurrent = currentComponent as DynamicComponentBooleanField;
                                     return (
                                       <div className="flex items-center space-x-2 pt-2">
                                         <Switch
@@ -1228,14 +1237,17 @@ export default function RenderExtraContentPage() {
                                           htmlFor={fieldName}
                                           className="text-sm font-normal"
                                         >
-                                          {placeholder || "Enable"}
+                                          {placeholder || (boolCompCurrent.label || 'Enable')}
                                         </FormLabel>
                                       </div>
                                     );
                                   default:
+                                    // This default case should ideally not be reached if all component types are handled.
+                                    // Explicitly handle 'never' case for type safety if component could be 'never'.
+                                    // const _exhaustiveCheck: never = currentComponent; // uncomment for exhaustive check
                                     return (
                                       <Input
-                                        placeholder={`Unsupported component: ${component.__component}`}
+                                        placeholder={`Unsupported component: ${(currentComponent as any).__component}`}
                                         {...field}
                                         value={field.value ?? ""}
                                         disabled
@@ -1290,7 +1302,7 @@ export default function RenderExtraContentPage() {
                 typeof currentMediaFieldTarget === "string"
                   ? currentMediaFieldTarget
                   : currentMediaFieldTarget.fieldName,
-                !!currentMediaFieldDefinition.is_array, 
+                !!(currentMediaFieldDefinition as FormFormatComponent).is_array, 
                 typeof currentMediaFieldTarget !== "string"
                   ? currentMediaFieldTarget.index
                   : undefined
@@ -1301,5 +1313,4 @@ export default function RenderExtraContentPage() {
     </div>
   );
 }
-
     

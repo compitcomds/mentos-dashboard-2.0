@@ -142,9 +142,10 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                 <FormLabel className="sr-only">{label} Item {index + 1}</FormLabel>
                 <FormControl>
                   {(() => {
-                    switch (componentDefinition.__component) {
+                    const currentComponentDef = componentDefinition as FormFormatComponent; // Use a specific cast for the switch
+                    switch (currentComponentDef.__component) {
                         case 'dynamic-component.text-field':
-                          const textComp = componentDefinition as DynamicComponentTextField;
+                          const textComp = currentComponentDef as DynamicComponentTextField;
                           if (textComp.inputType === 'tip-tap') {
                             return (
                               <TipTapEditor
@@ -156,16 +157,17 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                           }
                           return <Input type={textComp.inputType === 'email' ? 'email' : 'text'} placeholder={placeholder} {...field} value={field.value ?? ''} disabled={isSubmitting} />;
                         case 'dynamic-component.number-field':
-                          const numComp = componentDefinition as DynamicComponentNumberField;
+                          const numComp = currentComponentDef as DynamicComponentNumberField;
                           return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={numComp.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
                         case 'dynamic-component.media-field':
                            const currentMediaId: number | null = typeof field.value === 'number' ? field.value : null;
+                           const mediaFieldComp = currentComponentDef as DynamicComponentMediaField;
                           return (
                             <div>
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => openMediaSelector({ fieldName: fieldName as string, index }, componentDefinition)}
+                                onClick={() => openMediaSelector({ fieldName: fieldName as string, index }, mediaFieldComp)}
                                 disabled={isSubmitting}
                               >
                                 <ImageIcon className="mr-2 h-4 w-4" />
@@ -177,7 +179,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                             </div>
                           );
                         case 'dynamic-component.enum-field':
-                          const enumComp = componentDefinition as DynamicComponentEnumField;
+                          const enumComp = currentComponentDef as DynamicComponentEnumField;
                           const options = enumComp.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
                           if (enumComp.type === 'multi-select') {
                             return (
@@ -212,7 +214,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                             </Select>
                           );
                         case 'dynamic-component.date-field':
-                          const dateComp = componentDefinition as DynamicComponentDateField;
+                          const dateComp = currentComponentDef as DynamicComponentDateField;
                           const dateValue = field.value ? (typeof field.value === 'string' ? parseISO(field.value) : field.value) : null;
                           return (
                             <Popover>
@@ -243,7 +245,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                                             onChange={(e) => {
                                                 const [hours, minutes] = e.target.value.split(':').map(Number);
                                                 let newDate = dateValue && isValid(dateValue) ? new Date(dateValue) : new Date();
-                                                if (isNaN(newDate.getTime())) { // If dateValue was null/invalid, start with today
+                                                if (isNaN(newDate.getTime())) { 
                                                     newDate = new Date();
                                                 }
                                                 newDate.setHours(hours, minutes, 0, 0);
@@ -257,14 +259,16 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                             </Popover>
                           );
                         case 'dynamic-component.boolean-field':
+                           const boolFieldComp = currentComponentDef as DynamicComponentBooleanField;
                           return (
                             <div className="flex items-center space-x-2 pt-2">
                               <Switch id={itemFieldName} checked={field.value || false} onCheckedChange={field.onChange} disabled={isSubmitting} />
-                              <FormLabel htmlFor={itemFieldName} className="text-sm font-normal">{placeholder || 'Enable'}</FormLabel>
+                              <FormLabel htmlFor={itemFieldName} className="text-sm font-normal">{placeholder || (boolFieldComp.label || 'Enable')}</FormLabel>
                             </div>
                           );
                       default:
-                        return <Input placeholder={`Unsupported: ${componentDefinition.__component}`} {...field} value={field.value ?? ''} disabled />;
+                        // const _exhaustiveCheck: never = currentComponentDef; // For exhaustive type checking
+                        return <Input placeholder={`Unsupported: ${(currentComponentDef as any).__component}`} {...field} value={field.value ?? ''} disabled />;
                     }
                   })()}
                 </FormControl>
@@ -366,7 +370,7 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                 id={item.id}
                 index={index}
                 fieldName={fieldName}
-                componentDefinition={componentDefinition}
+                componentDefinition={componentDefinition as FormFormatComponent}
                 control={control}
                 methods={methods}
                 isSubmitting={isSubmitting}
@@ -384,12 +388,10 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
           variant="outline"
           size="sm"
           onClick={() => {
-            // Ensure componentDefinition.__component is valid before calling
             if (componentDefinition && componentDefinition.__component) {
-                 append(getDefaultValueForComponent(componentDefinition.__component, componentDefinition) as any)
+                 append(getDefaultValueForComponent(componentDefinition.__component, componentDefinition) as any);
             } else {
                 console.error("Cannot append field: componentDefinition or __component is missing", componentDefinition);
-                // Optionally show a toast or other user feedback here
             }
           }}
           disabled={isSubmitting}
@@ -403,3 +405,4 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
     </FormItem>
   );
 }
+
