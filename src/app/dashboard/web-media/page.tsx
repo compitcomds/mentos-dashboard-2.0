@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'; // Added CardFooter
 import MediaTable from './_components/media-table';
 import UploadButton from './_components/upload-button';
 import { useFetchMedia } from '@/lib/queries/media';
@@ -30,7 +30,7 @@ import {
     TableBody,
     TableCell,
 } from "@/components/ui/table";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"; // Added Accordion imports
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 type ViewMode = 'table' | 'card';
 type SortField = 'name' | 'category' | 'createdAt' | 'updatedAt' | 'publishedAt';
@@ -128,7 +128,6 @@ export default function WebMediaPage() {
     const applyTextFilters = () => {
         setActiveNameFilter(localNameFilter);
         setActiveCategoryFilter(localCategoryFilter);
-        // setCurrentPage(1) will be handled by the useEffect watching activeNameFilter and activeCategoryFilter
     };
 
     const handleAddNewUserTag = (newTag: string) => {
@@ -326,8 +325,7 @@ function WebMediaPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, page
                     <div className="md:col-span-1 space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
                     <Skeleton className="h-9 w-full md:w-auto"/>
                 </div>
-                {/* Accordion Skeleton part */}
-                <Skeleton className="h-10 w-full rounded-md" /> {/* Placeholder for AccordionTrigger */}
+                <Skeleton className="h-10 w-full rounded-md" />
             </CardContent>
         </Card>
         <Card><CardHeader className="pb-2"><Skeleton className="h-5 w-1/4" /></CardHeader><CardContent><Skeleton className="h-4 w-1/2 mb-1" /><Skeleton className="h-2 w-full" /></CardContent></Card>
@@ -349,3 +347,4 @@ function WebMediaPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, page
 }
 
     
+
