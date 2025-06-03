@@ -155,10 +155,11 @@ export default function BlogFormPage() {
   const userTenentId = currentUser?.tenent_id;
 
   const {
-    data: fetchedCategories,
+    data: fetchedCategoriesData, // Renamed to reflect it's FindMany<Categorie>
     isLoading: isLoadingCategories,
     isError: isCategoriesError,
-  } = useGetCategories(userTenentId);
+  } = useGetCategories(); // Removed userTenentId, hook handles it
+  const fetchedCategories = fetchedCategoriesData?.data; // Actual array of categories
 
   const [isLoadingComponent, setIsLoadingComponent] = useState(true); // Renamed from isLoading to avoid conflict
   const [tags, setTags] = useState<string[]>([]);
@@ -300,7 +301,7 @@ export default function BlogFormPage() {
     isEditing,
     blogData,
     isLoadingBlog,
-    fetchedCategories,
+    fetchedCategories, // Use the array here
     reset,
     isLoadingUser,
     userTenentId,
@@ -874,8 +875,7 @@ export default function BlogFormPage() {
                         }
                         disabled={
                           isLoadingCategories ||
-                          (fetchedCategories &&
-                            fetchedCategories.length === 0) ||
+                          (fetchedCategories && fetchedCategories.length === 0) ||
                           isSubmittingForm ||
                           isCategoriesError
                         }
@@ -888,8 +888,7 @@ export default function BlogFormPage() {
                                   ? "Loading..."
                                   : isCategoriesError
                                   ? "Error loading"
-                                  : fetchedCategories &&
-                                    fetchedCategories.length === 0
+                                  : (fetchedCategories && fetchedCategories.length === 0)
                                   ? "No categories"
                                   : "Select category"
                               }
@@ -897,8 +896,7 @@ export default function BlogFormPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {fetchedCategories &&
-                            fetchedCategories.map((category: Categorie) => (
+                          {fetchedCategories?.map((category: Categorie) => (
                               <SelectItem
                                 key={category.id}
                                 value={category.id!.toString()}
@@ -1471,3 +1469,4 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
+

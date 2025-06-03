@@ -29,6 +29,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
+    AlertDialogTrigger, // Added this import
 } from "@/components/ui/alert-dialog"; 
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -49,7 +50,6 @@ import { useGetCategories } from '@/lib/queries/category';
 import type { Categorie } from '@/types/category'; 
 import { toast } from '@/hooks/use-toast';
 import { getStoredPreference, setStoredPreference } from '@/lib/storage';
-import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || '';
 
@@ -87,7 +87,8 @@ export default function BlogPage() {
    const blogQueryOptions: UseGetBlogsOptions = { page: currentPage, pageSize, sortField, sortOrder };
    const { data: blogData, isLoading: isLoadingBlogs, isError: isBlogsError, error: blogsError, refetch, isFetching } = useGetBlogs(blogQueryOptions);
    
-   const { data: categories, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories(userTenentId);
+   const { data: categoriesData, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories(); // Removed userTenentId, hook handles it
+   const categories = categoriesData?.data; // Extract the array of categories
    const deleteMutation = useDeleteBlog();
 
    const [viewMode, setViewMode] = React.useState<ViewMode>(() => getStoredPreference('blogViewMode', 'table'));
@@ -161,7 +162,11 @@ export default function BlogPage() {
                      {searchTerm && (<Button variant="ghost" size="icon" className="absolute right-1.5 top-1/2 h-7 w-7 -translate-y-1/2" onClick={() => setSearchTerm('')}><X className="h-4 w-4" /><span className="sr-only">Clear search</span></Button>)}
                 </div>
                 <div className="w-full md:w-auto md:min-w-[200px]">
-                    <Select value={selectedCategoryId || ''} onValueChange={(value) => setSelectedCategoryId(value === 'all' ? null : value)} disabled={isLoadingCategories || !categories || categories.length === 0 || isLoadingBlogs}>
+                    <Select 
+                        value={selectedCategoryId || ''} 
+                        onValueChange={(value) => setSelectedCategoryId(value === 'all' ? null : value)} 
+                        disabled={isLoadingCategories || !categories || categories.length === 0 || isLoadingBlogs}
+                    >
                         <SelectTrigger><SelectValue placeholder="Filter by category..." /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Categories</SelectItem>
@@ -327,3 +332,4 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
     </div>
   );
 }
+
