@@ -5,20 +5,11 @@ import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useGetMetaFormat } from '@/lib/queries/meta-format';
-import { useGetMetaDataEntries, useDeleteMetaDataEntry } from '@/lib/queries/meta-data';
+import { useGetMetaDataEntries, useDeleteMetaDataEntry, type UseGetMetaDataEntriesOptions } from '@/lib/queries/meta-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription as DialogDescriptionComponent,
-  DialogFooter,
-  DialogClose,
-} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,16 +17,21 @@ import {
   AlertDialogContent,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogDescription,
+  AlertDialogDescription as AlertDialogDescriptionComponent, // Renamed import
   AlertDialogFooter,
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, FileJson as FileJsonIcon, Loader2, PackageOpen, Eye, ImageIcon } from 'lucide-react';
+import { AlertCircle, PlusCircle, MoreHorizontal, Edit, Trash2, FileJson as FileJsonIcon, Loader2, PackageOpen, Eye, ImageIcon, Search, X, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import type { MetaData } from '@/types/meta-data';
 import type { FormFormatComponent } from '@/types/meta-format';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Label } from '@/components/ui/label';
+import { getStoredPreference, setStoredPreference } from '@/lib/storage';
 import {
   Carousel,
   CarouselContent,
@@ -43,7 +39,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import MediaRenderer from '../_components/media-renderer'; // Corrected import path
+import MediaRenderer from '../_components/media-renderer';
 
 const getFieldName = (component: FormFormatComponent): string => {
   if (component.label && component.label.trim() !== '') {
@@ -51,9 +47,8 @@ const getFieldName = (component: FormFormatComponent): string => {
       .toLowerCase()
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '');
-    return slugifiedLabel; // ID suffix removed
+    return slugifiedLabel;
   }
-  // Fallback remains the same, using component ID for uniqueness if no label
   return `component_${component.__component.replace('dynamic-component.', '')}_${component.id}`;
 };
 
@@ -63,13 +58,49 @@ const formatDate = (dateString?: string | Date, formatType: string = 'PPP p') =>
   return isValid(date) ? format(date, formatType) : 'Invalid Date';
 };
 
+type SortFieldMetaData = 'handle' | 'createdAt' | 'updatedAt' | 'publishedAt';
+type SortOrderMetaData = 'asc' | 'desc';
+
+const DEFAULT_PAGE_SIZE_METADATA = 9; // Suitable for card view
+const PAGE_SIZE_OPTIONS_METADATA = [
+    { label: "9 per page", value: "9" }, { label: "12 per page", value: "12" },
+    { label: "24 per page", value: "24" }, { label: "48 per page", value: "48" },
+];
+const SORT_FIELD_OPTIONS_METADATA: { label: string; value: SortFieldMetaData }[] = [
+  { label: "Created At", value: "createdAt" },
+  { label: "Updated At", value: "updatedAt" },
+  { label: "Published At", value: "publishedAt" },
+  { label: "Handle", value: "handle" },
+];
+const SORT_ORDER_OPTIONS_METADATA: { label: string; value: SortOrderMetaData }[] = [
+  { label: "Ascending", value: "asc" }, { label: "Descending", value: "desc" },
+];
+
 export default function MetaDataListingPage() {
   const router = useRouter();
   const params = useParams();
   const metaFormatDocumentId = params.metaFormatDocumentId as string;
 
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(() => getStoredPreference('metaDataPageSize', DEFAULT_PAGE_SIZE_METADATA));
+  const [sortField, setSortField] = React.useState<SortFieldMetaData>(() => getStoredPreference('metaDataSortField', 'createdAt'));
+  const [sortOrder, setSortOrder] = React.useState<SortOrderMetaData>(() => getStoredPreference('metaDataSortOrder', 'desc'));
+  const [localHandleFilter, setLocalHandleFilter] = React.useState('');
+  const [activeHandleFilter, setActiveHandleFilter] = React.useState<string | null>(null);
+
   const { data: metaFormat, isLoading: isLoadingMetaFormat, isError: isErrorMetaFormat, error: errorMetaFormat } = useGetMetaFormat(metaFormatDocumentId);
-  const { data: metaDataEntries, isLoading: isLoadingMetaData, isError: isErrorMetaData, error: errorMetaData, refetch: refetchMetaData, isFetching: isFetchingMetaData } = useGetMetaDataEntries(metaFormatDocumentId);
+  
+  const metaDataQueryOptions: UseGetMetaDataEntriesOptions = {
+    page: currentPage,
+    pageSize,
+    sortField,
+    sortOrder,
+    handleFilter: activeHandleFilter,
+  };
+  const { data: metaDataResponse, isLoading: isLoadingMetaData, isError: isErrorMetaData, error: errorMetaData, refetch: refetchMetaData, isFetching: isFetchingMetaData } = useGetMetaDataEntries(metaFormatDocumentId, metaDataQueryOptions);
+  const metaDataEntries = metaDataResponse?.data || [];
+  const paginationInfo = metaDataResponse?.meta?.pagination;
+
   const deleteMetaDataMutation = useDeleteMetaDataEntry();
 
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
@@ -78,6 +109,11 @@ export default function MetaDataListingPage() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [selectedEntryData, setSelectedEntryData] = React.useState<Record<string, any> | null>(null);
   const [selectedEntryForDialog, setSelectedEntryForDialog] = React.useState<MetaData | null>(null);
+
+  React.useEffect(() => { setStoredPreference('metaDataPageSize', pageSize); setCurrentPage(1); }, [pageSize]);
+  React.useEffect(() => { setStoredPreference('metaDataSortField', sortField); setCurrentPage(1); }, [sortField]);
+  React.useEffect(() => { setStoredPreference('metaDataSortOrder', sortOrder); setCurrentPage(1); }, [sortOrder]);
+  React.useEffect(() => { setCurrentPage(1); }, [activeHandleFilter]);
 
   const handleDeleteConfirmation = (entry: MetaData) => {
     setMetaDataToDelete(entry);
@@ -89,13 +125,8 @@ export default function MetaDataListingPage() {
       deleteMetaDataMutation.mutate(
         { documentId: metaDataToDelete.documentId, metaFormatDocumentId: metaFormatDocumentId },
         {
-          onSuccess: () => {
-            setIsAlertOpen(false);
-            setMetaDataToDelete(null);
-          },
-          onError: () => {
-            setIsAlertOpen(false);
-          }
+          onSuccess: () => { setIsAlertOpen(false); setMetaDataToDelete(null); },
+          onError: () => setIsAlertOpen(false)
         }
       );
     }
@@ -107,62 +138,46 @@ export default function MetaDataListingPage() {
     setIsDetailDialogOpen(true);
   };
 
+  const applyHandleFilter = () => {
+    setActiveHandleFilter(localHandleFilter.trim() === '' ? null : localHandleFilter.trim());
+  };
+
   const isLoading = isLoadingMetaFormat || isLoadingMetaData;
   const isError = isErrorMetaFormat || isErrorMetaData;
   const error = errorMetaFormat || errorMetaData;
 
-  if (isLoading) {
-    return (
-      <div className="p-6 space-y-4">
-        <Skeleton className="h-8 w-1/3" />
-        <Skeleton className="h-6 w-1/2" />
-        <Skeleton className="h-10 w-36" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(3)].map((_, i) => (
-                 <Card key={`skeleton-${i}`} className="flex flex-col shadow-sm">
-                    <CardContent className="p-4 pb-0 aspect-video bg-muted rounded-t-lg flex items-center justify-center">
-                         <Skeleton className="w-full h-full" />
-                     </CardContent>
-                    <CardHeader className="pb-2 pt-3">
-                        <Skeleton className="h-5 w-3/4" />
-                        <Skeleton className="h-4 w-1/2 mt-1" />
-                    </CardHeader>
-                    <CardContent className="space-y-2 flex-1 pt-2">
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-5/6" />
-                    </CardContent>
-                    <CardFooter className="border-t pt-3 flex justify-end"><Skeleton className="h-8 w-24" /></CardFooter>
-                 </Card>
-            ))}
-        </div>
-      </div>
-    );
+  if (isLoading && !metaDataResponse) {
+    return <MetaDataPageSkeleton />;
   }
 
-  if (isError) {
+  if (isError && !isFetchingMetaData) {
     return (
-      <div className="p-6">
+      <div className="p-6 space-y-4">
+        <Button variant="outline" onClick={() => router.push('/dashboard/extra-content')}>&larr; Back</Button>
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>{(error as Error)?.message || 'Could not load data for this extra content format.'}</AlertDescription>
-           <Button onClick={() => router.refresh()} className="mt-2">Retry</Button>
+          <AlertDescription>{(error as Error)?.message || 'Could not load data.'}</AlertDescription>
+           <Button onClick={() => refetchMetaData()} className="mt-2" disabled={isFetchingMetaData}>
+             {isFetchingMetaData && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Retry
+           </Button>
         </Alert>
       </div>
     );
   }
 
-  if (!metaFormat) {
+  if (!metaFormat && !isLoadingMetaFormat) {
     return (
-      <div className="p-6">
+      <div className="p-6 space-y-4">
+         <Button variant="outline" onClick={() => router.push('/dashboard/extra-content')}>&larr; Back</Button>
         <Alert>
           <AlertTitle>Extra Content Format Not Found</AlertTitle>
-          <AlertDescription>The requested extra content format (ID: {metaFormatDocumentId}) could not be found.</AlertDescription>
+          <AlertDescription>ID: {metaFormatDocumentId} not found.</AlertDescription>
         </Alert>
       </div>
     );
   }
-
+  
   const createNewEntryLink = `/dashboard/extra-content/render/${metaFormatDocumentId}?action=create`;
 
   return (
@@ -173,8 +188,8 @@ export default function MetaDataListingPage() {
 
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{metaFormat.name}</h1>
-          {metaFormat.description && <p className="text-muted-foreground mt-1">{metaFormat.description}</p>}
+          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{metaFormat?.name || <Skeleton className="h-8 w-48 inline-block" />}</h1>
+          {metaFormat?.description && <p className="text-muted-foreground mt-1">{metaFormat.description}</p>}
            <p className="text-xs text-muted-foreground mt-1">Format ID: {metaFormatDocumentId}</p>
         </div>
         <Button asChild className="flex-shrink-0">
@@ -184,33 +199,74 @@ export default function MetaDataListingPage() {
         </Button>
       </div>
 
-    {(isFetchingMetaData && (!metaDataEntries || metaDataEntries.length === 0)) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-             {[...Array(3)].map((_, i) => (
-                 <Card key={`skeleton-fetching-${i}`} className="flex flex-col shadow-sm">
-                     <CardContent className="p-4 pb-0 aspect-video bg-muted rounded-t-lg flex items-center justify-center">
-                         <Skeleton className="w-full h-full" />
-                     </CardContent>
-                     <CardHeader className="pb-2 pt-3">
-                         <Skeleton className="h-5 w-3/4" />
-                         <Skeleton className="h-4 w-1/2 mt-1" />
-                     </CardHeader>
-                     <CardContent className="space-y-2 flex-1 pt-2">
-                         <Skeleton className="h-4 w-full" />
-                         <Skeleton className="h-4 w-5/6" />
-                     </CardContent>
-                     <CardFooter className="border-t pt-3 flex justify-end"><Skeleton className="h-8 w-24" /></CardFooter>
-                 </Card>
-             ))}
-        </div>
-    )}
+      <Card>
+        <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Filter & Sort Entries</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                <div className="relative md:col-span-2">
+                    <Label htmlFor="handle-filter-input" className="text-xs text-muted-foreground">Filter by Handle</Label>
+                    <Input
+                        id="handle-filter-input"
+                        type="search"
+                        placeholder="Enter handle to search..."
+                        value={localHandleFilter}
+                        onChange={(e) => setLocalHandleFilter(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && applyHandleFilter()}
+                        className="h-9 text-xs"
+                        disabled={isLoadingMetaData || isFetchingMetaData}
+                    />
+                </div>
+                <Button onClick={applyHandleFilter} className="w-full md:w-auto h-9 text-xs" disabled={isLoadingMetaData || isFetchingMetaData}>
+                    <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Handle Filter
+                </Button>
+            </div>
+             <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="advanced-sort-pagination">
+                    <AccordionTrigger className="text-sm font-medium">
+                        <div className="flex items-center gap-2"><Filter className="h-4 w-4" />Advanced Sorting & Pagination</div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-4 space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                            <div>
+                                <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                <Select value={sortField} onValueChange={(value) => setSortField(value as SortFieldMetaData)} disabled={isLoadingMetaData || isFetchingMetaData}>
+                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                    <SelectContent>{SORT_FIELD_OPTIONS_METADATA.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-muted-foreground">Order</Label>
+                                <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrderMetaData)} disabled={isLoadingMetaData || isFetchingMetaData}>
+                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                    <SelectContent>{SORT_ORDER_OPTIONS_METADATA.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingMetaData || isFetchingMetaData}>
+                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                    <SelectContent>{PAGE_SIZE_OPTIONS_METADATA.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
+        </CardContent>
+      </Card>
 
-    {(!metaDataEntries || metaDataEntries.length === 0) && !isFetchingMetaData && (
+      {(isFetchingMetaData && metaDataEntries.length === 0) && <MetaDataPageSkeleton />}
+
+      {(!metaDataEntries || metaDataEntries.length === 0) && !isFetchingMetaData && (
          <Card className="col-span-full text-center py-12 shadow-sm">
             <CardContent className="flex flex-col items-center justify-center">
                 <PackageOpen className="h-16 w-16 text-muted-foreground mb-4" />
-                <h3 className="text-xl font-semibold text-foreground">No Data Entries Yet</h3>
-                <p className="text-muted-foreground mt-1">Get started by creating a new entry for "{metaFormat.name}".</p>
+                <h3 className="text-xl font-semibold text-foreground">No Data Entries Found</h3>
+                <p className="text-muted-foreground mt-1">
+                    {activeHandleFilter ? `No entries match handle filter "${activeHandleFilter}".` : `No entries for "${metaFormat?.name}".`}
+                </p>
             </CardContent>
          </Card>
       ) }
@@ -350,14 +406,28 @@ export default function MetaDataListingPage() {
         </div>
       )}
 
+      {paginationInfo && paginationInfo.pageCount > 1 && (
+        <div className="flex items-center justify-between pt-4">
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1 || isFetchingMetaData}>
+                <ChevronLeft className="mr-1 h-4 w-4" /> Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">
+                Page {paginationInfo.page} of {paginationInfo.pageCount} (Total: {paginationInfo.total} entries)
+            </span>
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(paginationInfo.pageCount, prev + 1))} disabled={currentPage === paginationInfo.pageCount || isFetchingMetaData}>
+                Next <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+        </div>
+      )}
+
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescriptionComponent>
               This action cannot be undone. This will permanently delete the data entry with handle
               <span className="font-semibold"> "{metaDataToDelete?.handle || metaDataToDelete?.documentId || 'this entry'}"</span>.
-            </AlertDialogDescription>
+            </AlertDialogDescriptionComponent>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteMetaDataMutation.isPending} onClick={() => setMetaDataToDelete(null)}>Cancel</AlertDialogCancel>
@@ -377,9 +447,9 @@ export default function MetaDataListingPage() {
         <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Details for Entry (Handle: {selectedEntryForDialog?.handle || selectedEntryForDialog?.documentId || 'N/A'})</DialogTitle>
-            <DialogDescriptionComponent>
+            <AlertDialogDescriptionComponent>
               View formatted data or raw JSON.
-            </DialogDescriptionComponent>
+            </AlertDialogDescriptionComponent>
           </DialogHeader>
           <Tabs defaultValue="ui" className="flex-1 flex flex-col overflow-hidden mt-2">
             <TabsList className="flex-shrink-0">
@@ -461,12 +531,59 @@ export default function MetaDataListingPage() {
             </ScrollArea>
           </Tabs>
           <DialogFooter className="mt-4 flex-shrink-0 pt-4 border-t">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Close</Button>
-            </DialogClose>
+            <AlertDialogCancel asChild><Button type="button" variant="outline">Close</Button></AlertDialogCancel>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function MetaDataPageSkeleton() {
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      <Skeleton className="h-8 w-1/4" /> {/* Back button */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <Skeleton className="h-9 w-64 mb-1" /> {/* Title */}
+          <Skeleton className="h-4 w-80 mb-1" /> {/* Description */}
+          <Skeleton className="h-3 w-40" /> {/* Format ID */}
+        </div>
+        <Skeleton className="h-10 w-40" /> {/* Create New Entry Button */}
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2"><Skeleton className="h-6 w-1/3" /></CardHeader>
+        <CardContent className="space-y-4 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div className="md:col-span-2 space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full" /></div>
+            <Skeleton className="h-9 w-full md:w-auto" />
+          </div>
+          <Skeleton className="h-10 w-full rounded-md" /> {/* Accordion Trigger */}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[...Array(3)].map((_, i) => (
+          <Card key={`skeleton-entry-${i}`} className="flex flex-col shadow-sm">
+            <Skeleton className="aspect-video bg-muted rounded-t-lg" />
+            <CardHeader className="pb-2 pt-3">
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-4 w-1/2 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-2 flex-1 pt-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+            </CardContent>
+            <CardFooter className="border-t pt-3 flex justify-end"><Skeleton className="h-8 w-24" /></CardFooter>
+          </Card>
+        ))}
+      </div>
+      <div className="flex items-center justify-between pt-4">
+        <Skeleton className="h-8 w-24" />
+        <Skeleton className="h-6 w-1/4" />
+        <Skeleton className="h-8 w-20" />
+      </div>
     </div>
   );
 }

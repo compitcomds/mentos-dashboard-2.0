@@ -9,29 +9,55 @@ import {
   getMetaDataEntry,
   updateMetaDataEntry,
   deleteMetaDataEntry,
+  type GetMetaDataEntriesParams, // Import params type
 } from '@/lib/services/meta-data';
 import type { MetaData, CreateMetaDataPayload } from '@/types/meta-data';
+import type { FindMany } from '@/types/strapi_response';
 import { useCurrentUser } from './user';
 
-export const META_DATA_ENTRIES_QUERY_KEY = (metaFormatDocumentId: string, userTenentId?: string) => ['metaDataEntries', metaFormatDocumentId, userTenentId || 'all'];
+export interface UseGetMetaDataEntriesOptions {
+  page?: number;
+  pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+  handleFilter?: string | null;
+}
+
+export const META_DATA_ENTRIES_QUERY_KEY = (
+  metaFormatDocumentId: string,
+  userTenentId?: string,
+  options?: UseGetMetaDataEntriesOptions
+) => [
+  'metaDataEntries',
+  metaFormatDocumentId,
+  userTenentId || 'all',
+  options?.page,
+  options?.pageSize,
+  options?.sortField,
+  options?.sortOrder,
+  options?.handleFilter,
+];
+
 export const META_DATA_ENTRY_DETAIL_QUERY_KEY = (documentId?: string, userTenentId?: string) => ['metaDataEntry', documentId || 'detail', userTenentId || 'all'];
 
-export function useGetMetaDataEntries(metaFormatDocumentId: string) {
+export function useGetMetaDataEntries(metaFormatDocumentId: string, options?: UseGetMetaDataEntriesOptions) {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
+  const { page, pageSize, sortField, sortOrder, handleFilter } = options || {};
 
-  return useQuery<MetaData[], Error>({
-    queryKey: META_DATA_ENTRIES_QUERY_KEY(metaFormatDocumentId, userTenentId),
+  return useQuery<FindMany<MetaData>, Error>({
+    queryKey: META_DATA_ENTRIES_QUERY_KEY(metaFormatDocumentId, userTenentId, { page, pageSize, sortField, sortOrder, handleFilter }),
     queryFn: () => {
       if (!userTenentId) {
         console.warn("useGetMetaDataEntries: User tenent_id not available. Returning empty array.");
-        return Promise.resolve([]);
+        return Promise.resolve({ data: [], meta: { pagination: { page: 1, pageSize: pageSize || 10, pageCount: 0, total: 0 } } });
       }
       if (!metaFormatDocumentId) {
         console.warn("useGetMetaDataEntries: metaFormatDocumentId not available. Returning empty array.");
-        return Promise.resolve([]);
+        return Promise.resolve({ data: [], meta: { pagination: { page: 1, pageSize: pageSize || 10, pageCount: 0, total: 0 } } });
       }
-      return getMetaDataEntries(metaFormatDocumentId, userTenentId);
+      const params: GetMetaDataEntriesParams = { metaFormatDocumentId, userTenentId, page, pageSize, sortField, sortOrder, handleFilter };
+      return getMetaDataEntries(params);
     },
     enabled: !!userTenentId && !!metaFormatDocumentId && !isLoadingUser,
   });
@@ -52,10 +78,12 @@ export function useCreateMetaDataEntry() {
     },
     onSuccess: (data) => {
       toast({ title: "Success", description: "MetaData entry created successfully." });
-      if (data.meta_format && typeof data.meta_format !== 'number' && data.meta_format.documentId) { // Check if meta_format is populated
-         queryClient.invalidateQueries({ queryKey: META_DATA_ENTRIES_QUERY_KEY(data.meta_format.documentId, currentUser?.tenent_id) });
+      const metaFormatDocId = typeof data.meta_format === 'object' && data.meta_format?.documentId ? data.meta_format.documentId : null;
+      if (metaFormatDocId) {
+         queryClient.invalidateQueries({ queryKey: META_DATA_ENTRIES_QUERY_KEY(metaFormatDocId, currentUser?.tenent_id) });
       } else {
          // Fallback if meta_format is not populated or only ID is available - this might require a broader invalidation or specific logic
+         console.warn("Created MetaData entry is missing meta_format.documentId. Invalidating generically.", data);
          queryClient.invalidateQueries({ queryKey: ['metaDataEntries'] }); // More generic invalidation
       }
     },
@@ -96,6 +124,7 @@ export function useUpdateMetaDataEntry() {
       if (metaFormatDocId) {
         queryClient.invalidateQueries({ queryKey: META_DATA_ENTRIES_QUERY_KEY(metaFormatDocId, currentUser?.tenent_id) });
       } else {
+         console.warn("Updated MetaData entry is missing meta_format.documentId. Invalidating generically.", data);
          queryClient.invalidateQueries({ queryKey: ['metaDataEntries'] });
       }
       if (data.documentId) {
@@ -124,6 +153,7 @@ export function useDeleteMetaDataEntry() {
       if (variables.metaFormatDocumentId) {
         queryClient.invalidateQueries({ queryKey: META_DATA_ENTRIES_QUERY_KEY(variables.metaFormatDocumentId, currentUser?.tenent_id) });
       } else {
+         console.warn("MetaData entry deleted but metaFormatDocumentId was not available for precise invalidation. Invalidating generically.", data, variables);
          queryClient.invalidateQueries({ queryKey: ['metaDataEntries'] });
       }
       queryClient.removeQueries({ queryKey: META_DATA_ENTRY_DETAIL_QUERY_KEY(variables.documentId, currentUser?.tenent_id) });

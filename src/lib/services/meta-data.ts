@@ -15,31 +15,64 @@ async function getAuthHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
+export interface GetMetaDataEntriesParams {
+  metaFormatDocumentId: string;
+  userTenentId: string;
+  page?: number;
+  pageSize?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+  handleFilter?: string | null;
+}
+
 // Fetch all MetaData entries for a specific MetaFormat and tenent_id
-export const getMetaDataEntries = async (metaFormatDocumentId: string, userTenentId: string): Promise<MetaData[]> => {
+export const getMetaDataEntries = async (params: GetMetaDataEntriesParams): Promise<FindMany<MetaData>> => {
+  const {
+    metaFormatDocumentId,
+    userTenentId,
+    page = 1, // Default page
+    pageSize = 10, // Default page size
+    sortField = 'createdAt', // Default sort field
+    sortOrder = 'desc', // Default sort order
+    handleFilter,
+  } = params;
+
+
   if (!metaFormatDocumentId || !userTenentId) {
     console.error('[Service getMetaDataEntries]: metaFormatDocumentId or userTenentId is missing.');
     throw new Error('metaFormatDocumentId and userTenentId are required.');
   }
-  const params = {
+
+  const strapiParams: any = {
     'filters[meta_format][documentId][$eq]': metaFormatDocumentId,
     'filters[tenent_id][$eq]': userTenentId,
-    'populate': ['meta_format', 'user'], // Populate relations
-    'sort[0]': 'createdAt:desc',
+    'populate': ['meta_format', 'user'],
+    'pagination[page]': page,
+    'pagination[pageSize]': pageSize,
+    'sort[0]': `${sortField}:${sortOrder}`,
   };
+
+  if (handleFilter && handleFilter.trim() !== "") {
+    strapiParams['filters[handle][$containsi]'] = handleFilter.trim();
+  }
+
   const url = '/meta-datas';
-  console.log(`[getMetaDataEntries] Fetching URL: ${url} with params:`, params);
+  console.log(`[getMetaDataEntries] Fetching URL: ${url} with params:`, JSON.stringify(strapiParams));
 
   try {
     const headers = await getAuthHeader();
-    const response = await axiosInstance.get<FindMany<MetaData>>(url, { params, headers });
+    const response = await axiosInstance.get<FindMany<MetaData>>(url, { params: strapiParams, headers });
 
-    if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
-      console.error(`[getMetaDataEntries] Unexpected API response. Expected 'data' array, received:`, response.data);
-      return [];
+    if (!response.data || !response.data.data || !Array.isArray(response.data.data) || !response.data.meta?.pagination) {
+      console.error(`[getMetaDataEntries] Unexpected API response. Expected 'data' array and 'meta.pagination', received:`, response.data);
+       if (response.data === null || response.data === undefined || (response.data && !response.data.data)) {
+         console.warn(`[getMetaDataEntries] API returned null, undefined, or no 'data' property. Returning empty result.`);
+         return { data: [], meta: { pagination: { page: 1, pageSize, pageCount: 0, total: 0 } } };
+       }
+      throw new Error('Unexpected API response structure. Expected an array within a "data" property and pagination metadata.');
     }
-    console.log(`[getMetaDataEntries] Fetched ${response.data.data.length} MetaData entries.`);
-    return response.data.data;
+    console.log(`[getMetaDataEntries] Fetched ${response.data.data.length} MetaData entries. Pagination:`, response.data.meta.pagination);
+    return response.data;
   } catch (error: unknown) {
     let message = `Failed to fetch MetaData entries for MetaFormat ${metaFormatDocumentId}.`;
     if (error instanceof AxiosError) {
@@ -177,4 +210,3 @@ export const deleteMetaDataEntry = async (documentId: string, userTenentId: stri
     throw new Error(message);
   }
 };
-
