@@ -16,10 +16,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, ImageIcon, PlusCircle, Trash2, ArrowUp, ArrowDown, GripVertical, Loader2 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import type { FormFormatComponent } from '@/types/meta-format';
+import type { FormFormatComponent, DynamicComponentTextField, DynamicComponentNumberField, DynamicComponentEnumField, DynamicComponentDateField, DynamicComponentBooleanField, DynamicComponentMediaField } from '@/types/meta-format';
 import TipTapEditor from '@/components/ui/tiptap';
-import MediaRenderer from '@/app/dashboard/extra-content/data/_components/media-renderer'; // Import MediaRenderer
-import { useGetMediaFileDetailsById } from '@/lib/queries/media'; // Import hook to fetch media details
+import MediaRenderer from '@/app/dashboard/extra-content/data/_components/media-renderer'; 
+import { useGetMediaFileDetailsById } from '@/lib/queries/media'; 
 
 import {
   DndContext,
@@ -144,18 +144,20 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                   {(() => {
                     switch (componentDefinition.__component) {
                         case 'dynamic-component.text-field':
-                          if (componentDefinition.inputType === 'tip-tap') {
+                          const textComp = componentDefinition as DynamicComponentTextField;
+                          if (textComp.inputType === 'tip-tap') {
                             return (
                               <TipTapEditor
-                                content={field.value || componentDefinition.default || ''}
+                                content={field.value || textComp.default || ''}
                                 onContentChange={(html) => methods.setValue(itemFieldName, html, { shouldValidate: true })}
                                 className="min-h-[100px]"
                               />
                             );
                           }
-                          return <Input type={componentDefinition.inputType === 'email' ? 'email' : 'text'} placeholder={placeholder} {...field} value={field.value ?? ''} disabled={isSubmitting} />;
+                          return <Input type={textComp.inputType === 'email' ? 'email' : 'text'} placeholder={placeholder} {...field} value={field.value ?? ''} disabled={isSubmitting} />;
                         case 'dynamic-component.number-field':
-                          return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={componentDefinition.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
+                          const numComp = componentDefinition as DynamicComponentNumberField;
+                          return <Input type="number" placeholder={placeholder} {...field} value={field.value ?? ''} step={numComp.type === 'integer' ? '1' : 'any'} disabled={isSubmitting} />;
                         case 'dynamic-component.media-field':
                            const currentMediaId: number | null = typeof field.value === 'number' ? field.value : null;
                           return (
@@ -175,8 +177,9 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                             </div>
                           );
                         case 'dynamic-component.enum-field':
-                          const options = componentDefinition.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
-                          if (componentDefinition.type === 'multi-select') {
+                          const enumComp = componentDefinition as DynamicComponentEnumField;
+                          const options = enumComp.Values?.map(v => v.tag_value).filter(Boolean) as string[] || [];
+                          if (enumComp.type === 'multi-select') {
                             return (
                                 <div className="space-y-2 p-2 border rounded-md">
                                 {options.map(option => (
@@ -201,7 +204,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                             );
                           }
                           return (
-                            <Select onValueChange={field.onChange} value={field.value || componentDefinition.default || ""} disabled={isSubmitting}>
+                            <Select onValueChange={field.onChange} value={field.value || enumComp.default || ""} disabled={isSubmitting}>
                               <SelectTrigger><SelectValue placeholder={placeholder || 'Select an option'} /></SelectTrigger>
                               <SelectContent>
                                 {options.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
@@ -209,6 +212,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                             </Select>
                           );
                         case 'dynamic-component.date-field':
+                          const dateComp = componentDefinition as DynamicComponentDateField;
                           const dateValue = field.value ? (typeof field.value === 'string' ? parseISO(field.value) : field.value) : null;
                           return (
                             <Popover>
@@ -219,7 +223,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                                   disabled={isSubmitting}
                                 >
                                   <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {dateValue && isValid(dateValue) ? format(dateValue, (componentDefinition.type === 'time' ? 'HH:mm' : componentDefinition.type === 'data&time' || componentDefinition.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
+                                  {dateValue && isValid(dateValue) ? format(dateValue, (dateComp.type === 'time' ? 'HH:mm' : dateComp.type === 'data&time' || dateComp.type === 'datetime' ? 'PPP HH:mm' : 'PPP')) : <span>{placeholder || 'Pick a date'}</span>}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-auto p-0">
@@ -230,7 +234,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                                   initialFocus
                                   disabled={isSubmitting}
                                 />
-                                {(componentDefinition.type === 'time' || componentDefinition.type === 'data&time' || componentDefinition.type === 'datetime') && (
+                                {(dateComp.type === 'time' || dateComp.type === 'data&time' || dateComp.type === 'datetime') && (
                                     <div className="p-3 border-t border-border">
                                         <FormLabel>Time (HH:mm)</FormLabel>
                                         <Input
@@ -379,7 +383,15 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => append(getDefaultValueForComponent(componentDefinition.__component, componentDefinition) as any)}
+          onClick={() => {
+            // Ensure componentDefinition.__component is valid before calling
+            if (componentDefinition && componentDefinition.__component) {
+                 append(getDefaultValueForComponent(componentDefinition.__component, componentDefinition) as any)
+            } else {
+                console.error("Cannot append field: componentDefinition or __component is missing", componentDefinition);
+                // Optionally show a toast or other user feedback here
+            }
+          }}
           disabled={isSubmitting}
           className="mt-2"
         >
@@ -391,4 +403,3 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
     </FormItem>
   );
 }
-    

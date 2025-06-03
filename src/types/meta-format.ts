@@ -7,70 +7,60 @@ import type { OtherTag } from './common';
 export interface DynamicComponentBase {
   id: number; // Strapi assigns an ID to each component instance in a DZ
   __component: string; // Strapi's identifier, e.g., "dynamic-component.text-field"
+  label?: string | null;
+  description?: string | null;
+  placeholder?: string | null;
+  required?: boolean | null;
+  is_array?: boolean | null; // Indicates if this component instance itself can have multiple values
 }
 
 // --- Text Field Component ---
 export interface DynamicComponentTextField extends DynamicComponentBase {
   __component: "dynamic-component.text-field";
-  label?: string | null; // Corrected from lable
   min?: number | null;
   max?: number | null;
   default?: string | null;
-  required?: boolean | null;
-  placeholder?: string | null;
   inputType?: "default" | "tip-tap" | "email" | null;
 }
 
 // --- Number Field Component ---
 export interface DynamicComponentNumberField extends DynamicComponentBase {
   __component: "dynamic-component.number-field";
-  label?: string | null;
   type?: "integer" | "float" | "decimal" | null;
   min?: number | null;
   max?: number | null;
   default?: string | null; // Strapi might store numeric defaults as strings
-  required?: boolean | null;
-  placeholder?: string | null;
 }
 
 // --- Media Field Component ---
 export interface DynamicComponentMediaField extends DynamicComponentBase {
-  is_array: boolean;
   __component: "dynamic-component.media-field";
-  label?: string | null;
-  placeholder?: string | null;
-  required?: boolean | null;
-  // In Strapi, a media field within a component usually holds a relation to one or more Media items.
-  // When fetched with population, this would be a Media object or Media[].
+  // is_array is inherited from DynamicComponentBase. If a media field *always* has this explicitly defined (e.g. not optional), it could be `is_array: boolean;` here.
   // For payload, it would be the media ID(s).
-  // Let's assume for now it holds a single Media relation when populated.
   media?: Media | null; // This would be populated. For payload, it'd be an ID.
+  type?: 'image' | 'video' | 'pdf' | 'media' | 'other' | null; // Added type for media classification
 }
 
 // --- Enum Field Component ---
 export interface DynamicComponentEnumField extends DynamicComponentBase {
   __component: "dynamic-component.enum-field";
   Values?: OtherTag[] | null; // Array of { id?, tag_value? }
-  label?: string | null;
   default?: string | null;
-  placeholder?: string | null;
   type?: "single-select" | "multi-select" | null;
 }
 
 // --- Date Field Component ---
 export interface DynamicComponentDateField extends DynamicComponentBase {
   __component: "dynamic-component.date-field";
-  label?: string | null; // Corrected from lable
   // Strapi schema has "data&time", assuming it maps to "datetime" conceptually
   type?: "date" | "time" | "datetime" | "data&time" | null;
+  default?: string | null; // Dates can have defaults
 }
 
 // --- Boolean Field Component ---
 export interface DynamicComponentBooleanField extends DynamicComponentBase {
   __component: "dynamic-component.boolean-field";
-  label?: string | null;
   default?: string | null; // Strapi might store boolean default as string "true"/"false"
-  placeholder?: string | null;
 }
 
 // Union type for any component that can be in the 'from_formate' dynamic zone
