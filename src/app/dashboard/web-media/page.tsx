@@ -30,6 +30,7 @@ import {
     TableBody,
     TableCell,
 } from "@/components/ui/table";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"; // Added Accordion imports
 
 type ViewMode = 'table' | 'card';
 type SortField = 'name' | 'category' | 'createdAt' | 'updatedAt' | 'publishedAt';
@@ -78,13 +79,10 @@ export default function WebMediaPage() {
     const [sortField, setSortField] = React.useState<SortField>(() => getStoredPreference('webMediaSortField', 'createdAt'));
     const [sortOrder, setSortOrder] = React.useState<SortOrder>(() => getStoredPreference('webMediaSortOrder', 'desc'));
     
-    // Active filters for API query
-    const [categoryFilter, setCategoryFilter] = React.useState('');
-    const [nameFilter, setNameFilter] = React.useState('');
-
-    // Local state for input fields, updated on every keystroke
-    const [localCategoryFilter, setLocalCategoryFilter] = React.useState('');
     const [localNameFilter, setLocalNameFilter] = React.useState('');
+    const [activeNameFilter, setActiveNameFilter] = React.useState('');
+    const [localCategoryFilter, setLocalCategoryFilter] = React.useState('');
+    const [activeCategoryFilter, setActiveCategoryFilter] = React.useState('');
 
 
     const [userDefinedTags, setUserDefinedTags] = React.useState<string[]>(() => getStoredPreference(USER_DEFINED_TAGS_STORAGE_KEY, []));
@@ -99,8 +97,8 @@ export default function WebMediaPage() {
         pageSize,
         sortField,
         sortOrder,
-        categoryFilter: categoryFilter || null,
-        nameFilter: nameFilter || null,
+        categoryFilter: activeCategoryFilter || null,
+        nameFilter: activeNameFilter || null,
         tagsFilter: selectedFilterTags.length > 0 ? selectedFilterTags : null,
     };
     const { data: mediaDataResponse, isLoading: isLoadingMedia, isError: isMediaError, error: mediaError, refetch, isFetching } = useFetchMedia(mediaQueryOptions);
@@ -113,7 +111,7 @@ export default function WebMediaPage() {
     React.useEffect(() => { setStoredPreference('webMediaPageSize', pageSize); setCurrentPage(1); }, [pageSize]);
     React.useEffect(() => { setStoredPreference('webMediaSortField', sortField); setCurrentPage(1); }, [sortField]);
     React.useEffect(() => { setStoredPreference('webMediaSortOrder', sortOrder); setCurrentPage(1); }, [sortOrder]);
-    React.useEffect(() => { setCurrentPage(1); }, [categoryFilter, nameFilter, selectedFilterTags]);
+    React.useEffect(() => { setCurrentPage(1); }, [activeCategoryFilter, activeNameFilter, selectedFilterTags]);
 
     React.useEffect(() => {
         setStoredPreference(USER_DEFINED_TAGS_STORAGE_KEY, userDefinedTags);
@@ -128,9 +126,9 @@ export default function WebMediaPage() {
     };
 
     const applyTextFilters = () => {
-        setNameFilter(localNameFilter);
-        setCategoryFilter(localCategoryFilter);
-        // setCurrentPage(1) will be handled by the useEffect watching nameFilter and categoryFilter
+        setActiveNameFilter(localNameFilter);
+        setActiveCategoryFilter(localCategoryFilter);
+        // setCurrentPage(1) will be handled by the useEffect watching activeNameFilter and activeCategoryFilter
     };
 
     const handleAddNewUserTag = (newTag: string) => {
@@ -171,60 +169,75 @@ export default function WebMediaPage() {
 
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-lg flex items-center gap-2"><Filter className="h-5 w-5"/>Filters & Sorting</CardTitle>
+                        <CardTitle className="text-lg">Filters & Display Options</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4 pt-2">
+                        {/* Visible Filters: Name and Category */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                             <div className="relative md:col-span-1">
                                 <Label htmlFor="name-filter-input" className="text-xs text-muted-foreground">Filter by Name</Label>
-                                <Input id="name-filter-input" type="search" placeholder="Media name..." value={localNameFilter} onChange={(e) => setLocalNameFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs pr-8" disabled={isLoadingMedia || isFetching}/>
-                                {localNameFilter && (<Button variant="ghost" size="icon" className="absolute right-0 top-1/2 h-7 w-7 mt-1" onClick={() => { setLocalNameFilter(''); setNameFilter(''); }}><X className="h-4 w-4" /><span className="sr-only">Clear Name</span></Button>)}
+                                <Input id="name-filter-input" type="search" placeholder="Media name..." value={localNameFilter} onChange={(e) => setLocalNameFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs" disabled={isLoadingMedia || isFetching}/>
                             </div>
                             <div className="relative md:col-span-1">
                                 <Label htmlFor="category-filter-input" className="text-xs text-muted-foreground">Filter by Category</Label>
-                                <Input id="category-filter-input" type="search" placeholder="Category..." value={localCategoryFilter} onChange={(e) => setLocalCategoryFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs pr-8" disabled={isLoadingMedia || isFetching} />
-                                {localCategoryFilter && (<Button variant="ghost" size="icon" className="absolute right-0 top-1/2 h-7 w-7 mt-1" onClick={() => { setLocalCategoryFilter(''); setCategoryFilter(''); }}><X className="h-4 w-4" /><span className="sr-only">Clear Category</span></Button>)}
+                                <Input id="category-filter-input" type="search" placeholder="Category..." value={localCategoryFilter} onChange={(e) => setLocalCategoryFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs" disabled={isLoadingMedia || isFetching} />
                             </div>
                             <Button onClick={applyTextFilters} className="w-full md:w-auto h-9 text-xs" disabled={isLoadingMedia || isFetching}>
-                                <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Filters
+                                <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Text Filters
                             </Button>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                            <div>
-                                <Label className="text-xs text-muted-foreground">Sort By</Label>
-                                <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingMedia || isFetching}>
-                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
-                                    <SelectContent>{SORT_FIELD_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label className="text-xs text-muted-foreground">Order</Label>
-                                <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingMedia || isFetching}>
-                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
-                                    <SelectContent>{SORT_ORDER_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label className="text-xs text-muted-foreground">Items/Page</Label>
-                                <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingMedia || isFetching}>
-                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
-                                    <SelectContent>{PAGE_SIZE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </CardContent>
-                     <CardContent className="pt-3 border-t">
-                        <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-                           <TagIcon className="h-3.5 w-3.5" /> Filter by Tags (select one or more)
-                        </Label>
-                        <TagFilterControl
-                            allAvailableTags={allAvailableTagsForFilter}
-                            selectedTags={selectedFilterTags}
-                            onTagSelectionChange={handleTagSelectionChange}
-                            onAddNewTag={handleAddNewUserTag}
-                            isLoading={isLoadingMedia || isFetching}
-                            predefinedTags={PREDEFINED_TAGS_FOR_WEB_MEDIA}
-                        />
+
+                        {/* Accordion for Advanced Filters & Sorting */}
+                        <Accordion type="single" collapsible className="w-full">
+                            <AccordionItem value="advanced-filters">
+                                <AccordionTrigger>
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                        <Filter className="h-4 w-4" />
+                                        <span>Advanced Filters & Sorting</span>
+                                    </div>
+                                </AccordionTrigger>
+                                <AccordionContent className="pt-4 space-y-4">
+                                    {/* Sort Controls */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                        <div>
+                                            <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                            <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingMedia || isFetching}>
+                                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                                <SelectContent>{SORT_FIELD_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div>
+                                            <Label className="text-xs text-muted-foreground">Order</Label>
+                                            <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingMedia || isFetching}>
+                                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                                <SelectContent>{SORT_ORDER_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div>
+                                            <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                            <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingMedia || isFetching}>
+                                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                                <SelectContent>{PAGE_SIZE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    {/* Tag Filter */}
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1.5">
+                                        <TagIcon className="h-3.5 w-3.5" /> Filter by Tags (select one or more)
+                                        </Label>
+                                        <TagFilterControl
+                                            allAvailableTags={allAvailableTagsForFilter}
+                                            selectedTags={selectedFilterTags}
+                                            onTagSelectionChange={handleTagSelectionChange}
+                                            onAddNewTag={handleAddNewUserTag}
+                                            isLoading={isLoadingMedia || isFetching}
+                                            predefinedTags={PREDEFINED_TAGS_FOR_WEB_MEDIA}
+                                        />
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
                     </CardContent>
                 </Card>
 
@@ -313,15 +326,8 @@ function WebMediaPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, page
                     <div className="md:col-span-1 space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
                     <Skeleton className="h-9 w-full md:w-auto"/>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                    <div className="space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
-                    <div className="space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
-                    <div className="space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
-                </div>
-            </CardContent>
-            <CardContent className="pt-3 border-t">
-                <Skeleton className="h-5 w-1/4 mb-2" />
-                <Skeleton className="h-16 w-full" />
+                {/* Accordion Skeleton part */}
+                <Skeleton className="h-10 w-full rounded-md" /> {/* Placeholder for AccordionTrigger */}
             </CardContent>
         </Card>
         <Card><CardHeader className="pb-2"><Skeleton className="h-5 w-1/4" /></CardHeader><CardContent><Skeleton className="h-4 w-1/2 mb-1" /><Skeleton className="h-2 w-full" /></CardContent></Card>
