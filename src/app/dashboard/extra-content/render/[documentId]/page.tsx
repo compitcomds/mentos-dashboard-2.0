@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -53,7 +54,7 @@ import {
   Loader2,
   Image as ImageIcon,
   RefreshCcw,
-} from "lucide-react"; // Added RefreshCcw
+} from "lucide-react"; 
 import { format, isValid, parseISO } from "date-fns";
 import type {
   FormFormatComponent,
@@ -87,9 +88,8 @@ const getFieldName = (component: FormFormatComponent): string => {
       .toLowerCase()
       .replace(/\s+/g, "_")
       .replace(/[^a-z0-9_]/g, "");
-    return slugifiedLabel; // ID suffix removed
+    return slugifiedLabel; 
   }
-  // Fallback if no label
   return `component_${component.__component.replace(
     "dynamic-component.",
     ""
@@ -100,7 +100,6 @@ const getDefaultValueForComponent = (
   componentType: string,
   component?: FormFormatComponent
 ): any => {
-  // Check if component itself is defined before trying to access properties on it
   const compDef = component as FormFormatComponent | undefined;
 
   switch (componentType) {
@@ -114,11 +113,12 @@ const getDefaultValueForComponent = (
         ? Number(numDefault)
         : null;
     case "dynamic-component.media-field":
-      return null; // Media field stores string documentId or array of documentIds
+      return null; 
     case "dynamic-component.enum-field":
-      if ((compDef as DynamicComponentEnumField)?.type === "multi-select")
+      const enumCompDef = compDef as DynamicComponentEnumField | undefined;
+      if (enumCompDef?.type === "multi-select")
         return [];
-      return (compDef as DynamicComponentEnumField)?.default || null;
+      return enumCompDef?.default || null;
     case "dynamic-component.date-field":
       const dateDefault = (compDef as DynamicComponentDateField)?.default;
       return dateDefault ? new Date(dateDefault) : null;
@@ -184,12 +184,10 @@ const generateFormSchemaAndDefaults = (
       case "dynamic-component.number-field":
         {
           const comp = component as DynamicComponentNumberField;
-          let numberSchema = z.number();
-
-          numberSchema = z.preprocess(
-            (val) => Number(val),
-            z.number({ required_error: "Required" })
-          ) as unknown as z.ZodNumber;
+          let numberSchema = z.preprocess(
+            (val) => val === "" || val === null || val === undefined ? null : Number(val),
+            z.number().nullable() 
+          ) as z.ZodNumber | z.ZodNullable<z.ZodNumber>;
 
           if (comp.min !== null && comp.min !== undefined) {
             numberSchema = numberSchema.min(comp.min);
@@ -197,7 +195,12 @@ const generateFormSchemaAndDefaults = (
           if (comp.max !== null && comp.max !== undefined) {
             numberSchema = numberSchema.max(comp.max);
           }
-          baseSchema = numberSchema; // not numSchema
+          if (comp.required) {
+            baseSchema = numberSchema.refine(val => val !== null, { message: `${comp.label || "Number"} is required.`});
+          } else {
+            baseSchema = numberSchema.optional();
+          }
+          
           componentDefaultValue =
             comp.default !== undefined &&
             comp.default !== null &&
@@ -212,8 +215,8 @@ const generateFormSchemaAndDefaults = (
           baseSchema = z
             .number({
               required_error: `${component.label || "Media"} is required.`,
-            })
-            .min(1);
+              invalid_type_error: `${component.label || "Media"} must be a number (ID).`
+            });
         componentDefaultValue = null;
         break;
       case "dynamic-component.enum-field":
@@ -252,6 +255,7 @@ const generateFormSchemaAndDefaults = (
         if (component.required)
           baseSchema = z.date({
             required_error: `${component.label || "Date"} is required.`,
+            invalid_type_error: `${component.label || "Date"} must be a valid date.`
           });
         componentDefaultValue = (component as DynamicComponentDateField).default
           ? new Date((component as DynamicComponentDateField).default!)
@@ -259,13 +263,15 @@ const generateFormSchemaAndDefaults = (
         break;
       case "dynamic-component.boolean-field":
         baseSchema = z.boolean().optional();
-        if (component.required)
-          baseSchema = z.boolean({
-            required_error: `${component.label || "Field"} is required.`,
-          });
-        const boolDefaultStr = (component as DynamicComponentBooleanField)
-          .default;
-        componentDefaultValue = boolDefaultStr === "true" || false;
+        if (component.required && component.default !== "true" && component.default !== "false") {
+            baseSchema = z.boolean({
+                required_error: `${component.label || "Field"} is required.`
+            });
+        } else if (component.required) {
+             baseSchema = z.boolean(); // Required, will use default if provided
+        }
+        const boolDefaultStr = (component as DynamicComponentBooleanField).default;
+        componentDefaultValue = boolDefaultStr === "true" ? true : boolDefaultStr === "false" ? false : false; // Default to false if not explicitly true/false string
         break;
       default:
         baseSchema = z.any().optional();
@@ -273,7 +279,11 @@ const generateFormSchemaAndDefaults = (
     }
 
     if (component.is_array) {
-      schemaShape[fieldName] = z.array(baseSchema).optional().default([]);
+      let arraySchema = z.array(baseSchema);
+      if (component.required) {
+        arraySchema = arraySchema.nonempty({message: `${component.label || "List"} cannot be empty.`});
+      }
+      schemaShape[fieldName] = arraySchema.optional().default([]);
       defaultValues[fieldName] = [];
     } else {
       schemaShape[fieldName] = baseSchema;
@@ -290,11 +300,9 @@ const generateRandomHandle = (length = 12) => {
   for (let i = 0; i < length; i++) {
     result += characters.charAt(Math.floor(Math.random() * characters.length));
   }
-  // Ensure it starts with a letter if the regex requires it (current one doesn't strictly, but good practice)
   if (!/^[a-z]/.test(result) && result.length > 0) {
-    result = "h" + result.substring(1); // Prepend 'h' if starts with number
+    result = "h" + result.substring(1); 
   } else if (result.length === 0) {
-    // Should not happen with length=12, but safe
     result =
       "h" +
       Array(length - 1)
@@ -531,15 +539,18 @@ export default function RenderExtraContentPage() {
     setIsMediaSelectorOpen(true);
   };
 
-  const commonErrorHandling = (error: any, submittedHandle: string) => {
-    const errorMessageString = error.message || ""; // error is now a generic Error
+  const commonErrorHandling = (error: Error, submittedHandle: string) => { // Changed type to Error
+    const errorMessageString = error.message || ""; 
     const isCreateAction = action === "create";
 
     if (errorMessageString.startsWith("DUPLICATE_HANDLE_ERROR:")) {
-      methods.setError("handle", {
-        type: "manual",
-        message: "This handle is already taken. Please choose a different one.",
-      });
+      const actualHandleInError = errorMessageString.split("'")[1]; // Extract handle from message
+      if (actualHandleInError === submittedHandle) {
+        methods.setError("handle", {
+          type: "manual",
+          message: "This handle is already taken. Please choose a different one.",
+        });
+      }
       toast({
         variant: "destructive",
         title: "Duplicate Handle",
@@ -593,7 +604,7 @@ export default function RenderExtraContentPage() {
       methods.setValue("handle", currentSubmitHandle, {
         shouldValidate: true,
         shouldDirty: true,
-      }); // Update form state for user
+      }); 
     }
 
     const { handle, ...dynamicData } = data;
@@ -639,7 +650,7 @@ export default function RenderExtraContentPage() {
           toast({ title: "Success", description: "Data entry created." });
           router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`);
         },
-        onError: (error: any) => commonErrorHandling(error, payload.handle),
+        onError: (error: Error) => commonErrorHandling(error, payload.handle),
       });
     } else if (action === "edit" && metaDataEntryDocumentIdParam) {
       const updatePayload: Partial<
@@ -666,7 +677,7 @@ export default function RenderExtraContentPage() {
               `/dashboard/extra-content/data/${metaFormatDocumentId}`
             );
           },
-          onError: (error: any) =>
+          onError: (error: Error) =>
             commonErrorHandling(error, updatePayload.handle),
         }
       );
@@ -699,7 +710,6 @@ export default function RenderExtraContentPage() {
           <CardContent className="space-y-6">
             <div className="space-y-2">
               {" "}
-              {/* Skeleton for Handle */}
               <Skeleton className="h-4 w-1/4" />
               <Skeleton className="h-10 w-full" />
             </div>
@@ -900,7 +910,7 @@ export default function RenderExtraContentPage() {
                         <ArrayFieldRenderer
                           key={fieldName}
                           fieldName={fieldName as any}
-                          componentDefinition={component}
+                          componentDefinition={component as FormFormatComponent}
                           control={methods.control}
                           methods={methods}
                           isSubmitting={isSubmitting}
@@ -1280,7 +1290,7 @@ export default function RenderExtraContentPage() {
                 typeof currentMediaFieldTarget === "string"
                   ? currentMediaFieldTarget
                   : currentMediaFieldTarget.fieldName,
-                !!currentMediaFieldDefinition.is_array, // Pass boolean indicating if field is array type
+                !!currentMediaFieldDefinition.is_array, 
                 typeof currentMediaFieldTarget !== "string"
                   ? currentMediaFieldTarget.index
                   : undefined
@@ -1291,3 +1301,5 @@ export default function RenderExtraContentPage() {
     </div>
   );
 }
+
+    
