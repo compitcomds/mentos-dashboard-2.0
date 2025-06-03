@@ -25,23 +25,23 @@ import { useCurrentUser } from './user';
 
 
 const MEDIA_QUERY_KEY = (userKey?: string, options?: Omit<FetchMediaFilesParams, 'userTenentId'>) =>
-    ['mediaFiles', userKey || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder, options?.categoryFilter, options?.nameFilter];
+    ['mediaFiles', userKey || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder, options?.categoryFilter, options?.nameFilter, options?.tagsFilter?.join(',')];
 
 const MEDIA_DETAIL_QUERY_KEY = (id: number) => ['mediaFileDetail', id];
 
 export function useFetchMedia(options?: Omit<FetchMediaFilesParams, 'userTenentId'>) {
     const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
     const userTenentId = currentUser?.tenent_id;
-    const { page, pageSize, sortField, sortOrder, categoryFilter, nameFilter } = options || {};
+    const { page, pageSize, sortField, sortOrder, categoryFilter, nameFilter, tagsFilter } = options || {};
 
     return useQuery<FindMany<CombinedMediaData>, Error>({
-        queryKey: MEDIA_QUERY_KEY(userTenentId, { page, pageSize, sortField, sortOrder, categoryFilter, nameFilter }),
+        queryKey: MEDIA_QUERY_KEY(userTenentId, { page, pageSize, sortField, sortOrder, categoryFilter, nameFilter, tagsFilter }),
         queryFn: () => {
             if (!userTenentId) {
                 console.warn("useFetchMedia: User key not provided. Returning empty result.");
                 return Promise.resolve({ data: [], meta: { pagination: { page: 1, pageSize: pageSize || 10, pageCount: 0, total: 0 } } });
             }
-            return fetchMediaFiles({ userTenentId, page, pageSize, sortField, sortOrder, categoryFilter, nameFilter });
+            return fetchMediaFiles({ userTenentId, page, pageSize, sortField, sortOrder, categoryFilter, nameFilter, tagsFilter });
         },
         enabled: !!userTenentId && !isLoadingUser,
         staleTime: 1000 * 60 * 2,
@@ -87,7 +87,7 @@ export function useUploadMediaMutation() {
                 tenent_id: userKey,
                 media: uploadedFile.id,
                 category: category || null,
-                tags: tags || [], // Ensure tags is an array, defaults to empty if null/undefined
+                tags: tags || [], 
             };
             console.log(`[useUploadMediaMutation] Payload for createWebMedia service:`, createPayload);
 

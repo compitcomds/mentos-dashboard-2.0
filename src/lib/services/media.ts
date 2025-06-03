@@ -29,11 +29,12 @@ export interface FetchMediaFilesParams {
     sortField?: string;
     sortOrder?: 'asc' | 'desc';
     categoryFilter?: string | null;
-    nameFilter?: string | null; // For consistency with other services, though filtering name on server might be complex for WebMedia.name + Media.name
+    nameFilter?: string | null;
+    tagsFilter?: string[] | null; // Added for tag filtering
 }
 
 export async function fetchMediaFiles(params: FetchMediaFilesParams): Promise<FindMany<CombinedMediaData>> {
-    const { userTenentId, page = 1, pageSize = 10, sortField = 'createdAt', sortOrder = 'desc', categoryFilter, nameFilter } = params;
+    const { userTenentId, page = 1, pageSize = 10, sortField = 'createdAt', sortOrder = 'desc', categoryFilter, nameFilter, tagsFilter } = params;
 
     if (!userTenentId) {
         console.error('[Service fetchMediaFiles]: userTenentId is missing. Cannot fetch media.');
@@ -56,10 +57,19 @@ export async function fetchMediaFiles(params: FetchMediaFilesParams): Promise<Fi
         strapiParams['filters[category][$containsi]'] = categoryFilter;
     }
     if (nameFilter) {
-        // Filtering by name might need to target WebMedia.name or Media.name (file name)
-        // For simplicity, let's assume we filter by WebMedia.name here.
-        // If Strapi supports OR filters easily or if you have a combined searchable field, that would be better.
         strapiParams['filters[name][$containsi]'] = nameFilter;
+    }
+    if (tagsFilter && tagsFilter.length > 0) {
+      // Assuming 'tags' is a component and 'tag_value' is a field within that component
+      // Strapi's $in filter for components requires an array of filters for each tag
+      // filters[relation][component_field][$in]=value
+      tagsFilter.forEach((tag, index) => {
+          strapiParams[`filters[tags][tag_value][$in][${index}]`] = tag;
+      });
+      // Note: This creates an OR condition for tags (matches if ANY of the tags are present).
+      // If you need AND (matches if ALL tags are present), Strapi's filtering might require
+      // multiple `$and` conditions or a different approach like a custom endpoint.
+      // For now, `$in` is implemented for "any of these tags".
     }
 
 
