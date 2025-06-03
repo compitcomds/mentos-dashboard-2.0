@@ -142,7 +142,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                 <FormLabel className="sr-only">{label} Item {index + 1}</FormLabel>
                 <FormControl>
                   {(() => {
-                    const currentComponentDef = componentDefinition as FormFormatComponent; // Use a specific cast for the switch
+                    const currentComponentDef = componentDefinition; 
                     switch (currentComponentDef.__component) {
                         case 'dynamic-component.text-field':
                           const textComp = currentComponentDef as DynamicComponentTextField;
@@ -267,7 +267,7 @@ function SortableItem<TFieldValues extends FieldValues = FieldValues>({
                             </div>
                           );
                       default:
-                        // const _exhaustiveCheck: never = currentComponentDef; // For exhaustive type checking
+                        const _exhaustiveCheck: never = currentComponentDef; 
                         return <Input placeholder={`Unsupported: ${(currentComponentDef as any).__component}`} {...field} value={field.value ?? ''} disabled />;
                     }
                   })()}
@@ -370,7 +370,7 @@ export default function ArrayFieldRenderer<TFieldValues extends FieldValues = Fi
                 id={item.id}
                 index={index}
                 fieldName={fieldName}
-                componentDefinition={componentDefinition as FormFormatComponent}
+                componentDefinition={componentDefinition} 
                 control={control}
                 methods={methods}
                 isSubmitting={isSubmitting}
