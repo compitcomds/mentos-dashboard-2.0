@@ -149,15 +149,18 @@ const generateFormSchemaAndDefaults = (metaFormat: MetaFormat | null | undefined
   return { schema: z.object(schemaShape), defaultValues };
 };
 
-const generateRandomHandle = () => {
-  const now = new Date();
-  const timestamp = now.toISOString()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/--+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  const randomSuffix = Math.random().toString(36).substring(2, 7);
-  return `${timestamp}-${randomSuffix}`;
+const generateRandomHandle = (length = 12) => {
+  const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  // Ensure it starts with a letter for better practice, though not strictly required by the regex
+  if (!/^[a-z]/.test(result)) {
+    result = 'h' + result.substring(1); // Prepend 'h' if it starts with a number
+  }
+  // Replace sequences of hyphens if any were allowed in characters (currently not)
+  return result.replace(/-+/g, '-').replace(/^-+|-+$/g, '');
 };
 
 
