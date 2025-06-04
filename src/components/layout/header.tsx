@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import NotificationBell from './notification-bell'; // Import NotificationBell
 
 
 interface MenuItem {
@@ -106,10 +107,12 @@ export default function Header({ userName, onLogout, menuItems }: HeaderProps) {
           </Sheet>
           <Breadcrumbs />
       </div>
-      <div className="flex items-center gap-4 lg:gap-2 lg:gap-4">
+      <div className="flex items-center gap-2 lg:gap-4">
         <div className="text-xs text-muted-foreground hidden sm:block capitalize">
           Environment: {environment}
         </div>
+
+        <NotificationBell /> {/* Add NotificationBell here */}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
