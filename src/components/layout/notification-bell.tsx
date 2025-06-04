@@ -4,7 +4,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, Info, AlertTriangle, CheckCircle, XCircle, ExternalLink, MailWarning, CheckCheck, CircleSlash } from 'lucide-react';
+import { Bell, Info, AlertTriangle, CheckCircle, XCircle, ExternalLink, MailWarning, CheckCheck, CircleSlash, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -45,10 +45,12 @@ export default function NotificationBell() {
   const markAllAsReadMutation = useMarkAllNotificationsAsReadMutation();
 
   const notifications = notificationsResponse?.data || [];
-  const unreadCount = notifications.filter(n => !n.attributes.isRead).length; // Assuming initial fetch is for unread
+  // Robust check for unread count
+  const unreadCount = notifications.filter(n => n && n.attributes && n.attributes.isRead === false).length;
 
   const handleNotificationClick = (notification: Notification) => {
-    if (!notification.attributes.isRead) {
+    // Ensure attributes and isRead exist before checking
+    if (notification && notification.attributes && notification.attributes.isRead === false) {
       markAsReadMutation.mutate({ notificationId: notification.id });
     }
     if (notification.attributes.actionUrl) {
@@ -109,36 +111,40 @@ export default function NotificationBell() {
             </DropdownMenuItem>
           )}
           {!isLoading && !isError && notifications.length > 0 && (
-            notifications.map((notification) => (
-              <DropdownMenuItem
-                key={notification.id}
-                onClick={() => handleNotificationClick(notification)}
-                className={cn(
-                  "flex items-start space-x-3 p-3 cursor-pointer hover:bg-accent",
-                  !notification.attributes.isRead && "bg-primary/5 hover:bg-primary/10"
-                )}
-              >
-                <div className="flex-shrink-0 mt-0.5">
-                  {getNotificationIcon(notification.attributes.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {notification.attributes.title}
-                  </p>
-                  {notification.attributes.message && (
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      {notification.attributes.message}
-                    </p>
+            notifications.map((notification) => {
+              // Safe check for rendering read/unread status
+              const isUnread = notification && notification.attributes && notification.attributes.isRead === false;
+              return (
+                <DropdownMenuItem
+                  key={notification.id}
+                  onClick={() => handleNotificationClick(notification)}
+                  className={cn(
+                    "flex items-start space-x-3 p-3 cursor-pointer hover:bg-accent",
+                    isUnread && "bg-primary/5 hover:bg-primary/10"
                   )}
-                  <p className="text-xs text-muted-foreground/80 mt-0.5">
-                    {notification.attributes.createdAt ? formatDistanceToNow(new Date(notification.attributes.createdAt), { addSuffix: true }) : 'Recently'}
-                  </p>
-                </div>
-                {!notification.attributes.isRead && (
-                   <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-1" title="Unread"></div>
-                )}
-              </DropdownMenuItem>
-            ))
+                >
+                  <div className="flex-shrink-0 mt-0.5">
+                    {getNotificationIcon(notification.attributes.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {notification.attributes.title}
+                    </p>
+                    {notification.attributes.message && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {notification.attributes.message}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground/80 mt-0.5">
+                      {notification.attributes.createdAt ? formatDistanceToNow(new Date(notification.attributes.createdAt), { addSuffix: true }) : 'Recently'}
+                    </p>
+                  </div>
+                  {isUnread && (
+                     <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-1" title="Unread"></div>
+                  )}
+                </DropdownMenuItem>
+              )
+            })
           )}
         </ScrollArea>
         {notifications.length > 0 && (
