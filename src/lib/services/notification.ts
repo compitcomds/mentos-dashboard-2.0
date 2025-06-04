@@ -108,14 +108,12 @@ export const markNotificationAsRead = async (notificationId: number): Promise<No
   }
 };
 
-const markNotificationAsReadService = markNotificationAsRead;
-
 export const markAllNotificationsAsRead = async (userId: number, userTenentId: string): Promise<void> => {
   console.log(`[markAllNotificationsAsRead] Attempting for user ${userId}, tenent ${userTenentId}.`);
   
   // Fetch all unread notifications. Strapi's limit: -1 often means all, but it can be capped.
-  // If a very large number of notifications is expected, consider paginated fetching and updating.
-  const unreadNotificationsResponse = await getNotificationsService({ userId, userTenentId, isRead: false, limit: -1 });
+  // Using the getNotifications function defined in this file.
+  const unreadNotificationsResponse = await getNotifications({ userId, userTenentId, isRead: false, limit: -1 });
 
   const unreadNotifications = unreadNotificationsResponse.data;
 
@@ -127,7 +125,7 @@ export const markAllNotificationsAsRead = async (userId: number, userTenentId: s
   console.log(`[markAllNotificationsAsRead] Found ${unreadNotifications.length} unread notifications to mark as read for user ${userId}. Processing one by one...`);
 
   const updatePromises = unreadNotifications.map(notification =>
-    markNotificationAsReadService(notification.id) // Service updates one by one
+    markNotificationAsRead(notification.id) // Using markNotificationAsRead from this file
   );
 
   try {
@@ -142,14 +140,10 @@ export const markAllNotificationsAsRead = async (userId: number, userTenentId: s
       throw new Error(`Failed to mark all notifications as read. ${failedUpdates} of ${results.length} failed.`);
     }
   } catch (error) {
-    // This catch block will handle errors from Promise.allSettled if re-thrown or other errors during processing.
     console.error(`[markAllNotificationsAsRead] Overall error marking all notifications as read for user ${userId}:`, error);
-    // The error from Promise.allSettled (if rethrown due to failedUpdates > 0) will be propagated.
-    // If no rethrow, ensure this catch block throws a generic error if needed.
     if (!(error instanceof Error && error.message.startsWith("Failed to mark all notifications as read."))) {
         throw new Error("An unexpected error occurred while marking all notifications as read.");
     }
-    throw error; // Re-throw the specific error from the loop or the new one
+    throw error; 
   }
 };
-
