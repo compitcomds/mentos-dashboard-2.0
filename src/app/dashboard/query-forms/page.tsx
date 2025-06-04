@@ -75,20 +75,25 @@ const MediaPreview: React.FC<{ mediaItem: Media }> = ({ mediaItem }) => {
       return url.startsWith('http') ? url : `${apiBaseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     };
   
-    const url = getFullUrl(mediaItem.url);
-    const thumbUrl = getFullUrl(mediaItem.formats?.thumbnail?.url) || url;
+    const mainUrl = getFullUrl(mediaItem.url);
+    const thumbUrl = getFullUrl(mediaItem.formats?.thumbnail?.url) || mainUrl;
   
-    if (!url) return <div className="text-xs text-muted-foreground p-1 flex items-center justify-center bg-muted rounded h-16 w-16"><FileText className="w-6 h-6" /></div>;
-  
-    if (mediaItem.mime?.startsWith('image/')) {
-      return <img src={thumbUrl!} alt={mediaItem.alternativeText || mediaItem.name || 'media'} className="w-16 h-16 object-cover rounded border" />;
+    if (!thumbUrl && !mainUrl) { // If both main URL and thumb URL are unavailable
+      return <div className="text-xs text-muted-foreground p-1 flex items-center justify-center bg-muted rounded h-16 w-16"><FileText className="w-6 h-6" /></div>;
     }
-    if (mediaItem.mime?.startsWith('video/')) {
+    
+    const displaySrc = thumbUrl || mainUrl; // Prioritize thumbUrl, fallback to main url
+
+    if (mediaItem.mime?.startsWith('image/') && displaySrc) {
+      return <img src={displaySrc} alt={mediaItem.alternativeText || mediaItem.name || 'media'} className="w-16 h-16 object-cover rounded border" />;
+    }
+    if (mediaItem.mime?.startsWith('video/') && displaySrc) {
       return <div className="w-16 h-16 flex items-center justify-center bg-muted rounded border"><Video className="w-8 h-8 text-purple-500" /></div>;
     }
-    if (mediaItem.mime === 'application/pdf') {
+    if (mediaItem.mime === 'application/pdf' && displaySrc) {
       return <div className="w-16 h-16 flex items-center justify-center bg-muted rounded border"><FileText className="w-8 h-8 text-red-500" /></div>;
     }
+    // Fallback for other file types or if displaySrc is somehow still null (though previous check should prevent it)
     return <div className="w-16 h-16 flex items-center justify-center bg-muted rounded border"><FileText className="w-8 h-8 text-gray-500" /></div>;
 };
 
@@ -390,7 +395,7 @@ export default function QueryFormsPage() {
                                     {selectedQueryForm.media.map(mediaItem => (
                                         <a 
                                           key={mediaItem.id} 
-                                          href={(process.env.NEXT_PUBLIC_API_BASE_URL_no_api || "") + (mediaItem.url || '')}
+                                          href={mediaItem.url ? ((process.env.NEXT_PUBLIC_API_BASE_URL_no_api || "") + mediaItem.url) : '#'}
                                           target="_blank" 
                                           rel="noopener noreferrer" 
                                           className="block border rounded-lg p-2 hover:shadow-lg transition-shadow text-center group"
