@@ -61,10 +61,10 @@ const SORT_ORDER_OPTIONS_QUERY: { label: string; value: SortOrderQuery }[] = [
 
 const formatBytes = (bytes?: number | null, decimals = 2) => {
     if (bytes === null || bytes === undefined || bytes <= 0) return '0 Bytes';
-    const k = 1024;
+    const k = 1024; // Kilobytes for media_size_Kb
     const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizes = ['KB', 'MB', 'GB', 'TB']; // Start from KB
+    const i = bytes === 0 ? 0 : Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 };
 
@@ -390,7 +390,7 @@ export default function QueryFormsPage() {
                                     {selectedQueryForm.media.map(mediaItem => (
                                         <a 
                                           key={mediaItem.id} 
-                                          href={mediaItem.url} // Assume mediaItem.url is the full URL
+                                          href={(process.env.NEXT_PUBLIC_API_BASE_URL_no_api || "") + (mediaItem.url || '')}
                                           target="_blank" 
                                           rel="noopener noreferrer" 
                                           className="block border rounded-lg p-2 hover:shadow-lg transition-shadow text-center group"
@@ -444,9 +444,9 @@ export default function QueryFormsPage() {
 const DetailItem: React.FC<{ label: string; value?: string | number | null; preWrap?: boolean; badge?: true | "outline" | "secondary"; capitalize?: boolean }> = ({ label, value, preWrap = false, badge, capitalize }) => {
     if (value === null || value === undefined || String(value).trim() === '') return null;
     return (
-        <div className="grid grid-cols-3 gap-2 items-start py-1 border-b border-border/60 last:border-b-0">
-            <strong className="col-span-1 text-muted-foreground font-medium">{label}:</strong>
-            <div className={`col-span-2 ${preWrap ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
+        <div className="grid grid-cols-3 gap-2 items-start py-1.5 border-b border-border/60 last:border-b-0">
+            <strong className="col-span-1 text-muted-foreground font-medium text-xs sm:text-sm">{label}:</strong>
+            <div className={`col-span-2 ${preWrap ? 'whitespace-pre-wrap break-words' : 'truncate'} text-xs sm:text-sm`}>
                 {badge ? <Badge variant={badge === true ? 'default' : badge} className={capitalize ? 'capitalize' : ''}>{String(value)}</Badge> : String(value)}
             </div>
         </div>
@@ -488,3 +488,4 @@ function QueryFormsPageSkeleton({ viewMode, pageSize }: { viewMode: ViewModeQuer
       </>
     );
 }
+
