@@ -23,7 +23,7 @@ import type { Notification, NotificationType } from '@/types/notification';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
-const getNotificationIcon = (type: NotificationType): React.ReactElement => {
+const getNotificationIcon = (type?: NotificationType): React.ReactElement => { // Allow type to be undefined
   switch (type) {
     case 'info':
       return <Info className="h-4 w-4 text-blue-500" />;
@@ -33,8 +33,10 @@ const getNotificationIcon = (type: NotificationType): React.ReactElement => {
       return <XCircle className="h-4 w-4 text-red-500" />;
     case 'success':
       return <CheckCircle className="h-4 w-4 text-green-500" />;
-    default:
-      return <Info className="h-4 w-4 text-gray-500" />;
+    case 'custom': // Explicitly handle custom if needed, or let it fall to default
+      return <Info className="h-4 w-4 text-purple-500" />; // Example for custom type
+    default: // Handles undefined or any other unexpected type
+      return <Info className="h-4 w-4 text-gray-500" />; // Default/fallback icon
   }
 };
 
@@ -113,7 +115,11 @@ export default function NotificationBell() {
           {!isLoading && !isError && notifications.length > 0 && (
             notifications.map((notification) => {
               // Safe check for rendering read/unread status
-              const isUnread = notification && notification.attributes && notification.attributes.isRead === false;
+              if (!notification || !notification.attributes) {
+                // Skip rendering this notification if essential data is missing
+                return null; 
+              }
+              const isUnread = notification.attributes.isRead === false;
               return (
                 <DropdownMenuItem
                   key={notification.id}
@@ -176,3 +182,4 @@ export default function NotificationBell() {
     </DropdownMenu>
   );
 }
+
