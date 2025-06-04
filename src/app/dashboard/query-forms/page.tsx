@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -22,7 +23,7 @@ import {
   Alert,
   AlertDescription as AlertDescriptionComponent,
   AlertTitle,
-} from "@/components/ui/alert"; // Aliased AlertDescription
+} from "@/components/ui/alert"; 
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   useGetQueryForms,
@@ -37,7 +38,7 @@ import {
   List,
   Eye,
   FileText,
-  Image as ImageIconLucide,
+  ImageIcon as ImageIconLucide,
   Video,
   Search,
   X,
@@ -47,6 +48,8 @@ import {
   Paperclip,
   Code2,
   User,
+  CalendarIcon,
+  DownloadCloud,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import {
@@ -84,6 +87,10 @@ import {
 } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { toast } from "@/hooks/use-toast";
 
 type ViewModeQuery = "card" | "table";
 type SortFieldQuery = "name" | "email" | "type" | "group_id" | "createdAt";
@@ -94,30 +101,24 @@ const DEFAULT_PAGE_SIZE_QUERY_CARD = 9;
 const QUERY_FORM_TYPES_FILTER = ["contact", "career", "event", "membership"];
 
 const PAGE_SIZE_OPTIONS_QUERY = [
-  { label: "9 per page (Card)", value: "9" },
-  { label: "10 per page (Table)", value: "10" },
-  { label: "12 per page", value: "12" },
-  { label: "20 per page", value: "20" },
-  { label: "24 per page", value: "24" },
-  { label: "50 per page", value: "50" },
+  { label: "9 per page (Card)", value: "9" }, { label: "10 per page (Table)", value: "10" },
+  { label: "12 per page", value: "12" }, { label: "20 per page", value: "20" },
+  { label: "24 per page", value: "24" }, { label: "50 per page", value: "50" },
 ];
 const SORT_FIELD_OPTIONS_QUERY: { label: string; value: SortFieldQuery }[] = [
-  { label: "Name", value: "name" },
-  { label: "Email", value: "email" },
-  { label: "Type", value: "type" },
-  { label: "Group ID", value: "group_id" },
+  { label: "Name", value: "name" }, { label: "Email", value: "email" },
+  { label: "Type", value: "type" }, { label: "Group ID", value: "group_id" },
   { label: "Submitted At", value: "createdAt" },
 ];
 const SORT_ORDER_OPTIONS_QUERY: { label: string; value: SortOrderQuery }[] = [
-  { label: "Ascending", value: "asc" },
-  { label: "Descending", value: "desc" },
+  { label: "Ascending", value: "asc" }, { label: "Descending", value: "desc" },
 ];
 
 const formatBytes = (bytes?: number | null, decimals = 2) => {
   if (bytes === null || bytes === undefined || bytes <= 0) return "0 Bytes";
-  const k = 1024; // Kilobytes for media_size_Kb
+  const k = 1024; 
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["KB", "MB", "GB", "TB"]; // Start from KB
+  const sizes = ["KB", "MB", "GB", "TB"]; 
   const i = bytes === 0 ? 0 : Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
 };
@@ -135,15 +136,13 @@ const MediaPreview: React.FC<{ mediaItem: Media }> = ({ mediaItem }) => {
   const thumbUrl = getFullUrl(mediaItem.formats?.thumbnail?.url) || mainUrl;
 
   if (!thumbUrl && !mainUrl) {
-    // If both main URL and thumb URL are unavailable
     return (
       <div className="text-xs text-muted-foreground p-1 flex items-center justify-center bg-muted rounded h-16 w-16">
         <FileText className="w-6 h-6" />
       </div>
     );
   }
-
-  const displaySrc = thumbUrl || mainUrl; // Prioritize thumbUrl, fallback to main url
+  const displaySrc = thumbUrl || mainUrl;
 
   if (mediaItem.mime?.startsWith("image/") && displaySrc) {
     return (
@@ -168,7 +167,6 @@ const MediaPreview: React.FC<{ mediaItem: Media }> = ({ mediaItem }) => {
       </div>
     );
   }
-  // Fallback for other file types or if displaySrc is somehow still null (though previous check should prevent it)
   return (
     <div className="w-16 h-16 flex items-center justify-center bg-muted rounded border">
       <FileText className="w-8 h-8 text-gray-500" />
@@ -314,7 +312,16 @@ export default function QueryFormsPage() {
   const [localGroupIdFilter, setLocalGroupIdFilter] = React.useState("");
   const [activeGroupIdFilter, setActiveGroupIdFilter] = React.useState<
     string | null
-  >(null);
+  >(() => getStoredPreference("queryFormGroupIdFilter", null));
+
+
+  // State for CSV Download Dialog
+  const [isDownloadDialogOpen, setIsDownloadDialogOpen] = React.useState(false);
+  const [downloadGroupId, setDownloadGroupId] = React.useState(activeGroupIdFilter || "");
+  const [downloadDateFrom, setDownloadDateFrom] = React.useState<Date | undefined>();
+  const [downloadDateTo, setDownloadDateTo] = React.useState<Date | undefined>();
+  const [isDownloadingCsv, setIsDownloadingCsv] = React.useState(false);
+
 
   const queryFormOptions: UseGetQueryFormsOptions = {
     page: currentPage,
@@ -356,7 +363,10 @@ export default function QueryFormsPage() {
     setCurrentPage(1);
   }, [selectedTypeFilter]);
   React.useEffect(() => {
+    setStoredPreference("queryFormGroupIdFilter", activeGroupIdFilter);
     setCurrentPage(1);
+    // Pre-fill download group ID when active filter changes
+    if (activeGroupIdFilter) setDownloadGroupId(activeGroupIdFilter);
   }, [activeGroupIdFilter]);
 
   const handleViewDetails = (queryForm: QueryForm) => {
@@ -370,12 +380,136 @@ export default function QueryFormsPage() {
     );
   };
 
+  // Function to escape CSV cell content
+  const escapeCsvCell = (cellData: any): string => {
+    if (cellData === null || cellData === undefined) return "";
+    const stringVal = String(cellData);
+    // If the string contains a comma, double quote, or newline, wrap it in double quotes
+    // and escape any existing double quotes by doubling them up.
+    if (stringVal.includes(",") || stringVal.includes('"') || stringVal.includes("\n")) {
+      return `"${stringVal.replace(/"/g, '""')}"`;
+    }
+    return stringVal;
+  };
+
+  const handleDownloadCsv = async () => {
+    if (!downloadGroupId.trim()) {
+      toast({ title: "Group ID Required", description: "Please enter a Group ID to download.", variant: "destructive" });
+      return;
+    }
+    setIsDownloadingCsv(true);
+    try {
+      // Fetch all data for the given group ID and date range
+      // Using a very large page size to attempt to get all records.
+      // For truly large datasets, server-side CSV generation or iterative fetching would be better.
+      const fetchAllParams: UseGetQueryFormsOptions = {
+        group_id: downloadGroupId.trim(),
+        dateFrom: downloadDateFrom,
+        dateTo: downloadDateTo,
+        pageSize: 1000, // Fetch up to 1000 records, adjust if needed
+        page: 1,
+        sortField: 'createdAt', // Or a more relevant sort for export
+        sortOrder: 'asc',
+      };
+      // Directly use the service function with specific parameters for download
+      const { getQueryForms: getQueryFormsService } = await import('@/lib/services/query-form');
+      const { data: currentUser } = await import('@/lib/queries/user').then(m => m.useCurrentUser()); // Get current user for tenent_id
+
+      if (!currentUser?.tenent_id) {
+          toast({ title: "Error", description: "User information not available for download.", variant: "destructive" });
+          setIsDownloadingCsv(false);
+          return;
+      }
+
+      const response = await getQueryFormsService({
+        ...fetchAllParams,
+        userTenentId: currentUser.tenent_id
+      });
+      const dataToExport = response.data;
+
+      if (!dataToExport || dataToExport.length === 0) {
+        toast({ title: "No Data", description: "No query forms found for the selected Group ID and date range.", variant: "default" });
+        setIsDownloadingCsv(false);
+        return;
+      }
+
+      // Dynamically determine headers from other_meta
+      const otherMetaKeys = new Set<string>();
+      dataToExport.forEach(item => {
+        if (item.other_meta && typeof item.other_meta === 'object') {
+          Object.keys(item.other_meta).forEach(key => otherMetaKeys.add(key));
+        }
+      });
+      const sortedOtherMetaKeys = Array.from(otherMetaKeys).sort();
+
+      const headers = [
+        "ID", "Document ID", "Name", "Email", "Description", "Type", "Group ID",
+        "Submitted At", "Published At", "Media Count", "Media Filenames", "Media Total Size (KB)",
+        ...sortedOtherMetaKeys
+      ];
+
+      const csvRows = [headers.join(",")];
+
+      dataToExport.forEach(item => {
+        const mediaCount = item.media?.length || 0;
+        const mediaFilenames = item.media?.map(m => m.name || 'unnamed_file').join('; ') || "";
+        const mediaTotalSizeKb = item.media_size_Kb || 0;
+
+        const row = [
+          escapeCsvCell(item.id),
+          escapeCsvCell(item.documentId),
+          escapeCsvCell(item.name),
+          escapeCsvCell(item.email),
+          escapeCsvCell(item.description),
+          escapeCsvCell(item.type),
+          escapeCsvCell(item.group_id),
+          escapeCsvCell(item.createdAt ? format(parseISO(String(item.createdAt)), "yyyy-MM-dd HH:mm:ss") : ""),
+          escapeCsvCell(item.publishedAt ? format(parseISO(String(item.publishedAt)), "yyyy-MM-dd HH:mm:ss") : ""),
+          escapeCsvCell(mediaCount),
+          escapeCsvCell(mediaFilenames),
+          escapeCsvCell(mediaTotalSizeKb),
+        ];
+
+        sortedOtherMetaKeys.forEach(key => {
+          const value = item.other_meta && typeof item.other_meta === 'object' ? (item.other_meta as Record<string, any>)[key] : "";
+          row.push(escapeCsvCell(typeof value === 'object' ? JSON.stringify(value) : value));
+        });
+        csvRows.push(row.join(","));
+      });
+
+      const csvString = csvRows.join("\n");
+      const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `query_forms_${downloadGroupId}_${format(new Date(), "yyyyMMddHHmmss")}.csv`);
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+      toast({ title: "Download Started", description: "CSV file is being generated."});
+      setIsDownloadDialogOpen(false); // Close dialog on successful download trigger
+    } catch (err) {
+      console.error("Error downloading CSV:", err);
+      toast({ title: "Download Failed", description: (err as Error).message || "Could not generate CSV.", variant: "destructive" });
+    } finally {
+      setIsDownloadingCsv(false);
+    }
+  };
+
+
   return (
     <TooltipProvider>
       <div className="flex flex-col space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h1 className="text-3xl font-bold tracking-tight">Query Forms</h1>
           <div className="flex items-center space-x-2 self-end sm:self-center">
+             <Button onClick={() => setIsDownloadDialogOpen(true)} variant="outline" size="sm" disabled={isLoading || isFetching}>
+                <DownloadCloud className="mr-2 h-4 w-4" /> Download CSV
+             </Button>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -665,6 +799,76 @@ export default function QueryFormsPage() {
         )}
       </div>
 
+      {/* CSV Download Dialog */}
+       <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Download Query Forms CSV</DialogTitle>
+            <DialogDescription>Specify Group ID and date range for the export.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="download-group-id">Group ID <span className="text-destructive">*</span></Label>
+              <Input
+                id="download-group-id"
+                value={downloadGroupId}
+                onChange={(e) => setDownloadGroupId(e.target.value)}
+                placeholder="Enter Group ID"
+                disabled={isDownloadingCsv}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="download-date-from">From Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="download-date-from"
+                      variant={"outline"}
+                      className={cn("w-full justify-start text-left font-normal h-9", !downloadDateFrom && "text-muted-foreground")}
+                      disabled={isDownloadingCsv}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {downloadDateFrom ? format(downloadDateFrom, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar mode="single" selected={downloadDateFrom} onSelect={setDownloadDateFrom} initialFocus disabled={isDownloadingCsv}/>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Label htmlFor="download-date-to">To Date</Label>
+                 <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="download-date-to"
+                      variant={"outline"}
+                      className={cn("w-full justify-start text-left font-normal h-9", !downloadDateTo && "text-muted-foreground")}
+                      disabled={isDownloadingCsv}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {downloadDateTo ? format(downloadDateTo, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar mode="single" selected={downloadDateTo} onSelect={setDownloadDateTo} initialFocus disabled={isDownloadingCsv}/>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline" disabled={isDownloadingCsv}>Cancel</Button></DialogClose>
+            <Button onClick={handleDownloadCsv} disabled={isDownloadingCsv || !downloadGroupId.trim()}>
+              {isDownloadingCsv && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Download CSV
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       {selectedQueryForm && (
         <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
           <DialogContent className="sm:min-w-[90%] max-h-[85vh] flex flex-col">
@@ -676,154 +880,79 @@ export default function QueryFormsPage() {
                 From: {selectedQueryForm.email || "N/A"}
               </DialogDescription>
             </DialogHeader>
-            <div className="flex-1 overflow-y-auto">
-              <div className="py-4 space-y-3 text-sm grid grid-cols-3 gap-4">
-                <div className="col-span-1 bg-gray-100 p-4 min-w-36">
+             <ScrollArea className="flex-1 min-h-0"> {/* Added min-h-0 for ScrollArea to work correctly in flex */}
+              <div className="py-4 space-y-3 text-sm grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-1 space-y-2 bg-muted/50 p-4 rounded-lg border">
                   <DetailItem label="Name" value={selectedQueryForm.name} />
                   <DetailItem label="Email" value={selectedQueryForm.email} />
-                  <DetailItem
-                    label="Description"
-                    value={selectedQueryForm.description}
-                    preWrap
-                  />
-                  <DetailItem
-                    label="Type"
-                    value={selectedQueryForm.type}
-                    badge
-                    capitalize
-                  />
-                  <DetailItem
-                    label="Group ID"
-                    value={selectedQueryForm.group_id}
-                    badge="secondary"
-                  />
-                  <DetailItem
-                    label="Submitted At"
-                    value={
-                      selectedQueryForm.createdAt
-                        ? format(
-                            parseISO(String(selectedQueryForm.createdAt)),
-                            "PPP p"
-                          )
-                        : undefined
-                    }
-                  />
+                  <DetailItem label="Description" value={selectedQueryForm.description} preWrap/>
+                  <DetailItem label="Type" value={selectedQueryForm.type} badge capitalize/>
+                  <DetailItem label="Group ID" value={selectedQueryForm.group_id} badge="secondary"/>
+                  <DetailItem label="User Key (Tenent ID)" value={selectedQueryForm.tenent_id} />
+                  <DetailItem label="Submitted At" value={selectedQueryForm.createdAt ? format(parseISO(String(selectedQueryForm.createdAt)), "PPP p") : undefined}/>
+                  <DetailItem label="Published At" value={selectedQueryForm.publishedAt ? format(parseISO(String(selectedQueryForm.publishedAt)), "PPP p") : undefined}/>
                 </div>
-                <div className="col-span-2 bg-gray-200 p-4">
-                  <div>
-                    {selectedQueryForm.other_meta &&
-                      Object.keys(selectedQueryForm.other_meta).length > 0 && (
-                        <>
-                          <Separator className="my-3" />
-                          <div className="space-y-2">
-                            <h4 className="font-semibold text-sm flex items-center gap-2">
-                              <User className="h-4 w-4 text-muted-foreground" />
-                              User Response
-                            </h4>
-                            <table className="text-xs bg-muted p-3 rounded-md border w-full">
-                              <thead>
-                                <tr>
-                                  <th className="text-left p-2 border-b">
-                                    Key
-                                  </th>
-                                  <th className="text-left p-2 border-b">
-                                    Value
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(() => {
-                                  try {
-                                    const jsonData =
-                                      typeof selectedQueryForm.other_meta ===
-                                      "string"
-                                        ? JSON.parse(
-                                            selectedQueryForm.other_meta
-                                          )
-                                        : selectedQueryForm.other_meta;
 
-                                    return Object.entries(jsonData).map(
-                                      ([key, value]) => (
-                                        <tr key={key}>
-                                          <td className="p-2 border-b">
-                                            {key}
-                                          </td>
-                                          <td className="p-2 border-b">
-                                            {typeof value === "object"
-                                              ? JSON.stringify(value, null, 2)
-                                              : String(value)}
-                                          </td>
-                                        </tr>
-                                      )
-                                    );
-                                  } catch (e) {
-                                    return (
-                                      <tr>
-                                        <td className="p-2" colSpan={2}>
-                                          {String(selectedQueryForm.other_meta)}
-                                        </td>
-                                      </tr>
-                                    );
-                                  }
-                                })()}
-                              </tbody>
-                            </table>
-                          </div>
-                        </>
-                      )}
-                  </div>
-
-                  <div>
-                    {selectedQueryForm.media &&
-                      selectedQueryForm.media.length > 0 && (
-                        <>
-                          <Separator className="my-3" />
-                          <div className="space-y-2">
-                            <h4 className="font-semibold text-sm flex items-center gap-2">
-                              <Paperclip className="h-4 w-4 text-muted-foreground" />
-                              Attached Media
-                              {selectedQueryForm.media_size_Kb ? (
-                                <Badge
-                                  variant="outline"
-                                  className="ml-2 text-xs font-normal"
-                                >
-                                  Total Size:{" "}
-                                  {formatBytes(selectedQueryForm.media_size_Kb)}
-                                </Badge>
-                              ) : null}
-                            </h4>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                <div className="md:col-span-2 space-y-4">
+                 {selectedQueryForm.media && selectedQueryForm.media.length > 0 && (
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <Paperclip className="h-4 w-4 text-primary"/> Attached Media
+                                {selectedQueryForm.media_size_Kb ? (
+                                  <Badge variant="outline" className="ml-auto text-xs font-normal">
+                                    Total Size: {formatBytes(selectedQueryForm.media_size_Kb)}
+                                  </Badge>
+                                ) : null}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                               {selectedQueryForm.media.map((mediaItem) => (
                                 <a
                                   key={mediaItem.id}
-                                  href={mediaItem.url ? mediaItem.url : "#"}
+                                  href={mediaItem.url ? (mediaItem.url.startsWith('http') ? mediaItem.url : `${process.env.NEXT_PUBLIC_API_BASE_URL_no_api || ''}${mediaItem.url}`) : '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="block border rounded-lg p-2 hover:shadow-lg transition-shadow text-center group"
                                 >
                                   <MediaPreview mediaItem={mediaItem} />
-                                  <p
-                                    className="text-xs truncate mt-1.5 group-hover:text-primary"
-                                    title={mediaItem.name}
-                                  >
-                                    {mediaItem.name}
-                                  </p>
+                                  <p className="text-xs truncate mt-1.5 group-hover:text-primary" title={mediaItem.name}>{mediaItem.name}</p>
                                 </a>
                               ))}
                             </div>
-                          </div>
-                        </>
-                      )}
-                  </div>
+                        </CardContent>
+                    </Card>
+                  )}
+
+                  {selectedQueryForm.other_meta && Object.keys(selectedQueryForm.other_meta).length > 0 && (
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <Code2 className="h-4 w-4 text-primary"/> Other Metadata (JSON)
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                             <pre className="text-xs bg-muted p-3 rounded-md border w-full overflow-auto max-h-60">
+                              {(() => {
+                                try {
+                                  const jsonData = typeof selectedQueryForm.other_meta === 'string'
+                                    ? JSON.parse(selectedQueryForm.other_meta)
+                                    : selectedQueryForm.other_meta;
+                                  return JSON.stringify(jsonData, null, 2);
+                                } catch (e) {
+                                  return String(selectedQueryForm.other_meta); // Show as string if parsing fails
+                                }
+                              })()}
+                            </pre>
+                        </CardContent>
+                    </Card>
+                  )}
                 </div>
               </div>
-            </div>
-            <DialogFooter className="mt-auto pt-4 border-t">
-              <DialogClose asChild>
-                <Button type="button" variant="outline">
-                  Close
-                </Button>
-              </DialogClose>
+            </ScrollArea>
+            <DialogFooter className="mt-auto pt-4 border-t flex-shrink-0">
+              <DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -949,3 +1078,4 @@ function QueryFormsPageSkeleton({
     </>
   );
 }
+

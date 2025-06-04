@@ -6,6 +6,7 @@ import type { FindMany, FindOne } from "@/types/strapi_response";
 import axiosInstance from "@/lib/axios";
 import { getAccessToken } from "@/lib/actions/auth";
 import { AxiosError } from 'axios';
+import { formatISO } from 'date-fns'; // Import for date formatting
 
 async function getAuthHeader() {
   const token = await getAccessToken();
@@ -23,10 +24,12 @@ export interface GetQueryFormsParams {
   pageSize?: number;
   sortField?: string;
   sortOrder?: 'asc' | 'desc';
+  dateFrom?: Date | null; // Added for date range filtering
+  dateTo?: Date | null;   // Added for date range filtering
 }
 
 export const getQueryForms = async (params: GetQueryFormsParams): Promise<FindMany<QueryForm>> => {
-    const { userTenentId, type, group_id, page = 1, pageSize = 10, sortField = 'createdAt', sortOrder = 'desc' } = params;
+    const { userTenentId, type, group_id, page = 1, pageSize = 10, sortField = 'createdAt', sortOrder = 'desc', dateFrom, dateTo } = params;
 
     if (!userTenentId) {
         console.error('[Service getQueryForms]: userTenentId is missing.');
@@ -37,7 +40,7 @@ export const getQueryForms = async (params: GetQueryFormsParams): Promise<FindMa
         'filters[tenent_id][$eq]': userTenentId,
         'pagination[page]': page,
         'pagination[pageSize]': pageSize,
-        'populate':"*", // Populate user and media relations
+        'populate':['media', 'user'], // Ensure media and user are populated
     };
 
     if (sortField && sortOrder) {
@@ -47,9 +50,21 @@ export const getQueryForms = async (params: GetQueryFormsParams): Promise<FindMa
       strapiParams['filters[type][$eq]'] = type;
     }
     if (group_id) {
-      // Assuming group_id is a text field, use containsi for case-insensitive partial match
       strapiParams['filters[group_id][$containsi]'] = group_id;
     }
+
+    // Add date range filters if provided
+    // We will filter based on 'createdAt'. Adjust if another date field is more relevant.
+    if (dateFrom) {
+      strapiParams['filters[createdAt][$gte]'] = formatISO(dateFrom, { representation: 'date' });
+    }
+    if (dateTo) {
+      // To include the whole "to" day, we could set time to end of day or use $lt for the next day
+      // For simplicity, using $lte which includes the start of the 'dateTo' day.
+      // If specific time is needed, adjust formatISO and $lte accordingly.
+      strapiParams['filters[createdAt][$lte]'] = formatISO(dateTo, { representation: 'date' });
+    }
+
 
     const url = '/query-forms';
     console.log(`[getQueryForms] Fetching URL: ${url} with params:`, JSON.stringify(strapiParams));
@@ -93,7 +108,7 @@ export const getQueryForm = async (id: string, userTenentId: string): Promise<Qu
         throw new Error('User tenent_id is required to verify fetched query form.');
     }
     const params = {
-      'populate':"*", // Populate user and media relations
+      'populate':['media', 'user'], // Ensure media and user are populated
     };
 
     const url = `/query-forms/${id}`;
