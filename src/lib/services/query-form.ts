@@ -35,7 +35,6 @@ export const getQueryForms = async (params: GetQueryFormsParams): Promise<FindMa
 
     const strapiParams: any = {
         'filters[tenent_id][$eq]': userTenentId,
-        'populate': ['user'], // MODIFIED: Only populate user for the list view
         'pagination[page]': page,
         'pagination[pageSize]': pageSize,
     };
@@ -93,7 +92,7 @@ export const getQueryForm = async (id: string, userTenentId: string): Promise<Qu
         throw new Error('User tenent_id is required to verify fetched query form.');
     }
     const params = {
-      'populate': ['user', 'media'], // Populate user and media relations
+      'populate': [ 'media'], // Populate user and media relations
     };
 
     const url = `/query-forms/${id}`;

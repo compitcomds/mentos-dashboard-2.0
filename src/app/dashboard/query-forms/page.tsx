@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useGetQueryForms, type UseGetQueryFormsOptions } from '@/lib/queries/query-form';
 import type { QueryForm } from '@/types/query-form';
 import type { Media } from '@/types/media';
-import { AlertCircle, Loader2, LayoutGrid, List, Eye, FileText, Image as ImageIconLucide, Video, Search, X, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { AlertCircle, Loader2, LayoutGrid, List, Eye, FileText, Image as ImageIconLucide, Video, Search, X, ChevronLeft, ChevronRight, Filter, Paperclip, Code2 } from "lucide-react";
 import { format, parseISO, isValid } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { getStoredPreference, setStoredPreference } from '@/lib/storage';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Separator } from '@/components/ui/separator';
 
 type ViewModeQuery = 'card' | 'table';
 type SortFieldQuery = 'name' | 'email' | 'type' | 'group_id' | 'createdAt';
@@ -42,7 +43,7 @@ type SortOrderQuery = 'asc' | 'desc';
 
 const DEFAULT_PAGE_SIZE_QUERY_TABLE = 10;
 const DEFAULT_PAGE_SIZE_QUERY_CARD = 9;
-const QUERY_FORM_TYPES_FILTER = ["contact", "career", "event", "membership"]; // Used for filter dropdown
+const QUERY_FORM_TYPES_FILTER = ["contact", "career", "event", "membership"]; 
 
 const PAGE_SIZE_OPTIONS_QUERY = [
     { label: "9 per page (Card)", value: "9" }, { label: "10 per page (Table)", value: "10" },
@@ -58,6 +59,15 @@ const SORT_ORDER_OPTIONS_QUERY: { label: string; value: SortOrderQuery }[] = [
   { label: "Ascending", value: "asc" }, { label: "Descending", value: "desc" },
 ];
 
+const formatBytes = (bytes?: number | null, decimals = 2) => {
+    if (bytes === null || bytes === undefined || bytes <= 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
 const MediaPreview: React.FC<{ mediaItem: Media }> = ({ mediaItem }) => {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || "";
     const getFullUrl = (url?: string | null) => {
@@ -68,18 +78,18 @@ const MediaPreview: React.FC<{ mediaItem: Media }> = ({ mediaItem }) => {
     const url = getFullUrl(mediaItem.url);
     const thumbUrl = getFullUrl(mediaItem.formats?.thumbnail?.url) || url;
   
-    if (!url) return <div className="text-xs text-muted-foreground">No URL</div>;
+    if (!url) return <div className="text-xs text-muted-foreground p-1 flex items-center justify-center bg-muted rounded h-16 w-16"><FileText className="w-6 h-6" /></div>;
   
     if (mediaItem.mime?.startsWith('image/')) {
-      return <img src={thumbUrl!} alt={mediaItem.alternativeText || mediaItem.name || 'media'} className="w-12 h-12 object-cover rounded border" />;
+      return <img src={thumbUrl!} alt={mediaItem.alternativeText || mediaItem.name || 'media'} className="w-16 h-16 object-cover rounded border" />;
     }
     if (mediaItem.mime?.startsWith('video/')) {
-      return <Video className="w-10 h-10 text-purple-500" />;
+      return <div className="w-16 h-16 flex items-center justify-center bg-muted rounded border"><Video className="w-8 h-8 text-purple-500" /></div>;
     }
     if (mediaItem.mime === 'application/pdf') {
-      return <FileText className="w-10 h-10 text-red-500" />;
+      return <div className="w-16 h-16 flex items-center justify-center bg-muted rounded border"><FileText className="w-8 h-8 text-red-500" /></div>;
     }
-    return <FileText className="w-10 h-10 text-gray-500" />;
+    return <div className="w-16 h-16 flex items-center justify-center bg-muted rounded border"><FileText className="w-8 h-8 text-gray-500" /></div>;
 };
 
 const QueryFormCard: React.FC<{ queryForm: QueryForm; onViewDetails: (queryForm: QueryForm) => void }> = ({ queryForm, onViewDetails }) => {
@@ -354,7 +364,7 @@ export default function QueryFormsPage() {
               <DialogDescription>From: {selectedQueryForm.email || 'N/A'}</DialogDescription>
             </DialogHeader>
             <ScrollArea className="flex-1 my-2 -mr-4 pr-4">
-                <div className="py-4 space-y-4 text-sm">
+                <div className="py-4 space-y-3 text-sm">
                     <DetailItem label="Name" value={selectedQueryForm.name} />
                     <DetailItem label="Email" value={selectedQueryForm.email} />
                     <DetailItem label="Description" value={selectedQueryForm.description} preWrap />
@@ -364,26 +374,60 @@ export default function QueryFormsPage() {
                     <DetailItem label="User Key (Tenent ID)" value={selectedQueryForm.tenent_id} badge="outline"/>
                     
                     {selectedQueryForm.media && selectedQueryForm.media.length > 0 && (
-                        <div>
-                            <h4 className="font-semibold text-sm mb-2">Attached Media ({selectedQueryForm.media_size_Kb ? `${(selectedQueryForm.media_size_Kb / 1024).toFixed(2)} MB` : ''}):</h4>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                {selectedQueryForm.media.map(mediaItem => (
-                                    <a key={mediaItem.id} href={mediaItem.url} target="_blank" rel="noopener noreferrer" className="block border rounded-md p-2 hover:shadow-md transition-shadow text-center space-y-1">
-                                        <MediaPreview mediaItem={mediaItem} />
-                                        <p className="text-xs truncate" title={mediaItem.name}>{mediaItem.name}</p>
-                                    </a>
-                                ))}
+                        <>
+                            <Separator className="my-3"/>
+                            <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                    <Paperclip className="h-4 w-4 text-muted-foreground"/>
+                                    Attached Media
+                                    {selectedQueryForm.media_size_Kb ? (
+                                        <Badge variant="outline" className="ml-2 text-xs font-normal">
+                                            Total Size: {formatBytes(selectedQueryForm.media_size_Kb)}
+                                        </Badge>
+                                    ) : null}
+                                </h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                    {selectedQueryForm.media.map(mediaItem => (
+                                        <a 
+                                          key={mediaItem.id} 
+                                          href={mediaItem.url} // Assume mediaItem.url is the full URL
+                                          target="_blank" 
+                                          rel="noopener noreferrer" 
+                                          className="block border rounded-lg p-2 hover:shadow-lg transition-shadow text-center group"
+                                        >
+                                            <MediaPreview mediaItem={mediaItem} />
+                                            <p className="text-xs truncate mt-1.5 group-hover:text-primary" title={mediaItem.name}>{mediaItem.name}</p>
+                                        </a>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        </>
                     )}
 
                     {selectedQueryForm.other_meta && Object.keys(selectedQueryForm.other_meta).length > 0 && (
-                        <div>
-                        <h4 className="font-semibold text-sm mb-1">Other Metadata:</h4>
-                        <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-60">
-                            {JSON.stringify(selectedQueryForm.other_meta, null, 2)}
-                        </pre>
-                        </div>
+                        <>
+                            <Separator className="my-3"/>
+                            <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                    <Code2 className="h-4 w-4 text-muted-foreground"/>
+                                    Other Metadata (JSON)
+                                </h4>
+                                <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-60 border">
+                                    <code>
+                                        {(() => {
+                                            try {
+                                                const jsonData = typeof selectedQueryForm.other_meta === 'string'
+                                                    ? JSON.parse(selectedQueryForm.other_meta)
+                                                    : selectedQueryForm.other_meta;
+                                                return JSON.stringify(jsonData, null, 2);
+                                            } catch (e) {
+                                                return String(selectedQueryForm.other_meta); // Fallback if parsing/stringifying fails
+                                            }
+                                        })()}
+                                    </code>
+                                </pre>
+                            </div>
+                        </>
                     )}
                 </div>
             </ScrollArea>
@@ -400,9 +444,9 @@ export default function QueryFormsPage() {
 const DetailItem: React.FC<{ label: string; value?: string | number | null; preWrap?: boolean; badge?: true | "outline" | "secondary"; capitalize?: boolean }> = ({ label, value, preWrap = false, badge, capitalize }) => {
     if (value === null || value === undefined || String(value).trim() === '') return null;
     return (
-        <div className="grid grid-cols-3 gap-2 items-start">
-            <strong className="col-span-1 text-muted-foreground">{label}:</strong>
-            <div className={`col-span-2 ${preWrap ? 'whitespace-pre-wrap' : ''}`}>
+        <div className="grid grid-cols-3 gap-2 items-start py-1 border-b border-border/60 last:border-b-0">
+            <strong className="col-span-1 text-muted-foreground font-medium">{label}:</strong>
+            <div className={`col-span-2 ${preWrap ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
                 {badge ? <Badge variant={badge === true ? 'default' : badge} className={capitalize ? 'capitalize' : ''}>{String(value)}</Badge> : String(value)}
             </div>
         </div>
@@ -435,7 +479,7 @@ function QueryFormsPageSkeleton({ viewMode, pageSize }: { viewMode: ViewModeQuer
           <div className="rounded-md border">
             <Table>
               <TableHeader><TableRow>{[...Array(6)].map((_, i) => <TableHead key={i}><Skeleton className="h-5 w-full" /></TableHead>)}</TableRow></TableHeader>
-              <TableBody>{[...Array(skeletonItemsCount)].map((_, i) => (<TableRow key={i}>{[...Array(6)].map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>))}</TableBody>
+              <TableBody>{[...Array(skeletonItemsCount)].map((_, i) => (<TableRow key={i}>{[...Array(6)].map((_,j)=><TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>))}</TableBody>
             </Table>
           </div>
           </CardContent></Card>
