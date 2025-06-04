@@ -48,30 +48,34 @@ export function useMarkNotificationAsReadMutation() {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
-  return useMutation<Notification, Error, { notificationId: number }>({
-    mutationFn: ({ notificationId }) => markNotificationAsReadService(notificationId),
-    onSuccess: (data, variables) => {
+  return useMutation<Notification, Error, { documentId: string }>({ // Changed notificationId to documentId
+    mutationFn: ({ documentId }) => markNotificationAsReadService(documentId), // Pass documentId
+    onSuccess: (updatedNotification, variables) => { // variables now { documentId: string }
       queryClient.invalidateQueries({ queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id] });
-      // Also, update the specific notification in the cache if possible
-      // This provides a more instant UI update before full refetch
+
+      // Optimistic update using documentId to find the notification, then its numeric id for matching in cache
       queryClient.setQueryData<NotificationsResponse>(
-        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined), 
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined),
         (oldData) => {
           if (!oldData) return oldData;
           return {
             ...oldData,
-            data: oldData.data.map(n => n.id === variables.notificationId ? { ...n, isRead: true } : n),
+            data: oldData.data.map(n =>
+              n.documentId === variables.documentId || n.id === updatedNotification.id // Match by documentId or numeric id
+                ? { ...n, isRead: true }
+                : n
+            ),
           };
         }
       );
-       queryClient.setQueryData<NotificationsResponse>(
-        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, false, undefined), // Target unread list
+      queryClient.setQueryData<NotificationsResponse>(
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, false, undefined),
         (oldData) => {
           if (!oldData) return oldData;
           return {
             ...oldData,
-            data: oldData.data.filter(n => n.id !== variables.notificationId), // Remove from unread list
-             meta: {
+            data: oldData.data.filter(n => !(n.documentId === variables.documentId || n.id === updatedNotification.id)),
+            meta: {
                 ...oldData.meta,
                 pagination: {
                     ...oldData.meta.pagination,
@@ -105,40 +109,33 @@ export function useMarkAllNotificationsAsReadMutation() {
     },
     onSuccess: () => {
       toast({ title: "Notifications Updated", description: "All notifications marked as read." });
-      
-      // 1. Invalidate all notification queries for the current user and tenent.
-      // This will ensure all views (like the main notifications page) refetch fresh data.
-      queryClient.invalidateQueries({ 
-        queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id] 
+
+      queryClient.invalidateQueries({
+        queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id]
       });
 
-      // 2. Optimistically update the cache for the "unread" notifications list (typically used by the bell).
-      // Set its data to an empty array and total to 0.
-      // We target the key for "unread" status (isRead: false) and any page (undefined for page).
       queryClient.setQueryData<NotificationsResponse>(
-        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, false, undefined), 
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, false, undefined),
         (oldData) => {
-          const defaultPageSize = oldData?.meta?.pagination?.pageSize || 10; // Use existing or default
+          const defaultPageSize = oldData?.meta?.pagination?.pageSize || 10;
           if (!oldData) {
-            // If there was no cached data for unread notifications, create a default empty state.
-            return { 
-              data: [], 
-              meta: { 
-                pagination: { page: 1, pageSize: defaultPageSize, pageCount: 0, total: 0 } 
-              } 
+            return {
+              data: [],
+              meta: {
+                pagination: { page: 1, pageSize: defaultPageSize, pageCount: 0, total: 0 }
+              }
             };
           }
-          // If oldData exists, update it to be empty.
           return {
             ...oldData,
-            data: [], 
+            data: [],
             meta: {
                 ...oldData.meta,
                 pagination: {
                     ...oldData.meta.pagination,
                     total: 0,
-                    pageCount: 0, 
-                    page: 1 // Reset to page 1
+                    pageCount: 0,
+                    page: 1
                 }
             }
           };
@@ -154,4 +151,3 @@ export function useMarkAllNotificationsAsReadMutation() {
     },
   });
 }
-

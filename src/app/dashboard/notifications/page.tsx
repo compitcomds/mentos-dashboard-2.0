@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useGetNotifications, useMarkNotificationAsReadMutation, useMarkAllNotificationsAsReadMutation } from '@/lib/queries/notification';
-import type { Notification, NotificationType } from '@/types/notification'; // Using updated flat Notification type
+import type { Notification, NotificationType } from '@/types/notification';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -64,9 +64,10 @@ export default function NotificationsPage() {
   const markAllAsReadMutation = useMarkAllNotificationsAsReadMutation();
 
   const handleNotificationClick = (notification: Notification) => {
-    if (notification && notification.isRead === false) { // Direct access
+    if (!notification) return;
+    if (notification.documentId && notification.isRead === false) {
       markAsReadMutation.mutate(
-        { notificationId: notification.id },
+        { documentId: notification.documentId }, // Use documentId
         {
           onSuccess: () => {
             // Query invalidation handles refetch
@@ -74,7 +75,7 @@ export default function NotificationsPage() {
         }
       );
     }
-    if (notification.actionUrl) { // Direct access
+    if (notification.actionUrl) {
       router.push(notification.actionUrl);
     }
   };
@@ -87,7 +88,7 @@ export default function NotificationsPage() {
     });
   };
 
-  const hasUnread = notifications.some(n => n && n.isRead === false); // Direct access
+  const hasUnread = notifications.some(n => n && n.isRead === false);
 
   return (
     <div className="space-y-6">
@@ -153,38 +154,38 @@ export default function NotificationsPage() {
             <ScrollArea className="max-h-[calc(100vh-20rem)]">
               <div className="space-y-3 pr-3">
                 {notifications.map((notification) => {
-                  if (!notification) return null; // Check for notification object itself
-                  const isUnread = notification.isRead === false; // Direct access
+                  if (!notification) return null;
+                  const isUnread = notification.isRead === false;
                   return (
                     <div
-                      key={notification.id}
+                      key={notification.documentId || notification.id}
                       onClick={() => handleNotificationClick(notification)}
                       className={cn(
                         "flex items-start space-x-3 p-3.5 border rounded-lg transition-colors hover:bg-accent",
                         isUnread && "bg-primary/5 hover:bg-primary/10 border-primary/30",
-                        notification.actionUrl && "cursor-pointer" // Direct access
+                        notification.actionUrl && "cursor-pointer"
                       )}
                     >
                       <div className="flex-shrink-0 mt-0.5">
-                        {getNotificationIcon(notification.type)} {/* Direct access */}
+                        {getNotificationIcon(notification.type)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline">
                            <h4 className={cn("text-sm font-semibold text-foreground truncate", isUnread && "text-primary")}>
-                             {notification.title} {/* Direct access */}
+                             {notification.title}
                            </h4>
-                            {notification.createdAt && ( /* Direct access */
+                            {notification.createdAt && (
                                 <p className="text-xs text-muted-foreground/80 ml-2 flex-shrink-0">
                                 {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                                 </p>
                             )}
                         </div>
-                        {notification.message && ( /* Direct access */
+                        {notification.message && (
                           <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
                             {notification.message}
                           </p>
                         )}
-                        {notification.actionUrl && ( /* Direct access */
+                        {notification.actionUrl && (
                            <Button variant="link" size="sm" className="p-0 h-auto mt-1 text-xs" asChild>
                              <Link href={notification.actionUrl} onClick={(e) => e.stopPropagation()}>
                                View Details <ExternalLink className="ml-1 h-3 w-3" />
