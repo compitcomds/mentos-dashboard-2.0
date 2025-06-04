@@ -72,19 +72,17 @@ export function useCreateMetaDataEntry() {
       if (!currentUser?.tenent_id) {
         throw new Error('User tenent_id is not available. Cannot create MetaData entry.');
       }
-      // Ensure tenent_id and user are correctly set in payload by the caller or here.
-      // Caller should provide meta_format documentId.
       return createMetaDataEntry({ ...payload, tenent_id: currentUser.tenent_id, user: currentUser.id });
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => { // `variables` here is the CreateMetaDataPayload
       toast({ title: "Success", description: "MetaData entry created successfully." });
-      const metaFormatDocId = typeof data.meta_format === 'object' && data.meta_format?.documentId ? data.meta_format.documentId : null;
+      const metaFormatDocId = variables.meta_format; // This is the string documentId from the input payload
+      
       if (metaFormatDocId) {
-         queryClient.invalidateQueries({ queryKey: META_DATA_ENTRIES_QUERY_KEY(metaFormatDocId, currentUser?.tenent_id) });
+         queryClient.invalidateQueries({ queryKey: ['metaDataEntries', metaFormatDocId, currentUser?.tenent_id] });
       } else {
-         // Fallback if meta_format is not populated or only ID is available - this might require a broader invalidation or specific logic
-         console.warn("Created MetaData entry is missing meta_format.documentId. Invalidating generically.", data);
-         queryClient.invalidateQueries({ queryKey: ['metaDataEntries'] }); // More generic invalidation
+         console.warn("Created MetaData entry: metaFormatDocumentId was not found in creation payload variables. Invalidating entries generically.", data, variables);
+         queryClient.invalidateQueries({ queryKey: ['metaDataEntries'] }); 
       }
     },
     onError: (error: any) => {
@@ -118,16 +116,19 @@ export function useUpdateMetaDataEntry() {
       }
       return updateMetaDataEntry(documentId, payload, currentUser.tenent_id);
     },
-    onSuccess: (data) => {
+    onSuccess: (data) => { // `data` here is the response from updateMetaDataEntry
       toast({ title: "Success", description: "MetaData entry updated successfully." });
+      // meta_format should be populated in the response 'data' by the service
       const metaFormatDocId = typeof data.meta_format === 'object' && data.meta_format?.documentId ? data.meta_format.documentId : null;
+      
       if (metaFormatDocId) {
-        queryClient.invalidateQueries({ queryKey: META_DATA_ENTRIES_QUERY_KEY(metaFormatDocId, currentUser?.tenent_id) });
+        queryClient.invalidateQueries({ queryKey: ['metaDataEntries', metaFormatDocId, currentUser?.tenent_id] });
       } else {
-         console.warn("Updated MetaData entry is missing meta_format.documentId. Invalidating generically.", data);
+         console.warn("Updated MetaData entry is missing meta_format.documentId from response. Invalidating entries generically.", data);
          queryClient.invalidateQueries({ queryKey: ['metaDataEntries'] });
       }
-      if (data.documentId) {
+      // Invalidate the specific detail query for the updated entry
+      if (data.documentId) { 
         queryClient.invalidateQueries({ queryKey: META_DATA_ENTRY_DETAIL_QUERY_KEY(data.documentId, currentUser?.tenent_id) });
       }
     },
@@ -148,14 +149,15 @@ export function useDeleteMetaDataEntry() {
       }
       return deleteMetaDataEntry(documentId, currentUser.tenent_id);
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (data, variables) => { // `variables` is { documentId: string, metaFormatDocumentId: string | null }
       toast({ title: "Success", description: "MetaData entry deleted successfully." });
       if (variables.metaFormatDocumentId) {
-        queryClient.invalidateQueries({ queryKey: META_DATA_ENTRIES_QUERY_KEY(variables.metaFormatDocumentId, currentUser?.tenent_id) });
+        queryClient.invalidateQueries({ queryKey: ['metaDataEntries', variables.metaFormatDocumentId, currentUser?.tenent_id] });
       } else {
-         console.warn("MetaData entry deleted but metaFormatDocumentId was not available for precise invalidation. Invalidating generically.", data, variables);
+         console.warn("MetaData entry deleted but metaFormatDocumentId was not available for precise invalidation. Invalidating entries generically.", data, variables);
          queryClient.invalidateQueries({ queryKey: ['metaDataEntries'] });
       }
+      // Remove the specific detail query for the deleted entry
       queryClient.removeQueries({ queryKey: META_DATA_ENTRY_DETAIL_QUERY_KEY(variables.documentId, currentUser?.tenent_id) });
     },
     onError: (error: any) => {
