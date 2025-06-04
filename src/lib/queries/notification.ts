@@ -11,26 +11,37 @@ import {
 import type { Notification, NotificationsResponse } from '@/types/notification';
 import { useCurrentUser } from './user';
 
-const NOTIFICATIONS_QUERY_KEY = (userId?: number, userTenentId?: string) => ['notifications', userId || 'allUsers', userTenentId || 'allTenents'];
+// Updated Query Key to include isRead status for differentiation
+const NOTIFICATIONS_QUERY_KEY = (userId?: number, userTenentId?: string, isRead?: boolean | null, page?: number) =>
+  ['notifications', userId || 'allUsers', userTenentId || 'allTenents', isRead === undefined ? 'all_status' : (isRead === null ? 'all_status_explicit' : (isRead ? 'read' : 'unread')), page || 1];
 
-export function useGetNotifications(limit: number = 5) {
+interface UseGetNotificationsOptions {
+  limit?: number;
+  isRead?: boolean | null; // Allow null for fetching all
+  page?: number;
+  enabled?: boolean; // To control query execution
+  refetchInterval?: number | false; // Allow disabling refetch interval
+}
+
+export function useGetNotifications(options?: UseGetNotificationsOptions) {
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userId = currentUser?.id;
   const userTenentId = currentUser?.tenent_id;
+  const { limit = 10, isRead, page = 1, enabled = true, refetchInterval = 1000 * 60 * 2 } = options || {};
+
 
   return useQuery<NotificationsResponse, Error>({
-    queryKey: NOTIFICATIONS_QUERY_KEY(userId, userTenentId),
+    queryKey: NOTIFICATIONS_QUERY_KEY(userId, userTenentId, isRead, page),
     queryFn: () => {
       if (!userId || !userTenentId) {
         console.warn("[useGetNotifications] User ID or tenent_id not available. Returning empty data.");
-        return Promise.resolve({ data: [], meta: { pagination: { page: 1, pageSize: limit, pageCount: 0, total: 0 } } });
+        return Promise.resolve({ data: [], meta: { pagination: { page, pageSize: limit, pageCount: 0, total: 0 } } });
       }
-      // Fetch only unread notifications for the bell
-      return getNotificationsService({ userId, userTenentId, limit, isRead: false });
+      return getNotificationsService({ userId, userTenentId, limit, isRead, page });
     },
-    enabled: !!userId && !!userTenentId && !isLoadingUser,
+    enabled: !!userId && !!userTenentId && !isLoadingUser && enabled,
     staleTime: 1000 * 60, // 1 minute
-    refetchInterval: 1000 * 60 * 2, // Poll every 2 minutes
+    refetchInterval: refetchInterval, // Use passed or default interval
   });
 }
 
@@ -41,8 +52,9 @@ export function useMarkNotificationAsReadMutation() {
   return useMutation<Notification, Error, { notificationId: number }>({
     mutationFn: ({ notificationId }) => markNotificationAsReadService(notificationId),
     onSuccess: () => {
-      toast({ title: "Notification Updated", description: "Notification marked as read." });
-      queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id) });
+      // No toast by default, individual components can show it
+      // Invalidate both "all" and "unread" queries, and paginated queries
+      queryClient.invalidateQueries({ queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id] });
     },
     onError: (error: any) => {
       toast({
@@ -67,7 +79,8 @@ export function useMarkAllNotificationsAsReadMutation() {
     },
     onSuccess: () => {
       toast({ title: "Notifications Updated", description: "All notifications marked as read." });
-      queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id) });
+      // Invalidate both "all" and "unread" queries, and paginated queries
+      queryClient.invalidateQueries({ queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id] });
     },
     onError: (error: any) => {
       toast({
@@ -78,3 +91,4 @@ export function useMarkAllNotificationsAsReadMutation() {
     },
   });
 }
+

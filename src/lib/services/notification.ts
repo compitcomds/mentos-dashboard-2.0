@@ -18,11 +18,12 @@ interface GetNotificationsParams {
   userId: number;
   userTenentId: string;
   limit?: number;
-  isRead?: boolean; // Optional: to fetch only unread or all
+  isRead?: boolean | null; // Updated to allow null/undefined for fetching all
+  page?: number; // Added for pagination
 }
 
 export const getNotifications = async (params: GetNotificationsParams): Promise<NotificationsResponse> => {
-  const { userId, userTenentId, limit = 5, isRead: filterIsRead } = params;
+  const { userId, userTenentId, limit = 10, isRead: filterIsRead, page = 1 } = params; // Default limit for pages
 
   if (!userId || !userTenentId) {
     console.error('[Service getNotifications]: userId or userTenentId is missing.');
@@ -34,15 +35,18 @@ export const getNotifications = async (params: GetNotificationsParams): Promise<
     'tenent_id': { '$eq': userTenentId },
   };
 
-  if (filterIsRead !== undefined) {
+  // Only add the isRead filter if it's explicitly true or false
+  if (filterIsRead === true || filterIsRead === false) {
     strapiFilters['isRead'] = { '$eq': filterIsRead };
   }
+  // If filterIsRead is null or undefined, no isRead filter is applied, fetching all.
 
-  const queryParams = {
+  const queryParams: any = {
     filters: strapiFilters,
     sort: ['createdAt:desc'],
-    'pagination[limit]': limit,
-    populate: ['user'], // Populate user if needed for display, though filtering handles target
+    'pagination[page]': page,
+    'pagination[pageSize]': limit, // Use limit as pageSize for pagination
+    populate: ['user'],
   };
 
   const url = '/notifications';
@@ -52,12 +56,11 @@ export const getNotifications = async (params: GetNotificationsParams): Promise<
     const headers = await getAuthHeader();
     const response = await axiosInstance.get<NotificationsResponse>(url, { params: queryParams, headers });
 
-    if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
-      console.error(`[getNotifications] Unexpected API response structure for user ${userId}. Expected 'data' array, received:`, response.data);
-      // Return a default structure if the API response is malformed
-      return { data: [], meta: { pagination: { page: 1, pageSize: limit, pageCount: 0, total: 0 } } };
+    if (!response.data || !response.data.data || !Array.isArray(response.data.data) || !response.data.meta?.pagination) {
+      console.error(`[getNotifications] Unexpected API response structure for user ${userId}. Expected 'data' array and 'meta.pagination', received:`, response.data);
+      return { data: [], meta: { pagination: { page, pageSize: limit, pageCount: 0, total: 0 } } };
     }
-    console.log(`[getNotifications] Fetched ${response.data.data.length} notifications for user ${userId}.`);
+    console.log(`[getNotifications] Fetched ${response.data.data.length} notifications for user ${userId}. Pagination:`, response.data.meta.pagination);
     return response.data;
   } catch (error: unknown) {
     let message = `Failed to fetch notifications for user ${userId}.`;
@@ -105,12 +108,9 @@ export const markNotificationAsRead = async (notificationId: number): Promise<No
   }
 };
 
-// Note: Strapi doesn't have a direct bulk update. This function would need to be
-// implemented carefully, perhaps by fetching unread IDs and updating them one by one,
-// or by a custom backend endpoint.
 export const markAllNotificationsAsRead = async (userId: number, userTenentId: string): Promise<void> => {
   console.log(`[markAllNotificationsAsRead] Attempting for user ${userId}, tenent ${userTenentId}.`);
-  // 1. Fetch all unread notifications for the user
+  // 1. Fetch all unread notifications for the user for the given tenent_id
   const unreadNotificationsResponse = await getNotifications({ userId, userTenentId, isRead: false, limit: -1 }); // limit -1 for all
 
   if (unreadNotificationsResponse.data.length === 0) {
@@ -120,7 +120,7 @@ export const markAllNotificationsAsRead = async (userId: number, userTenentId: s
 
   // 2. Iterate and mark each as read
   const updatePromises = unreadNotificationsResponse.data.map(notification =>
-    markNotificationAsRead(notification.id)
+    markNotificationAsReadService(notification.id) // Ensure this function is correctly named or imported
   );
 
   try {
@@ -131,3 +131,6 @@ export const markAllNotificationsAsRead = async (userId: number, userTenentId: s
     throw new Error("Failed to mark all notifications as read. Some may have failed.");
   }
 };
+// Renaming to avoid conflict if another markNotificationAsRead exists, or ensure correct import
+const markNotificationAsReadService = markNotificationAsRead;
+

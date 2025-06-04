@@ -58,3 +58,4 @@ export interface UpdateNotificationPayload {
   isRead?: boolean;
   // Potentially other fields if they can be updated
 }
+

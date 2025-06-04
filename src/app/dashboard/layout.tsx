@@ -15,6 +15,7 @@ import {
   LayoutList,
   FileJson,
   CreditCard,
+  Mail, // Added Mail icon for Notifications
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { removeAccessToken, getAccessToken } from '@/lib/actions/auth';
@@ -41,6 +42,7 @@ const initialStaticMenuItems: MenuItem[] = [
   // Dynamic items will be inserted after Extra Content Management
   { href: '/dashboard/web-media', label: 'Web Media', icon: ImageIconLucide },
   { href: '/dashboard/query-forms', label: 'Query Forms', icon: HelpCircle },
+  { href: '/dashboard/notifications', label: 'Notifications', icon: Mail }, // Added Notifications link
   { href: '/dashboard/developer-docs', label: 'Developer Docs', icon: BookText },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
   { href: '/dashboard/settings?tab=billing', label: 'Billing', icon: CreditCard },
