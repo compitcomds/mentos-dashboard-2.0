@@ -91,6 +91,8 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { toast } from "@/hooks/use-toast";
+import { useCurrentUser } from '@/lib/queries/user'; // Import useCurrentUser
+import { getQueryForms as getQueryFormsService } from '@/lib/services/query-form'; // Import the service
 
 type ViewModeQuery = "card" | "table";
 type SortFieldQuery = "name" | "email" | "type" | "group_id" | "createdAt";
@@ -283,6 +285,9 @@ const QueryFormTable: React.FC<{
 };
 
 export default function QueryFormsPage() {
+  const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser(); // Call hook at top level
+  const userKey = currentUser?.tenent_id;
+
   const [viewMode, setViewMode] = React.useState<ViewModeQuery>(() =>
     getStoredPreference("queryFormViewMode", "card")
   );
@@ -315,7 +320,6 @@ export default function QueryFormsPage() {
   >(() => getStoredPreference("queryFormGroupIdFilter", null));
 
 
-  // State for CSV Download Dialog
   const [isDownloadDialogOpen, setIsDownloadDialogOpen] = React.useState(false);
   const [downloadGroupId, setDownloadGroupId] = React.useState(activeGroupIdFilter || "");
   const [downloadDateFrom, setDownloadDateFrom] = React.useState<Date | undefined>();
@@ -334,8 +338,8 @@ export default function QueryFormsPage() {
   const {
     data: queryFormsData,
     isLoading,
-    isError,
-    error,
+    isError: isQueryFormsError, // Renamed to avoid conflict
+    error: queryFormsError,    // Renamed to avoid conflict
     refetch,
     isFetching,
   } = useGetQueryForms(queryFormOptions);
@@ -365,7 +369,6 @@ export default function QueryFormsPage() {
   React.useEffect(() => {
     setStoredPreference("queryFormGroupIdFilter", activeGroupIdFilter);
     setCurrentPage(1);
-    // Pre-fill download group ID when active filter changes
     if (activeGroupIdFilter) setDownloadGroupId(activeGroupIdFilter);
   }, [activeGroupIdFilter]);
 
@@ -380,12 +383,9 @@ export default function QueryFormsPage() {
     );
   };
 
-  // Function to escape CSV cell content
   const escapeCsvCell = (cellData: any): string => {
     if (cellData === null || cellData === undefined) return "";
     const stringVal = String(cellData);
-    // If the string contains a comma, double quote, or newline, wrap it in double quotes
-    // and escape any existing double quotes by doubling them up.
     if (stringVal.includes(",") || stringVal.includes('"') || stringVal.includes("\n")) {
       return `"${stringVal.replace(/"/g, '""')}"`;
     }
@@ -399,31 +399,26 @@ export default function QueryFormsPage() {
     }
     setIsDownloadingCsv(true);
     try {
-      // Fetch all data for the given group ID and date range
-      // Using a very large page size to attempt to get all records.
-      // For truly large datasets, server-side CSV generation or iterative fetching would be better.
       const fetchAllParams: UseGetQueryFormsOptions = {
         group_id: downloadGroupId.trim(),
         dateFrom: downloadDateFrom,
         dateTo: downloadDateTo,
-        pageSize: 1000, // Fetch up to 1000 records, adjust if needed
+        pageSize: 1000,
         page: 1,
-        sortField: 'createdAt', // Or a more relevant sort for export
+        sortField: 'createdAt',
         sortOrder: 'asc',
       };
-      // Directly use the service function with specific parameters for download
-      const { getQueryForms: getQueryFormsService } = await import('@/lib/services/query-form');
-      const { data: currentUser } = await import('@/lib/queries/user').then(m => m.useCurrentUser()); // Get current user for tenent_id
-
-      if (!currentUser?.tenent_id) {
+      
+      // Use userKey (derived from useCurrentUser at component top level)
+      if (!userKey) {
           toast({ title: "Error", description: "User information not available for download.", variant: "destructive" });
           setIsDownloadingCsv(false);
           return;
       }
 
-      const response = await getQueryFormsService({
+      const response = await getQueryFormsService({ // Call the imported service function directly
         ...fetchAllParams,
-        userTenentId: currentUser.tenent_id
+        userTenentId: userKey // Pass the tenant ID from component scope
       });
       const dataToExport = response.data;
 
@@ -433,7 +428,6 @@ export default function QueryFormsPage() {
         return;
       }
 
-      // Dynamically determine headers from other_meta
       const otherMetaKeys = new Set<string>();
       dataToExport.forEach(item => {
         if (item.other_meta && typeof item.other_meta === 'object') {
@@ -491,7 +485,7 @@ export default function QueryFormsPage() {
         URL.revokeObjectURL(url);
       }
       toast({ title: "Download Started", description: "CSV file is being generated."});
-      setIsDownloadDialogOpen(false); // Close dialog on successful download trigger
+      setIsDownloadDialogOpen(false);
     } catch (err) {
       console.error("Error downloading CSV:", err);
       toast({ title: "Download Failed", description: (err as Error).message || "Could not generate CSV.", variant: "destructive" });
@@ -500,6 +494,10 @@ export default function QueryFormsPage() {
     }
   };
 
+  const pageIsLoading = isLoadingUser || isLoading; // Combined loading state
+  const pageIsError = isUserError || isQueryFormsError;
+  const pageError = isUserError ? new Error("Failed to load user data") : queryFormsError;
+
 
   return (
     <TooltipProvider>
@@ -507,7 +505,7 @@ export default function QueryFormsPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h1 className="text-3xl font-bold tracking-tight">Query Forms</h1>
           <div className="flex items-center space-x-2 self-end sm:self-center">
-             <Button onClick={() => setIsDownloadDialogOpen(true)} variant="outline" size="sm" disabled={isLoading || isFetching}>
+             <Button onClick={() => setIsDownloadDialogOpen(true)} variant="outline" size="sm" disabled={pageIsLoading || isFetching}>
                 <DownloadCloud className="mr-2 h-4 w-4" /> Download CSV
              </Button>
             <Tooltip>
@@ -517,6 +515,7 @@ export default function QueryFormsPage() {
                   size="icon"
                   onClick={() => setViewMode("card")}
                   aria-label="Card View"
+                  disabled={pageIsLoading}
                 >
                   <LayoutGrid className="h-4 w-4" />
                 </Button>
@@ -530,6 +529,7 @@ export default function QueryFormsPage() {
                   size="icon"
                   onClick={() => setViewMode("table")}
                   aria-label="Table View"
+                  disabled={pageIsLoading}
                 >
                   <List className="h-4 w-4" />
                 </Button>
@@ -557,7 +557,7 @@ export default function QueryFormsPage() {
                   onValueChange={(value) =>
                     setSelectedTypeFilter(value === "all" ? null : value)
                   }
-                  disabled={isLoading || isFetching}
+                  disabled={pageIsLoading || isFetching}
                 >
                   <SelectTrigger
                     id="type-filter-select"
@@ -593,13 +593,13 @@ export default function QueryFormsPage() {
                   onChange={(e) => setLocalGroupIdFilter(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && applyGroupIdFilter()}
                   className="h-9 text-xs"
-                  disabled={isLoading || isFetching}
+                  disabled={pageIsLoading || isFetching}
                 />
               </div>
               <Button
                 onClick={applyGroupIdFilter}
                 className="w-full md:w-auto h-9 text-xs"
-                disabled={isLoading || isFetching}
+                disabled={pageIsLoading || isFetching}
               >
                 <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Group ID Filter
               </Button>
@@ -624,7 +624,7 @@ export default function QueryFormsPage() {
                         onValueChange={(value) =>
                           setSortField(value as SortFieldQuery)
                         }
-                        disabled={isLoading || isFetching}
+                        disabled={pageIsLoading || isFetching}
                       >
                         <SelectTrigger className="h-9 text-xs">
                           <SelectValue placeholder="Sort by..." />
@@ -651,7 +651,7 @@ export default function QueryFormsPage() {
                         onValueChange={(value) =>
                           setSortOrder(value as SortOrderQuery)
                         }
-                        disabled={isLoading || isFetching}
+                        disabled={pageIsLoading || isFetching}
                       >
                         <SelectTrigger className="h-9 text-xs">
                           <SelectValue placeholder="Order..." />
@@ -676,7 +676,7 @@ export default function QueryFormsPage() {
                       <Select
                         value={String(pageSize)}
                         onValueChange={(value) => setPageSize(Number(value))}
-                        disabled={isLoading || isFetching}
+                        disabled={pageIsLoading || isFetching}
                       >
                         <SelectTrigger className="h-9 text-xs">
                           <SelectValue placeholder="Items per page" />
@@ -701,16 +701,16 @@ export default function QueryFormsPage() {
           </CardContent>
         </Card>
 
-        {(isLoading && !queryFormsData) || (isFetching && !queryFormsData) ? (
+        {(pageIsLoading && !queryFormsData) || (isFetching && !queryFormsData) ? (
           <QueryFormsPageSkeleton viewMode={viewMode} pageSize={pageSize} />
         ) : null}
 
-        {isError && !isFetching && (
+        {pageIsError && !isFetching && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error Loading Data</AlertTitle>
             <AlertDescriptionComponent>
-              Could not fetch query forms. {error?.message}
+              Could not fetch query forms. {pageError?.message}
               <Button
                 onClick={() => refetch()}
                 variant="secondary"
@@ -727,13 +727,19 @@ export default function QueryFormsPage() {
           </Alert>
         )}
 
-        {!isLoading && !isError && queryForms.length === 0 && (
+        {!pageIsLoading && !pageIsError && userKey && queryForms.length === 0 && (
           <div className="mt-4 border border-dashed border-border rounded-md p-8 text-center text-muted-foreground">
-            No query forms found matching your criteria.
+            No query forms found matching your criteria for user ({userKey}).
           </div>
         )}
+         {!pageIsLoading && !pageIsError && !userKey && (
+             <div className="mt-4 border border-dashed border-border rounded-md p-8 text-center text-muted-foreground">
+                User information not available. Cannot load query forms.
+            </div>
+         )}
 
-        {!isLoading && !isError && queryForms.length > 0 && (
+
+        {!pageIsLoading && !pageIsError && userKey && queryForms.length > 0 && (
           <>
             {viewMode === "card" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -799,8 +805,7 @@ export default function QueryFormsPage() {
         )}
       </div>
 
-      {/* CSV Download Dialog */}
-       <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
+      <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Download Query Forms CSV</DialogTitle>
@@ -880,7 +885,7 @@ export default function QueryFormsPage() {
                 From: {selectedQueryForm.email || "N/A"}
               </DialogDescription>
             </DialogHeader>
-             <ScrollArea className="flex-1 min-h-0"> {/* Added min-h-0 for ScrollArea to work correctly in flex */}
+             <ScrollArea className="flex-1 min-h-0"> 
               <div className="py-4 space-y-3 text-sm grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-1 space-y-2 bg-muted/50 p-4 rounded-lg border">
                   <DetailItem label="Name" value={selectedQueryForm.name} />
@@ -941,7 +946,7 @@ export default function QueryFormsPage() {
                                     : selectedQueryForm.other_meta;
                                   return JSON.stringify(jsonData, null, 2);
                                 } catch (e) {
-                                  return String(selectedQueryForm.other_meta); // Show as string if parsing fails
+                                  return String(selectedQueryForm.other_meta);
                                 }
                               })()}
                             </pre>
@@ -1078,4 +1083,3 @@ function QueryFormsPageSkeleton({
     </>
   );
 }
-
