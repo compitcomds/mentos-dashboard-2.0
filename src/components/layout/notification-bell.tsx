@@ -19,11 +19,11 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useGetNotifications, useMarkNotificationAsReadMutation, useMarkAllNotificationsAsReadMutation } from '@/lib/queries/notification';
-import type { Notification, NotificationType } from '@/types/notification';
+import type { Notification, NotificationType } from '@/types/notification'; // Using the updated flat Notification type
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
-const getNotificationIcon = (type?: NotificationType): React.ReactElement => { // Allow type to be undefined
+const getNotificationIcon = (type?: NotificationType | null): React.ReactElement => {
   switch (type) {
     case 'info':
       return <Info className="h-4 w-4 text-blue-500" />;
@@ -33,30 +33,31 @@ const getNotificationIcon = (type?: NotificationType): React.ReactElement => { /
       return <XCircle className="h-4 w-4 text-red-500" />;
     case 'success':
       return <CheckCircle className="h-4 w-4 text-green-500" />;
-    case 'custom': // Explicitly handle custom if needed, or let it fall to default
-      return <Info className="h-4 w-4 text-purple-500" />; // Example for custom type
-    default: // Handles undefined or any other unexpected type
-      return <Info className="h-4 w-4 text-gray-500" />; // Default/fallback icon
+    case 'custom':
+      return <Info className="h-4 w-4 text-purple-500" />;
+    default:
+      return <Info className="h-4 w-4 text-gray-500" />;
   }
 };
 
 export default function NotificationBell() {
   const router = useRouter();
-  const { data: notificationsResponse, isLoading, isError } = useGetNotifications();
+  // Fetching only unread notifications for the bell dropdown initially
+  const { data: notificationsResponse, isLoading, isError } = useGetNotifications({ isRead: false, limit: 5 });
   const markAsReadMutation = useMarkNotificationAsReadMutation();
   const markAllAsReadMutation = useMarkAllNotificationsAsReadMutation();
 
   const notifications = notificationsResponse?.data || [];
-  // Robust check for unread count
-  const unreadCount = notifications.filter(n => n && n.attributes && n.attributes.isRead === false).length;
+  // Unread count is simply the length of the fetched unread notifications
+  const unreadCount = notificationsResponse?.meta?.pagination?.total || 0;
+
 
   const handleNotificationClick = (notification: Notification) => {
-    // Ensure attributes and isRead exist before checking
-    if (notification && notification.attributes && notification.attributes.isRead === false) {
+    if (notification && notification.isRead === false) { // Direct access
       markAsReadMutation.mutate({ notificationId: notification.id });
     }
-    if (notification.attributes.actionUrl) {
-      router.push(notification.attributes.actionUrl);
+    if (notification.actionUrl) { // Direct access
+      router.push(notification.actionUrl);
     }
   };
 
@@ -82,7 +83,7 @@ export default function NotificationBell() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 md:w-96">
         <DropdownMenuLabel className="flex justify-between items-center">
-          <span>Notifications</span>
+          <span>Unread Notifications</span>
           {unreadCount > 0 && (
             <Badge variant="secondary">{unreadCount} New</Badge>
           )}
@@ -109,42 +110,41 @@ export default function NotificationBell() {
           )}
           {!isLoading && !isError && notifications.length === 0 && (
              <DropdownMenuItem disabled className="text-center text-muted-foreground py-4">
-               <MailWarning className="mr-2 h-4 w-4 mx-auto mb-1" /> No new notifications.
+               <MailWarning className="mr-2 h-4 w-4 mx-auto mb-1" /> No new unread notifications.
             </DropdownMenuItem>
           )}
           {!isLoading && !isError && notifications.length > 0 && (
             notifications.map((notification) => {
-              // Safe check for rendering read/unread status
-              if (!notification || !notification.attributes) {
-                // Skip rendering this notification if essential data is missing
-                return null; 
+              if (!notification) { // Basic check for notification object itself
+                return null;
               }
-              const isUnread = notification.attributes.isRead === false;
+              const isUnread = notification.isRead === false; // Direct access
               return (
                 <DropdownMenuItem
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
                   className={cn(
                     "flex items-start space-x-3 p-3 cursor-pointer hover:bg-accent",
-                    isUnread && "bg-primary/5 hover:bg-primary/10"
+                    isUnread && "bg-primary/5 hover:bg-primary/10" // Should always be true for this list now
                   )}
                 >
                   <div className="flex-shrink-0 mt-0.5">
-                    {getNotificationIcon(notification.attributes.type)}
+                    {getNotificationIcon(notification.type)} {/* Direct access */}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">
-                      {notification.attributes.title}
+                      {notification.title} {/* Direct access */}
                     </p>
-                    {notification.attributes.message && (
+                    {notification.message && ( /* Direct access */
                       <p className="text-xs text-muted-foreground line-clamp-2">
-                        {notification.attributes.message}
+                        {notification.message}
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground/80 mt-0.5">
-                      {notification.attributes.createdAt ? formatDistanceToNow(new Date(notification.attributes.createdAt), { addSuffix: true }) : 'Recently'}
+                      {notification.createdAt ? formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true }) : 'Recently'} {/* Direct access */}
                     </p>
                   </div>
+                  {/* Unread indicator might be redundant if list is only unread, but good for consistency */}
                   {isUnread && (
                      <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-1" title="Unread"></div>
                   )}
@@ -170,16 +170,21 @@ export default function NotificationBell() {
                     )}
                 </DropdownMenuItem>
               )}
-               <DropdownMenuItem disabled className="text-center text-muted-foreground text-xs">
-                 {/* Placeholder for "View All" if needed later */}
-                 {/* <Link href="/dashboard/notifications">View All Notifications</Link> */}
-                 {unreadCount === 0 && notifications.length > 0 && (<><CircleSlash className="mr-2 h-4 w-4" />No unread notifications</>)}
+              <DropdownMenuItem asChild className="flex items-center justify-center text-sm text-primary hover:underline">
+                 <Link href="/dashboard/notifications">View All Notifications <ExternalLink className="ml-1.5 h-3.5 w-3.5" /></Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </>
+        )}
+         {!isLoading && !isError && notifications.length === 0 && unreadCount === 0 && (
+            <>
+             <DropdownMenuSeparator />
+              <DropdownMenuItem asChild className="flex items-center justify-center text-sm text-primary hover:underline">
+                 <Link href="/dashboard/notifications">View All Notifications <ExternalLink className="ml-1.5 h-3.5 w-3.5" /></Link>
+              </DropdownMenuItem>
+            </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
-

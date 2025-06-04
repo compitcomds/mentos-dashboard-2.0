@@ -8,19 +8,19 @@ import {
   markNotificationAsRead as markNotificationAsReadService,
   markAllNotificationsAsRead as markAllNotificationsAsReadService,
 } from '@/lib/services/notification';
+// Using the updated Notification and NotificationsResponse types
 import type { Notification, NotificationsResponse } from '@/types/notification';
 import { useCurrentUser } from './user';
 
-// Updated Query Key to include isRead status for differentiation
 const NOTIFICATIONS_QUERY_KEY = (userId?: number, userTenentId?: string, isRead?: boolean | null, page?: number) =>
   ['notifications', userId || 'allUsers', userTenentId || 'allTenents', isRead === undefined ? 'all_status' : (isRead === null ? 'all_status_explicit' : (isRead ? 'read' : 'unread')), page || 1];
 
 interface UseGetNotificationsOptions {
   limit?: number;
-  isRead?: boolean | null; // Allow null for fetching all
+  isRead?: boolean | null;
   page?: number;
-  enabled?: boolean; // To control query execution
-  refetchInterval?: number | false; // Allow disabling refetch interval
+  enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 export function useGetNotifications(options?: UseGetNotificationsOptions) {
@@ -28,7 +28,6 @@ export function useGetNotifications(options?: UseGetNotificationsOptions) {
   const userId = currentUser?.id;
   const userTenentId = currentUser?.tenent_id;
   const { limit = 10, isRead, page = 1, enabled = true, refetchInterval = 1000 * 60 * 2 } = options || {};
-
 
   return useQuery<NotificationsResponse, Error>({
     queryKey: NOTIFICATIONS_QUERY_KEY(userId, userTenentId, isRead, page),
@@ -40,8 +39,8 @@ export function useGetNotifications(options?: UseGetNotificationsOptions) {
       return getNotificationsService({ userId, userTenentId, limit, isRead, page });
     },
     enabled: !!userId && !!userTenentId && !isLoadingUser && enabled,
-    staleTime: 1000 * 60, // 1 minute
-    refetchInterval: refetchInterval, // Use passed or default interval
+    staleTime: 1000 * 60,
+    refetchInterval: refetchInterval,
   });
 }
 
@@ -51,10 +50,20 @@ export function useMarkNotificationAsReadMutation() {
 
   return useMutation<Notification, Error, { notificationId: number }>({
     mutationFn: ({ notificationId }) => markNotificationAsReadService(notificationId),
-    onSuccess: () => {
-      // No toast by default, individual components can show it
-      // Invalidate both "all" and "unread" queries, and paginated queries
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id] });
+      // Also, update the specific notification in the cache if possible
+      // This provides a more instant UI update before full refetch
+      queryClient.setQueryData<NotificationsResponse>(
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined), // Example: invalidate 'all' status for all pages
+        (oldData) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            data: oldData.data.map(n => n.id === variables.notificationId ? { ...n, isRead: true } : n),
+          };
+        }
+      );
     },
     onError: (error: any) => {
       toast({
@@ -79,8 +88,18 @@ export function useMarkAllNotificationsAsReadMutation() {
     },
     onSuccess: () => {
       toast({ title: "Notifications Updated", description: "All notifications marked as read." });
-      // Invalidate both "all" and "unread" queries, and paginated queries
       queryClient.invalidateQueries({ queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id] });
+      // Optimistically update all currently fetched notifications to read
+      queryClient.setQueryData<NotificationsResponse>(
+         NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined),
+         (oldData) => {
+           if (!oldData) return oldData;
+           return {
+             ...oldData,
+             data: oldData.data.map(n => ({ ...n, isRead: true })),
+           };
+         }
+      );
     },
     onError: (error: any) => {
       toast({
@@ -91,4 +110,3 @@ export function useMarkAllNotificationsAsReadMutation() {
     },
   });
 }
-

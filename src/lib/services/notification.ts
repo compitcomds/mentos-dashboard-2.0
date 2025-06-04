@@ -1,7 +1,8 @@
 
 'use server';
 
-import type { Notification, NotificationsResponse, UpdateNotificationPayload, NotificationResponse } from '@/types/notification';
+// Using the updated Notification, NotificationsResponse, NotificationResponse types
+import type { Notification, NotificationsResponse, UpdateNotificationPayload, NotificationResponse, CreateNotificationPayload } from '@/types/notification';
 import axiosInstance from '@/lib/axios';
 import { getAccessToken } from '@/lib/actions/auth';
 import { AxiosError } from 'axios';
@@ -18,35 +19,34 @@ interface GetNotificationsParams {
   userId: number;
   userTenentId: string;
   limit?: number;
-  isRead?: boolean | null; // Updated to allow null/undefined for fetching all
-  page?: number; // Added for pagination
+  isRead?: boolean | null;
+  page?: number;
 }
 
 export const getNotifications = async (params: GetNotificationsParams): Promise<NotificationsResponse> => {
-  const { userId, userTenentId, limit = 10, isRead: filterIsRead, page = 1 } = params; // Default limit for pages
+  const { userId, userTenentId, limit = 10, isRead: filterIsRead, page = 1 } = params;
 
   if (!userId || !userTenentId) {
     console.error('[Service getNotifications]: userId or userTenentId is missing.');
     throw new Error('User ID and tenent_id are required to fetch notifications.');
   }
 
+  // Strapi filters are applied directly to the fields in your flat structure
   const strapiFilters: any = {
-    'user': { id: { '$eq': userId } },
+    'user': { id: { '$eq': userId } }, // Assuming 'user' is a relation and you filter by its id
     'tenent_id': { '$eq': userTenentId },
   };
 
-  // Only add the isRead filter if it's explicitly true or false
   if (filterIsRead === true || filterIsRead === false) {
     strapiFilters['isRead'] = { '$eq': filterIsRead };
   }
-  // If filterIsRead is null or undefined, no isRead filter is applied, fetching all.
 
   const queryParams: any = {
     filters: strapiFilters,
     sort: ['createdAt:desc'],
     'pagination[page]': page,
-    'pagination[pageSize]': limit, // Use limit as pageSize for pagination
-    populate: ['user'],
+    'pagination[pageSize]': limit,
+    // No 'populate' needed if the structure is already flat as per API response
   };
 
   const url = '/notifications';
@@ -54,8 +54,11 @@ export const getNotifications = async (params: GetNotificationsParams): Promise<
 
   try {
     const headers = await getAuthHeader();
+    // Expect NotificationsResponse which directly contains Notification[] in its data field
     const response = await axiosInstance.get<NotificationsResponse>(url, { params: queryParams, headers });
 
+    // The response.data should already be in the NotificationsResponse structure
+    // with data: Notification[] directly if the API sends it flat.
     if (!response.data || !response.data.data || !Array.isArray(response.data.data) || !response.data.meta?.pagination) {
       console.error(`[getNotifications] Unexpected API response structure for user ${userId}. Expected 'data' array and 'meta.pagination', received:`, response.data);
       return { data: [], meta: { pagination: { page, pageSize: limit, pageCount: 0, total: 0 } } };
@@ -82,17 +85,20 @@ export const markNotificationAsRead = async (notificationId: number): Promise<No
     throw new Error("Notification ID is required to mark as read.");
   }
   const url = `/notifications/${notificationId}`;
+  // Standard Strapi PUT request includes a 'data' wrapper in the payload
   const payload: { data: UpdateNotificationPayload } = { data: { isRead: true } };
   console.log(`[markNotificationAsRead] Marking notification ID ${notificationId} as read. Payload:`, payload);
 
   try {
     const headers = await getAuthHeader();
+    // Expect NotificationResponse which directly contains Notification in its data field
     const response = await axiosInstance.put<NotificationResponse>(url, payload, { headers });
+
     if (!response.data || !response.data.data) {
       throw new Error('Unexpected API response structure after updating notification.');
     }
     console.log(`[markNotificationAsRead] Notification ${notificationId} marked as read successfully.`);
-    return response.data.data;
+    return response.data.data; // Return the flat notification object
   } catch (error: unknown) {
     let message = `Failed to mark notification ${notificationId} as read.`;
      if (error instanceof AxiosError) {
@@ -108,19 +114,20 @@ export const markNotificationAsRead = async (notificationId: number): Promise<No
   }
 };
 
+// Renaming to avoid conflict if another markNotificationAsRead exists, or ensure correct import
+const markNotificationAsReadService = markNotificationAsRead;
+
 export const markAllNotificationsAsRead = async (userId: number, userTenentId: string): Promise<void> => {
   console.log(`[markAllNotificationsAsRead] Attempting for user ${userId}, tenent ${userTenentId}.`);
-  // 1. Fetch all unread notifications for the user for the given tenent_id
-  const unreadNotificationsResponse = await getNotifications({ userId, userTenentId, isRead: false, limit: -1 }); // limit -1 for all
+  const unreadNotificationsResponse = await getNotifications({ userId, userTenentId, isRead: false, limit: -1 });
 
   if (unreadNotificationsResponse.data.length === 0) {
     console.log(`[markAllNotificationsAsRead] No unread notifications found for user ${userId}.`);
     return;
   }
 
-  // 2. Iterate and mark each as read
   const updatePromises = unreadNotificationsResponse.data.map(notification =>
-    markNotificationAsReadService(notification.id) // Ensure this function is correctly named or imported
+    markNotificationAsReadService(notification.id)
   );
 
   try {
@@ -131,6 +138,3 @@ export const markAllNotificationsAsRead = async (userId: number, userTenentId: s
     throw new Error("Failed to mark all notifications as read. Some may have failed.");
   }
 };
-// Renaming to avoid conflict if another markNotificationAsRead exists, or ensure correct import
-const markNotificationAsReadService = markNotificationAsRead;
-

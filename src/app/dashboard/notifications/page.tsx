@@ -14,11 +14,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useGetNotifications, useMarkNotificationAsReadMutation, useMarkAllNotificationsAsReadMutation } from '@/lib/queries/notification';
-import type { Notification, NotificationType } from '@/types/notification';
+import type { Notification, NotificationType } from '@/types/notification'; // Using updated flat Notification type
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
-const getNotificationIcon = (type?: NotificationType): React.ReactElement => {
+const getNotificationIcon = (type?: NotificationType | null): React.ReactElement => {
   switch (type) {
     case 'info':
       return <Info className="h-5 w-5 text-blue-500" />;
@@ -54,7 +54,7 @@ export default function NotificationsPage() {
     page: currentPage,
     isRead: null, // Fetch all notifications (read and unread)
     enabled: true,
-    refetchInterval: false, // No need to poll on this page, user can refresh
+    refetchInterval: false,
   });
 
   const notifications = notificationsResponse?.data || [];
@@ -64,37 +64,30 @@ export default function NotificationsPage() {
   const markAllAsReadMutation = useMarkAllNotificationsAsReadMutation();
 
   const handleNotificationClick = (notification: Notification) => {
-    if (notification && notification.attributes && !notification.attributes.isRead) {
+    if (notification && notification.isRead === false) { // Direct access
       markAsReadMutation.mutate(
         { notificationId: notification.id },
         {
           onSuccess: () => {
-            // Optimistic update: refetch or manually update local state
-            // For simplicity, relying on query invalidation by the hook
+            // Query invalidation handles refetch
           },
-          onError: () => {
-            // Error toast handled by hook
-          }
         }
       );
     }
-    if (notification.attributes.actionUrl) {
-      router.push(notification.attributes.actionUrl);
+    if (notification.actionUrl) { // Direct access
+      router.push(notification.actionUrl);
     }
   };
 
   const handleMarkAllRead = () => {
     markAllAsReadMutation.mutate(undefined, {
         onSuccess: () => {
-             // Toast handled by mutation hook
+            // Toast handled by mutation hook
         },
-        onError: () => {
-            // Error toast handled by mutation hook
-        }
     });
   };
 
-  const hasUnread = notifications.some(n => n.attributes && !n.attributes.isRead);
+  const hasUnread = notifications.some(n => n && n.isRead === false); // Direct access
 
   return (
     <div className="space-y-6">
@@ -157,43 +150,43 @@ export default function NotificationsPage() {
           )}
 
           {!isLoading && !isError && notifications.length > 0 && (
-            <ScrollArea className="max-h-[calc(100vh-20rem)]"> {/* Adjust max height as needed */}
+            <ScrollArea className="max-h-[calc(100vh-20rem)]">
               <div className="space-y-3 pr-3">
                 {notifications.map((notification) => {
-                  if (!notification || !notification.attributes) return null;
-                  const isUnread = !notification.attributes.isRead;
+                  if (!notification) return null; // Check for notification object itself
+                  const isUnread = notification.isRead === false; // Direct access
                   return (
                     <div
                       key={notification.id}
                       onClick={() => handleNotificationClick(notification)}
                       className={cn(
-                        "flex items-start space-x-3 p-3.5 border rounded-lg cursor-pointer transition-colors hover:bg-accent",
+                        "flex items-start space-x-3 p-3.5 border rounded-lg transition-colors hover:bg-accent",
                         isUnread && "bg-primary/5 hover:bg-primary/10 border-primary/30",
-                        notification.attributes.actionUrl && "cursor-pointer"
+                        notification.actionUrl && "cursor-pointer" // Direct access
                       )}
                     >
                       <div className="flex-shrink-0 mt-0.5">
-                        {getNotificationIcon(notification.attributes.type)}
+                        {getNotificationIcon(notification.type)} {/* Direct access */}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline">
                            <h4 className={cn("text-sm font-semibold text-foreground truncate", isUnread && "text-primary")}>
-                             {notification.attributes.title}
+                             {notification.title} {/* Direct access */}
                            </h4>
-                            {notification.attributes.createdAt && (
+                            {notification.createdAt && ( /* Direct access */
                                 <p className="text-xs text-muted-foreground/80 ml-2 flex-shrink-0">
-                                {formatDistanceToNow(new Date(notification.attributes.createdAt), { addSuffix: true })}
+                                {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                                 </p>
                             )}
                         </div>
-                        {notification.attributes.message && (
+                        {notification.message && ( /* Direct access */
                           <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
-                            {notification.attributes.message}
+                            {notification.message}
                           </p>
                         )}
-                        {notification.attributes.actionUrl && (
+                        {notification.actionUrl && ( /* Direct access */
                            <Button variant="link" size="sm" className="p-0 h-auto mt-1 text-xs" asChild>
-                             <Link href={notification.attributes.actionUrl} onClick={(e) => e.stopPropagation()}> {/* Prevent card click */}
+                             <Link href={notification.actionUrl} onClick={(e) => e.stopPropagation()}>
                                View Details <ExternalLink className="ml-1 h-3 w-3" />
                              </Link>
                            </Button>
@@ -209,7 +202,6 @@ export default function NotificationsPage() {
             </ScrollArea>
           )}
 
-          {/* Pagination Controls */}
           {pagination && pagination.pageCount > 1 && (
             <div className="flex items-center justify-between pt-6 mt-4 border-t">
               <Button
