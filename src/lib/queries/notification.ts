@@ -55,12 +55,29 @@ export function useMarkNotificationAsReadMutation() {
       // Also, update the specific notification in the cache if possible
       // This provides a more instant UI update before full refetch
       queryClient.setQueryData<NotificationsResponse>(
-        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined), // Example: invalidate 'all' status for all pages
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined), 
         (oldData) => {
           if (!oldData) return oldData;
           return {
             ...oldData,
             data: oldData.data.map(n => n.id === variables.notificationId ? { ...n, isRead: true } : n),
+          };
+        }
+      );
+       queryClient.setQueryData<NotificationsResponse>(
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, false, undefined), // Target unread list
+        (oldData) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            data: oldData.data.filter(n => n.id !== variables.notificationId), // Remove from unread list
+             meta: {
+                ...oldData.meta,
+                pagination: {
+                    ...oldData.meta.pagination,
+                    total: Math.max(0, oldData.meta.pagination.total - 1)
+                }
+            }
           };
         }
       );
@@ -88,18 +105,45 @@ export function useMarkAllNotificationsAsReadMutation() {
     },
     onSuccess: () => {
       toast({ title: "Notifications Updated", description: "All notifications marked as read." });
-      queryClient.invalidateQueries({ queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id] });
-      // Optimistically update all currently fetched notifications to read
+      
+      // 1. Invalidate all notification queries for the current user and tenent.
+      // This will ensure all views (like the main notifications page) refetch fresh data.
+      queryClient.invalidateQueries({ 
+        queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id] 
+      });
+
+      // 2. Optimistically update the cache for the "unread" notifications list (typically used by the bell).
+      // Set its data to an empty array and total to 0.
+      // We target the key for "unread" status (isRead: false) and any page (undefined for page).
       queryClient.setQueryData<NotificationsResponse>(
-         NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined),
-         (oldData) => {
-           if (!oldData) return oldData;
-           return {
-             ...oldData,
-             data: oldData.data.map(n => ({ ...n, isRead: true })),
-           };
-         }
-      );
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, false, undefined), 
+        (oldData) => {
+          const defaultPageSize = oldData?.meta?.pagination?.pageSize || 10; // Use existing or default
+          if (!oldData) {
+            // If there was no cached data for unread notifications, create a default empty state.
+            return { 
+              data: [], 
+              meta: { 
+                pagination: { page: 1, pageSize: defaultPageSize, pageCount: 0, total: 0 } 
+              } 
+            };
+          }
+          // If oldData exists, update it to be empty.
+          return {
+            ...oldData,
+            data: [], 
+            meta: {
+                ...oldData.meta,
+                pagination: {
+                    ...oldData.meta.pagination,
+                    total: 0,
+                    pageCount: 0, 
+                    page: 1 // Reset to page 1
+                }
+            }
+          };
+        }
+     );
     },
     onError: (error: any) => {
       toast({
@@ -110,3 +154,4 @@ export function useMarkAllNotificationsAsReadMutation() {
     },
   });
 }
+

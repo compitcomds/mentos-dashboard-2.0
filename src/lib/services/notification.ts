@@ -33,7 +33,7 @@ export const getNotifications = async (params: GetNotificationsParams): Promise<
 
   // Strapi filters are applied directly to the fields in your flat structure
   const strapiFilters: any = {
-    'user': { id: { '$eq': userId } }, // Assuming 'user' is a relation and you filter by its id
+    'user': { id: { '$eq': userId } }, 
     'tenent_id': { '$eq': userTenentId },
   };
 
@@ -46,7 +46,6 @@ export const getNotifications = async (params: GetNotificationsParams): Promise<
     sort: ['createdAt:desc'],
     'pagination[page]': page,
     'pagination[pageSize]': limit,
-    // No 'populate' needed if the structure is already flat as per API response
   };
 
   const url = '/notifications';
@@ -54,11 +53,8 @@ export const getNotifications = async (params: GetNotificationsParams): Promise<
 
   try {
     const headers = await getAuthHeader();
-    // Expect NotificationsResponse which directly contains Notification[] in its data field
     const response = await axiosInstance.get<NotificationsResponse>(url, { params: queryParams, headers });
 
-    // The response.data should already be in the NotificationsResponse structure
-    // with data: Notification[] directly if the API sends it flat.
     if (!response.data || !response.data.data || !Array.isArray(response.data.data) || !response.data.meta?.pagination) {
       console.error(`[getNotifications] Unexpected API response structure for user ${userId}. Expected 'data' array and 'meta.pagination', received:`, response.data);
       return { data: [], meta: { pagination: { page, pageSize: limit, pageCount: 0, total: 0 } } };
@@ -85,20 +81,18 @@ export const markNotificationAsRead = async (notificationId: number): Promise<No
     throw new Error("Notification ID is required to mark as read.");
   }
   const url = `/notifications/${notificationId}`;
-  // Standard Strapi PUT request includes a 'data' wrapper in the payload
   const payload: { data: UpdateNotificationPayload } = { data: { isRead: true } };
   console.log(`[markNotificationAsRead] Marking notification ID ${notificationId} as read. Payload:`, payload);
 
   try {
     const headers = await getAuthHeader();
-    // Expect NotificationResponse which directly contains Notification in its data field
     const response = await axiosInstance.put<NotificationResponse>(url, payload, { headers });
 
     if (!response.data || !response.data.data) {
       throw new Error('Unexpected API response structure after updating notification.');
     }
     console.log(`[markNotificationAsRead] Notification ${notificationId} marked as read successfully.`);
-    return response.data.data; // Return the flat notification object
+    return response.data.data;
   } catch (error: unknown) {
     let message = `Failed to mark notification ${notificationId} as read.`;
      if (error instanceof AxiosError) {
@@ -114,27 +108,48 @@ export const markNotificationAsRead = async (notificationId: number): Promise<No
   }
 };
 
-// Renaming to avoid conflict if another markNotificationAsRead exists, or ensure correct import
 const markNotificationAsReadService = markNotificationAsRead;
 
 export const markAllNotificationsAsRead = async (userId: number, userTenentId: string): Promise<void> => {
   console.log(`[markAllNotificationsAsRead] Attempting for user ${userId}, tenent ${userTenentId}.`);
-  const unreadNotificationsResponse = await getNotifications({ userId, userTenentId, isRead: false, limit: -1 });
+  
+  // Fetch all unread notifications. Strapi's limit: -1 often means all, but it can be capped.
+  // If a very large number of notifications is expected, consider paginated fetching and updating.
+  const unreadNotificationsResponse = await getNotificationsService({ userId, userTenentId, isRead: false, limit: -1 });
 
-  if (unreadNotificationsResponse.data.length === 0) {
+  const unreadNotifications = unreadNotificationsResponse.data;
+
+  if (unreadNotifications.length === 0) {
     console.log(`[markAllNotificationsAsRead] No unread notifications found for user ${userId}.`);
     return;
   }
 
-  const updatePromises = unreadNotificationsResponse.data.map(notification =>
-    markNotificationAsReadService(notification.id)
+  console.log(`[markAllNotificationsAsRead] Found ${unreadNotifications.length} unread notifications to mark as read for user ${userId}. Processing one by one...`);
+
+  const updatePromises = unreadNotifications.map(notification =>
+    markNotificationAsReadService(notification.id) // Service updates one by one
   );
 
   try {
-    await Promise.all(updatePromises);
-    console.log(`[markAllNotificationsAsRead] Successfully marked ${unreadNotificationsResponse.data.length} notifications as read for user ${userId}.`);
+    const results = await Promise.allSettled(updatePromises);
+    const successfulUpdates = results.filter(result => result.status === 'fulfilled').length;
+    const failedUpdates = results.length - successfulUpdates;
+
+    console.log(`[markAllNotificationsAsRead] Processed ${results.length} notifications for user ${userId}. Successful: ${successfulUpdates}, Failed: ${failedUpdates}.`);
+    
+    if (failedUpdates > 0) {
+      console.error(`[markAllNotificationsAsRead] Some notifications failed to update for user ${userId}. Failures:`, results.filter(r => r.status === 'rejected'));
+      throw new Error(`Failed to mark all notifications as read. ${failedUpdates} of ${results.length} failed.`);
+    }
   } catch (error) {
-    console.error(`[markAllNotificationsAsRead] Error marking all notifications as read for user ${userId}:`, error);
-    throw new Error("Failed to mark all notifications as read. Some may have failed.");
+    // This catch block will handle errors from Promise.allSettled if re-thrown or other errors during processing.
+    console.error(`[markAllNotificationsAsRead] Overall error marking all notifications as read for user ${userId}:`, error);
+    // The error from Promise.allSettled (if rethrown due to failedUpdates > 0) will be propagated.
+    // If no rethrow, ensure this catch block throws a generic error if needed.
+    if (!(error instanceof Error && error.message.startsWith("Failed to mark all notifications as read."))) {
+        throw new Error("An unexpected error occurred while marking all notifications as read.");
+    }
+    throw error; // Re-throw the specific error from the loop or the new one
   }
 };
+
