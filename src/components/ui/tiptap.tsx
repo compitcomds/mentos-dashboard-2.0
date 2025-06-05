@@ -1,12 +1,12 @@
 
-import React, { useCallback, useEffect, useState, useRef, memo } from "react"; // Import memo
+import React, { useCallback, useEffect, useState, useRef, memo } from "react";
 import { EditorContent, useEditor, BubbleMenu } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
-import TiptapImage from "@tiptap/extension-image";
+import TiptapImage from "@tiptap/extension-image"; // Standard Tiptap Image extension
 import {
   Bold,
   Italic,
@@ -24,7 +24,7 @@ import {
   AlignCenter,
   AlignRight,
   AlignJustify,
-  Image as ImageIcon,
+  Image as ImageIconLucide, // Renamed to avoid conflict
   Pilcrow,
   Baseline,
   Unlink,
@@ -32,9 +32,6 @@ import {
   ChevronDown,
   Eraser,
   Video,
-  Lock,
-  Unlock,
-  Expand,
 } from "lucide-react";
 
 import { Separator } from "./separator";
@@ -45,7 +42,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./tooltip";
-import { Button, buttonVariants } from "./button"; // Keep buttonVariants
+import { Button, buttonVariants } from "./button";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -54,75 +51,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
-import { Input } from "./input";
-
-// --- Custom Image Extension with Alignment Classes & Inline Styles ---
-const CustomImage = TiptapImage.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      class: {
-        default: "align-left", 
-        parseHTML: (element) =>
-          element
-            .getAttribute("class")
-            ?.match(/align-(left|center|right)/)?.[0],
-        renderHTML: (attributes) => {
-          let baseClasses = "block my-4"; 
-          const alignmentClass = attributes.class || "align-left";
-          let sizingClasses = "";
-          if (
-            !attributes.style ||
-            (!attributes.style.includes("width:") &&
-              !attributes.style.includes("height:"))
-          ) {
-            sizingClasses = "max-w-full h-auto border rounded-md";
-          } else {
-            sizingClasses = "border rounded-md"; 
-          }
-          return {
-            class: `${baseClasses} ${sizingClasses} ${alignmentClass}`.trim(),
-          };
-        },
-      },
-      style: {
-        default: null,
-        parseHTML: (element) => element.getAttribute("style"),
-        renderHTML: (attributes) => {
-          return attributes.style ? { style: attributes.style } : {};
-        },
-      },
-      src: this.parent?.().src,
-      alt: this.parent?.().alt,
-      width: { // Keep for parsing but don't render directly
-        default: null,
-        parseHTML: (element) => element.getAttribute('width') || element.style.width?.replace('px', ''),
-        renderHTML: () => ({}), // We handle width via style or class
-      },
-      height: { // Keep for parsing but don't render directly
-        default: null,
-        parseHTML: (element) => element.getAttribute('height') || element.style.height?.replace('px', ''),
-        renderHTML: () => ({}), // We handle height via style or class
-      },
-      "data-original-width": {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-original-width"),
-        renderHTML: (attributes) =>
-          attributes["data-original-width"]
-            ? { "data-original-width": attributes["data-original-width"] }
-            : {},
-      },
-      "data-original-height": {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-original-height"),
-        renderHTML: (attributes) =>
-          attributes["data-original-height"]
-            ? { "data-original-height": attributes["data-original-height"] }
-            : {},
-      },
-    };
-  },
-});
+// Input is not directly used in the simplified version for image dimensions
 
 interface TipTapEditorProps {
   content?: string;
@@ -137,18 +66,14 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
     const [isBubbleMenuMounted, setIsBubbleMenuMounted] = useState(false);
     const editorContainerRef = useRef<HTMLDivElement>(null);
-    const [imageWidth, setImageWidth] = useState<string>("");
-    const [imageHeight, setImageHeight] = useState<string>("");
-    const [isRatioLocked, setIsRatioLocked] = useState<boolean>(true);
-    const [currentAspectRatio, setCurrentAspectRatio] = useState<number | null>(null);
 
     const editor = useEditor({
       extensions: [
         StarterKit.configure({
-          heading: { levels: [1, 2, 3], HTMLAttributes: {} }, // Added empty HTMLAttributes
-          bulletList: { HTMLAttributes: {} }, // Added empty HTMLAttributes
-          orderedList: { HTMLAttributes: {} }, // Added empty HTMLAttributes
-          blockquote: { HTMLAttributes: {} }, // Added empty HTMLAttributes
+          heading: { levels: [1, 2, 3], HTMLAttributes: {} },
+          bulletList: { HTMLAttributes: {} },
+          orderedList: { HTMLAttributes: {} },
+          blockquote: { HTMLAttributes: {} },
           codeBlock: false,
           horizontalRule: false,
         }),
@@ -161,15 +86,16 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             rel: "noopener noreferrer nofollow",
           },
         }),
-        CustomImage.configure({
+        TiptapImage.configure({ // Using standard TiptapImage
           inline: false,
           allowBase64: true,
+          // No custom attributes for alignment/style needed here for standard usage
         }),
         Placeholder.configure({
           placeholder: "Start writing your amazing content here…",
         }),
         TextAlign.configure({
-          types: ["heading", "paragraph", "image"], // Added image to types for alignment
+          types: ["heading", "paragraph"], // Removed 'image' from types
           alignments: ["left", "center", "right", "justify"],
           defaultAlignment: "left",
         }),
@@ -189,77 +115,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             setSourceContent(html);
           }
         }
-        if (editor.isActive("image")) {
-          updateImageDimensionStates();
-        }
       },
-      onSelectionUpdate: ({ editor }) => {
-        if (editor.isActive("image")) {
-          updateImageDimensionStates();
-        } else {
-          setImageWidth("");
-          setImageHeight("");
-          setCurrentAspectRatio(null);
-        }
-      },
-    }); 
-
-    const getCurrentImageDimensions = useCallback(() => {
-      if (!editor || !editor.isActive("image"))
-        return { width: "", height: "", ratio: null };
-      const attrs = editor.getAttributes("image");
-      const style = attrs.style || "";
-      const widthMatch = style.match(/width:\s*([^;]+?)\s*(?:px|%)?\s*;/);
-      const heightMatch = style.match(/height:\s*([^;]+?)\s*(?:px|%)?\s*;/);
-
-      let width = widthMatch ? widthMatch[1].trim() : attrs.width || "";
-      let height = heightMatch ? heightMatch[1].trim() : attrs.height || "";
-      let ratio: number | null = null;
-
-      if (typeof width === "string") width = width.replace(/%\s*$/, "%");
-      if (typeof height === "string") height = height.replace(/%\s*$/, "%");
-
-      const numericWidth = parseFloat(width);
-      const numericHeight = parseFloat(height);
-
-      if (
-        !isNaN(numericWidth) &&
-        numericWidth > 0 &&
-        !isNaN(numericHeight) &&
-        numericHeight > 0
-      ) {
-        ratio = numericWidth / numericHeight;
-      } else {
-        const originalWidth = parseFloat(attrs["data-original-width"]);
-        const originalHeight = parseFloat(attrs["data-original-height"]);
-        if (
-          !isNaN(originalWidth) &&
-          originalWidth > 0 &&
-          !isNaN(originalHeight) &&
-          originalHeight > 0
-        ) {
-          ratio = originalWidth / originalHeight;
-        }
-      }
-
-      return {
-        width: String(width),
-        height: String(height),
-        ratio: ratio,
-      };
-    }, [editor]); 
-
-    const updateImageDimensionStates = useCallback(() => {
-      const { width, height, ratio } = getCurrentImageDimensions();
-      if (width !== imageWidth) setImageWidth(width);
-      if (height !== imageHeight) setImageHeight(height);
-      if (ratio !== currentAspectRatio) setCurrentAspectRatio(ratio);
-    }, [
-      getCurrentImageDimensions,
-      imageWidth,
-      imageHeight,
-      currentAspectRatio,
-    ]); 
+    });
 
     useEffect(() => {
       if (editor && !isSourceMode) {
@@ -285,12 +142,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
         setIsBubbleMenuMounted(true);
       }
     }, [editor, isBubbleMenuMounted]);
-
-    useEffect(() => {
-      if (editor?.isFocused && editor.isActive("image")) {
-        updateImageDimensionStates();
-      }
-    }, [editor, editor?.isFocused, updateImageDimensionStates]);
 
     const setLinkCallback = useCallback(() => {
       if (!editor) return;
@@ -330,53 +181,17 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
       const { fileUrl: mediaUrl, alt: altText, mime: mimeType, name } = media;
       if (editor && mediaUrl) {
         if (mimeType?.startsWith("image/")) {
-          const img = new window.Image();
-          img.onload = () => {
-            const originalWidth = img.naturalWidth;
-            const originalHeight = img.naturalHeight;
-            const maxWidth = editorContainerRef.current?.offsetWidth ? Math.min(editorContainerRef.current.offsetWidth * 0.9, 600) : 600;
-            
-            let initialWidth = originalWidth;
-            let initialHeight = originalHeight;
-
-            if (initialWidth > maxWidth) {
-              initialHeight = (originalHeight * maxWidth) / originalWidth;
-              initialWidth = maxWidth;
-            }
-
-            initialWidth = Math.max(initialWidth, 50);
-            initialHeight = Math.max(initialHeight, 50);
-
-            const initialStyle = `width: ${Math.round(initialWidth)}px; height: ${Math.round(initialHeight)}px;`;
-            editor
-              .chain()
-              .focus()
-              .setImage({
-                src: mediaUrl,
-                alt: altText || name || undefined,
-                class: "align-left",
-                style: initialStyle,
-                "data-original-width": String(originalWidth),
-                "data-original-height": String(originalHeight),
-              })
-              .run();
-            updateImageDimensionStates();
-          };
-          img.onerror = () => {
-            editor
-              .chain()
-              .focus()
-              .setImage({
-                src: mediaUrl,
-                alt: altText || name || undefined,
-                class: "align-left",
-                style: "width: 100px; height: auto; min-width: 50px; min-height: 50px;",
-              })
-              .run();
-            updateImageDimensionStates();
-          };
-          img.src = mediaUrl;
+          // Standard image insertion
+          editor
+            .chain()
+            .focus()
+            .setImage({
+              src: mediaUrl,
+              alt: altText || name || undefined,
+            })
+            .run();
         } else {
+          // Insert non-image files as download links
           const displayText = `Download: ${name || altText || "File"}`;
           const downloadBtnHtml = `<p><a href="${mediaUrl}" download target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); text-decoration: none; border-radius: 0.375rem; font-weight: 500;">${displayText}</a></p>`;
           editor.chain().focus().insertContent(downloadBtnHtml).run();
@@ -403,160 +218,13 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
         const currentSource = sourceContent;
         const editorHtml = editor.getHTML();
         if (editorHtml !== currentSource) {
-          editor.commands.setContent(currentSource, true); 
+          editor.commands.setContent(currentSource, true);
         }
         if (onContentChange) {
           onContentChange(currentSource);
         }
       }
       setIsSourceMode(newMode);
-    };
-
-    const updateImageAttributes = useCallback(
-      (attrs: {
-        class?: string;
-        style?: string;
-        width?: string | null;
-        height?: string | null;
-      }) => {
-        if (!editor || !editor.isActive("image")) return;
-        const currentAttrs = editor.getAttributes("image");
-        let newStyle = currentAttrs.style || "";
-        let styleChanged = false;
-
-        const updateStyleProp = (
-          prop: "width" | "height",
-          value: string | null | undefined
-        ) => {
-          const regex = new RegExp(`${prop}:\\s*[^;]+;?`, "i");
-          let cleanValue =
-            value === null || value === "" || value === undefined
-              ? null
-              : String(value).trim();
-
-          if (cleanValue === null) {
-            if (newStyle.match(regex)) {
-              newStyle = newStyle.replace(regex, "").trim();
-              styleChanged = true;
-            }
-          }
-          else if (
-            /^\d+(\.\d+)?(px|%)?$/.test(cleanValue) ||
-            cleanValue === "auto"
-          ) {
-            let newValueWithUnit = cleanValue;
-            if (/^\d+(\.\d+)?$/.test(cleanValue)) {
-              newValueWithUnit = `${cleanValue}px`;
-            }
-
-            if (newValueWithUnit.endsWith("px")) {
-              const numericVal = parseFloat(newValueWithUnit);
-              if (numericVal < 50) {
-                newValueWithUnit = "50px";
-                if (prop === "width") setImageWidth("50");
-                if (prop === "height") setImageHeight("50");
-              }
-            }
-
-            const newPropStyle = `${prop}: ${newValueWithUnit};`;
-            if (newStyle.match(regex)) {
-              const currentStyleValue = newStyle.match(regex)?.[0];
-              if (
-                currentStyleValue?.toLowerCase() !== newPropStyle.toLowerCase()
-              ) {
-                newStyle = newStyle.replace(regex, newPropStyle);
-                styleChanged = true;
-              }
-            } else {
-              newStyle = `${newPropStyle} ${newStyle}`.trim();
-              styleChanged = true;
-            }
-          } else {
-            console.warn(
-              `Invalid ${prop} value: "${value}". Must be numeric (px), percentage (%), 'auto', or empty.`
-            );
-          }
-        };
-
-        updateStyleProp("width", attrs.width);
-        updateStyleProp("height", attrs.height);
-
-        newStyle = newStyle.replace(/;;/g, ";").replace(/;\s*$/, "").trim();
-        if (newStyle === "") newStyle = null as any; 
-
-        const finalAttrs: Record<string, any> = {};
-        if (attrs.class !== undefined && attrs.class !== currentAttrs.class) {
-          finalAttrs.class = attrs.class;
-        }
-        if (styleChanged || newStyle !== currentAttrs.style) {
-          finalAttrs.style = newStyle;
-        }
-
-        if (Object.keys(finalAttrs).length > 0) {
-          if (editor.isActive("image")) {
-            editor.chain().focus().updateAttributes("image", finalAttrs).run();
-          }
-        }
-      },
-      [editor]
-    ); 
-
-    const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newWidth = e.target.value;
-      setImageWidth(newWidth); 
-      let newHeight = imageHeight;
-      if (
-        isRatioLocked &&
-        currentAspectRatio &&
-        newWidth &&
-        /^\d+(\.\d+)?$/.test(newWidth)
-      ) {
-        const numericWidth = parseFloat(newWidth);
-        newHeight = String(
-          Math.max(50, Math.round(numericWidth / currentAspectRatio))
-        );
-        setImageHeight(newHeight); 
-      } else if (!newWidth && isRatioLocked) {
-        newHeight = "";
-        setImageHeight(newHeight);
-      }
-      updateImageAttributes({
-        width: newWidth || null,
-        height: newHeight || null,
-      });
-    };
-
-    const handleHeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newHeight = e.target.value;
-      setImageHeight(newHeight); 
-      let newWidth = imageWidth;
-      if (
-        isRatioLocked &&
-        currentAspectRatio &&
-        newHeight &&
-        /^\d+(\.\d+)?$/.test(newHeight)
-      ) {
-        const numericHeight = parseFloat(newHeight);
-        newWidth = String(
-          Math.max(50, Math.round(numericHeight * currentAspectRatio))
-        );
-        setImageWidth(newWidth); 
-      } else if (!newHeight && isRatioLocked) {
-        newWidth = "";
-        setImageWidth(newWidth);
-      }
-      updateImageAttributes({
-        width: newWidth || null,
-        height: newHeight || null,
-      });
-    };
-
-    const setWidthTo100Percent = () => {
-      const newWidth = "100%";
-      const newHeight = "auto"; 
-      setImageWidth(newWidth); 
-      setImageHeight(newHeight); 
-      updateImageAttributes({ width: newWidth, height: newHeight });
     };
 
     if (!editor) {
@@ -750,7 +418,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
       },
       {
         type: "button",
-        icon: ImageIcon,
+        icon: ImageIconLucide, // Using renamed import
         action: () => setIsMediaSelectorOpen(true),
         tooltip: "Attach Image/Video",
         id: "attach-media",
@@ -759,7 +427,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     ];
 
     const getActiveBlockLabel = () => {
-      if (!editor) return "Paragraph"; 
+      if (!editor) return "Paragraph";
       if (editor.isActive("heading", { level: 1 })) return "Heading 1";
       if (editor.isActive("heading", { level: 2 })) return "Heading 2";
       if (editor.isActive("heading", { level: 3 })) return "Heading 3";
@@ -772,9 +440,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
       to,
     }: any): boolean => {
       return !!currentEditor && from === to && currentEditor.isActive("link");
-    };
-    const shouldShowImageBubbleMenu = ({ editor: currentEditor }: any): boolean => {
-      return !!currentEditor && currentEditor.isActive("image");
     };
 
     return (
@@ -802,7 +467,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                   <DropdownMenu key={item.id}>
                     <DropdownMenuTrigger
                       asChild
-                      disabled={isSourceMode || !editor} 
+                      disabled={isSourceMode || !editor}
                     >
                       <Button
                         variant="ghost"
@@ -819,7 +484,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                           key={subItem.label}
                           onClick={subItem.action}
                           className={cn(subItem.isActive && "bg-accent")}
-                          disabled={isSourceMode || !editor} 
+                          disabled={isSourceMode || !editor}
                         >
                           {subItem.label}
                         </DropdownMenuItem>
@@ -833,7 +498,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                   key={item.id}
                   onClick={item.action}
                   isActive={item.isActive}
-                  disabled={item.disabled || !editor} 
+                  disabled={item.disabled || !editor}
                   tooltip={item.tooltip}
                 >
                   <item.icon className="w-4 h-4" />
@@ -848,7 +513,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
               shouldShow={shouldShowLinkBubbleMenu}
               tippyOptions={{
                 duration: 100,
-                appendTo: () => editorContainerRef.current || document.body, 
+                appendTo: () => editorContainerRef.current || document.body,
                 placement: "bottom",
               }}
               className="bg-background border border-border shadow-md rounded-md p-1 flex gap-1 items-center"
@@ -898,103 +563,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             </BubbleMenu>
           )}
 
-          {editor && isBubbleMenuMounted && editorContainerRef.current && (
-            <BubbleMenu
-              editor={editor}
-              shouldShow={shouldShowImageBubbleMenu}
-              tippyOptions={{
-                duration: 100,
-                appendTo: () => editorContainerRef.current || document.body, 
-                placement: "bottom",
-                hideOnClick: false, 
-                interactive: true, 
-              }}
-              className="bg-background border border-border shadow-md rounded-md p-2 flex gap-2 items-center flex-wrap"
-              pluginKey="imageBubbleMenu"
-            >
-              <div className="flex gap-1 items-center">
-                <span className="text-xs text-muted-foreground mr-1">
-                  Align:
-                </span>
-                <ToolbarButton
-                  onClick={() => updateImageAttributes({ class: "align-left" })}
-                  tooltip="Align Left"
-                  isActive={
-                    editor.getAttributes("image").class === "align-left"
-                  }
-                >
-                  <AlignLeft className="w-4 h-4" />
-                </ToolbarButton>
-                <ToolbarButton
-                  onClick={() =>
-                    updateImageAttributes({ class: "align-center" })
-                  }
-                  tooltip="Align Center"
-                  isActive={
-                    editor.getAttributes("image").class === "align-center"
-                  }
-                >
-                  <AlignCenter className="w-4 h-4" />
-                </ToolbarButton>
-                <ToolbarButton
-                  onClick={() =>
-                    updateImageAttributes({ class: "align-right" })
-                  }
-                  tooltip="Align Right"
-                  isActive={
-                    editor.getAttributes("image").class === "align-right"
-                  }
-                >
-                  <AlignRight className="w-4 h-4" />
-                </ToolbarButton>
-              </div>
-              <Separator orientation="vertical" className="h-6 mx-1" />
-              <div className="flex gap-1 items-center">
-                <span className="text-xs text-muted-foreground mr-1">
-                  Size (px):
-                </span>
-                <Input
-                  type="number" 
-                  min="50" 
-                  placeholder="Width"
-                  value={imageWidth.toString().replace(/px|%|auto/gi, "")}
-                  onChange={handleWidthChange}
-                  disabled={imageWidth === "auto" || imageWidth === "100%"}
-                  className="w-16 h-7 text-xs px-1"
-                />
-                <ToolbarButton
-                  onClick={() => setIsRatioLocked(!isRatioLocked)}
-                  tooltip={
-                    isRatioLocked ? "Unlock Aspect Ratio" : "Lock Aspect Ratio"
-                  }
-                  isActive={isRatioLocked}
-                >
-                  {isRatioLocked ? (
-                    <Lock className="w-4 h-4" />
-                  ) : (
-                    <Unlock className="w-4 h-4" />
-                  )}
-                </ToolbarButton>
-                <Input
-                  type="number" 
-                  min="50" 
-                  placeholder="Height"
-                  value={imageHeight.toString().replace(/px|%|auto/gi, "")}
-                  onChange={handleHeightChange}
-                  disabled={imageHeight === "auto"}
-                  className="w-16 h-7 text-xs px-1"
-                />
-              </div>
-              <Separator orientation="vertical" className="h-6 mx-1" />
-              <ToolbarButton
-                onClick={setWidthTo100Percent}
-                tooltip="Set Width to 100%"
-                isActive={imageWidth === "100%"}
-              >
-                <Expand className="w-4 h-4" />
-              </ToolbarButton>
-            </BubbleMenu>
-          )}
+          {/* Image specific bubble menu removed */}
 
           <div className="flex-1 overflow-y-auto editor-content-area-wrapper">
             {isSourceMode ? (
@@ -1017,13 +586,13 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
           isOpen={isMediaSelectorOpen}
           onOpenChange={setIsMediaSelectorOpen}
           onMediaSelect={handleMediaSelect}
-          returnType="url" 
+          returnType="url"
         />
       </TooltipProvider>
     );
   }
 );
-TipTapEditor.displayName = "TipTapEditor"; 
+TipTapEditor.displayName = "TipTapEditor";
 
 const ToolbarButton = memo(
   ({
@@ -1073,6 +642,6 @@ const ToolbarButton = memo(
     );
   }
 );
-ToolbarButton.displayName = "ToolbarButton"; 
+ToolbarButton.displayName = "ToolbarButton";
 
 export default TipTapEditor;
