@@ -1,6 +1,5 @@
 
 'use server';
-
 import type { QueryForm } from "@/types/query-form";
 import type { FindMany, FindOne } from "@/types/strapi_response";
 import axiosInstance from "@/lib/axios";
