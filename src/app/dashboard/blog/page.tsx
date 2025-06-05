@@ -117,9 +117,8 @@ export default function BlogPage() {
       const mediaFile = post.image as Media | null;
       const relativeUrl = mediaFile?.url;
       if (!relativeUrl) return null;
-      const cleanBaseUrl = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
       const cleanRelativeUrl = relativeUrl.startsWith('/') ? relativeUrl.substring(1) : relativeUrl;
-      return `${cleanBaseUrl}/${cleanRelativeUrl}`;
+      return `${cleanRelativeUrl}`;
   }
 
   const filteredBlogPosts = React.useMemo(() => {
