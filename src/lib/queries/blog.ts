@@ -152,9 +152,10 @@ export const useDeleteBlog = () => {
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post deleted successfully." });
-      queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) }); // Invalidate general list
+      queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
       const idToInvalidate = variables.documentIdForInvalidation || variables.documentId;
       if (idToInvalidate) {
+        // Instead of just invalidating, remove the specific query from cache if it exists
         queryClient.removeQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(idToInvalidate, userTenentId) });
       }
     },
@@ -166,3 +167,4 @@ export const useDeleteBlog = () => {
     }
   });
 };
+

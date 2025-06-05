@@ -163,7 +163,6 @@ export const useDeleteEvent = () => {
       toast({ title: "Success", description: "Event deleted successfully." });
       const tenentIdForInvalidation = (data as Event)?.tenent_id || currentUser?.tenent_id;
       queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(tenentIdForInvalidation) });
-      // Use variables.documentId for removing detail query
       if (variables.documentId) {
         queryClient.removeQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(variables.documentId, tenentIdForInvalidation) });
       }

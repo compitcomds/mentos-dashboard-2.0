@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useState, useRef, memo } from "react"; // Import memo
 import { EditorContent, useEditor, BubbleMenu } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -47,17 +48,13 @@ import {
 import { Button, buttonVariants } from "./button"; // Keep buttonVariants
 import { cn } from "@/lib/utils";
 import {
-  // Ensure DropdownMenu components are imported correctly
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-// Import the MediaSelectorDialog
 import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
 import { Input } from "./input";
-// Import Tiptap Video extension if needed (requires installation: npm install @tiptap/extension-video)
-// import VideoExtension from '@tiptap/extension-video';
 
 // --- Custom Image Extension with Alignment Classes & Inline Styles ---
 const CustomImage = TiptapImage.extend({
@@ -65,20 +62,14 @@ const CustomImage = TiptapImage.extend({
     return {
       ...this.parent?.(),
       class: {
-        // Use class attribute for alignment
-        default: "align-left", // Default alignment class
+        default: "align-left", 
         parseHTML: (element) =>
           element
             .getAttribute("class")
             ?.match(/align-(left|center|right)/)?.[0],
         renderHTML: (attributes) => {
-          // Base classes for structure and spacing
-          let baseClasses = "block my-4"; // block display, vertical margin
-
-          // Alignment class from attributes or default
+          let baseClasses = "block my-4"; 
           const alignmentClass = attributes.class || "align-left";
-
-          // Add sizing/border classes ONLY if no inline width/height is set via style
           let sizingClasses = "";
           if (
             !attributes.style ||
@@ -87,43 +78,33 @@ const CustomImage = TiptapImage.extend({
           ) {
             sizingClasses = "max-w-full h-auto border rounded-md";
           } else {
-            sizingClasses = "border rounded-md"; // Only border/rounding
+            sizingClasses = "border rounded-md"; 
           }
-
-          // Combine base, sizing, and alignment classes
           return {
             class: `${baseClasses} ${sizingClasses} ${alignmentClass}`.trim(),
           };
         },
       },
       style: {
-        // Use style attribute for width/height
         default: null,
         parseHTML: (element) => element.getAttribute("style"),
         renderHTML: (attributes) => {
           return attributes.style ? { style: attributes.style } : {};
         },
       },
-      // Inherit src and alt from parent
       src: this.parent?.().src,
       alt: this.parent?.().alt,
-      // Keep width/height for parsing but don't render directly
-      width: {
+      width: { // Keep for parsing but don't render directly
         default: null,
-        parseHTML: (element) =>
-          element.getAttribute("width") ||
-          element.style.width?.replace("px", ""),
-        renderHTML: () => ({}),
+        parseHTML: (element) => element.getAttribute('width') || element.style.width?.replace('px', ''),
+        renderHTML: () => ({}), // We handle width via style or class
       },
-      height: {
+      height: { // Keep for parsing but don't render directly
         default: null,
-        parseHTML: (element) =>
-          element.getAttribute("height") ||
-          element.style.height?.replace("px", ""),
-        renderHTML: () => ({}),
+        parseHTML: (element) => element.getAttribute('height') || element.style.height?.replace('px', ''),
+        renderHTML: () => ({}), // We handle height via style or class
       },
       "data-original-width": {
-        // Store original dimensions if possible
         default: null,
         parseHTML: (element) => element.getAttribute("data-original-width"),
         renderHTML: (attributes) =>
@@ -149,7 +130,6 @@ interface TipTapEditorProps {
   className?: string;
 }
 
-// Memoize the component to prevent unnecessary re-renders
 const TipTapEditor: React.FC<TipTapEditorProps> = memo(
   ({ content = "", onContentChange, className }) => {
     const [isSourceMode, setIsSourceMode] = useState(false);
@@ -160,18 +140,15 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     const [imageWidth, setImageWidth] = useState<string>("");
     const [imageHeight, setImageHeight] = useState<string>("");
     const [isRatioLocked, setIsRatioLocked] = useState<boolean>(true);
-    const [currentAspectRatio, setCurrentAspectRatio] = useState<number | null>(
-      null
-    );
+    const [currentAspectRatio, setCurrentAspectRatio] = useState<number | null>(null);
 
-    // Use forwardRef for the editor instance if necessary, but direct useEditor is common
     const editor = useEditor({
       extensions: [
         StarterKit.configure({
-          heading: { levels: [1, 2, 3] },
-          bulletList: { HTMLAttributes: {} },
-          orderedList: { HTMLAttributes: {} },
-          blockquote: { HTMLAttributes: {} },
+          heading: { levels: [1, 2, 3], HTMLAttributes: {} }, // Added empty HTMLAttributes
+          bulletList: { HTMLAttributes: {} }, // Added empty HTMLAttributes
+          orderedList: { HTMLAttributes: {} }, // Added empty HTMLAttributes
+          blockquote: { HTMLAttributes: {} }, // Added empty HTMLAttributes
           codeBlock: false,
           horizontalRule: false,
         }),
@@ -192,7 +169,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
           placeholder: "Start writing your amazing content here…",
         }),
         TextAlign.configure({
-          types: ["heading", "paragraph"],
+          types: ["heading", "paragraph", "image"], // Added image to types for alignment
           alignments: ["left", "center", "right", "justify"],
           defaultAlignment: "left",
         }),
@@ -225,10 +202,9 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
           setCurrentAspectRatio(null);
         }
       },
-    }); // Removed editor from dependency array
+    }); 
 
     const getCurrentImageDimensions = useCallback(() => {
-      // Ensure editor exists before accessing its methods
       if (!editor || !editor.isActive("image"))
         return { width: "", height: "", ratio: null };
       const attrs = editor.getAttributes("image");
@@ -271,11 +247,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
         height: String(height),
         ratio: ratio,
       };
-    }, [editor]); // Dependency on editor
+    }, [editor]); 
 
     const updateImageDimensionStates = useCallback(() => {
       const { width, height, ratio } = getCurrentImageDimensions();
-      // Only update state if the value has actually changed
       if (width !== imageWidth) setImageWidth(width);
       if (height !== imageHeight) setImageHeight(height);
       if (ratio !== currentAspectRatio) setCurrentAspectRatio(ratio);
@@ -284,7 +259,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
       imageWidth,
       imageHeight,
       currentAspectRatio,
-    ]); // Dependencies
+    ]); 
 
     useEffect(() => {
       if (editor && !isSourceMode) {
@@ -306,18 +281,15 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     }, [isSourceMode, editor, sourceContent]);
 
     useEffect(() => {
-      // Mount bubble menu only when editor is available
       if (editor && !isBubbleMenuMounted) {
         setIsBubbleMenuMounted(true);
       }
     }, [editor, isBubbleMenuMounted]);
 
     useEffect(() => {
-      // Update dimensions only if editor exists and image is active
       if (editor?.isFocused && editor.isActive("image")) {
         updateImageDimensionStates();
       }
-      // Add editor as dependency here too
     }, [editor, editor?.isFocused, updateImageDimensionStates]);
 
     const setLinkCallback = useCallback(() => {
@@ -356,84 +328,60 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
 
     const handleMediaSelect = (media: Media) => {
       const { fileUrl: mediaUrl, alt: altText, mime: mimeType, name } = media;
-
-      console.log("Selected media:", mediaUrl, altText, mimeType);
-
       if (editor && mediaUrl) {
         if (mimeType?.startsWith("image/")) {
           const img = new window.Image();
           img.onload = () => {
             const originalWidth = img.naturalWidth;
             const originalHeight = img.naturalHeight;
-            const maxWidth = 600;
-
+            const maxWidth = editorContainerRef.current?.offsetWidth ? Math.min(editorContainerRef.current.offsetWidth * 0.9, 600) : 600;
+            
             let initialWidth = originalWidth;
             let initialHeight = originalHeight;
 
             if (initialWidth > maxWidth) {
-              initialWidth = maxWidth;
               initialHeight = (originalHeight * maxWidth) / originalWidth;
+              initialWidth = maxWidth;
             }
 
             initialWidth = Math.max(initialWidth, 50);
             initialHeight = Math.max(initialHeight, 50);
 
-            const initialStyle = `width: ${Math.round(
-              initialWidth
-            )}px; height: ${Math.round(initialHeight)}px;`;
-
+            const initialStyle = `width: ${Math.round(initialWidth)}px; height: ${Math.round(initialHeight)}px;`;
             editor
               .chain()
               .focus()
               .setImage({
                 src: mediaUrl,
-                alt: altText || undefined,
+                alt: altText || name || undefined,
                 class: "align-left",
                 style: initialStyle,
                 "data-original-width": String(originalWidth),
                 "data-original-height": String(originalHeight),
               })
               .run();
-
             updateImageDimensionStates();
           };
-
           img.onerror = () => {
             editor
               .chain()
               .focus()
               .setImage({
                 src: mediaUrl,
-                alt: altText || undefined,
+                alt: altText || name || undefined,
                 class: "align-left",
-                style:
-                  "width: 100px; height: auto; min-width: 50px; min-height: 50px;",
+                style: "width: 100px; height: auto; min-width: 50px; min-height: 50px;",
               })
               .run();
-
             updateImageDimensionStates();
           };
-
           img.src = mediaUrl;
         } else {
-          // 📥 Insert Download Button
-          const displayText = `Download Resource: ${altText || name || "File"}`;
-          const downloadBtnHtml = `
-        <p>
-          <a href="${mediaUrl}" 
-             download 
-             target="_blank" 
-             rel="noopener noreferrer" 
-             style="display: inline-block; padding: 8px 16px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">
-            ${displayText}
-          </a>
-        </p>
-      `;
-
+          const displayText = `Download: ${name || altText || "File"}`;
+          const downloadBtnHtml = `<p><a href="${mediaUrl}" download target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); text-decoration: none; border-radius: 0.375rem; font-weight: 500;">${displayText}</a></p>`;
           editor.chain().focus().insertContent(downloadBtnHtml).run();
         }
       }
-
       setIsMediaSelectorOpen(false);
     };
 
@@ -442,15 +390,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     ) => {
       const newHtml = event.target.value;
       setSourceContent(newHtml);
-      // Update the actual editor content if not in source mode initially, but user switches back and forth
-      if (editor && !isSourceMode) {
-        const currentEditorHtml = editor.getHTML();
-        if (currentEditorHtml !== newHtml) {
-          // Be cautious with direct setContent, might trigger updates loop.
-          // editor.commands.setContent(newHtml, false); // Might cause issues
-        }
-      }
-      // Trigger external change handler if provided
       if (onContentChange) {
         onContentChange(newHtml);
       }
@@ -459,17 +398,13 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     const toggleSourceMode = () => {
       const newMode = !isSourceMode;
       if (newMode && editor) {
-        // Entering source mode: capture current editor HTML
         setSourceContent(editor.getHTML());
       } else if (!newMode && editor) {
-        // Exiting source mode: apply source content back to editor
         const currentSource = sourceContent;
         const editorHtml = editor.getHTML();
         if (editorHtml !== currentSource) {
-          // Use setContent to update the editor from the source textarea
-          editor.commands.setContent(currentSource, true); // Pass true to trigger 'update'
+          editor.commands.setContent(currentSource, true); 
         }
-        // Ensure external handler gets the latest content when exiting source mode
         if (onContentChange) {
           onContentChange(currentSource);
         }
@@ -489,7 +424,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
         let newStyle = currentAttrs.style || "";
         let styleChanged = false;
 
-        // Helper to update width or height in the style string
         const updateStyleProp = (
           prop: "width" | "height",
           value: string | null | undefined
@@ -500,42 +434,33 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
               ? null
               : String(value).trim();
 
-          // Handle removing the property if value is null/empty
           if (cleanValue === null) {
             if (newStyle.match(regex)) {
               newStyle = newStyle.replace(regex, "").trim();
               styleChanged = true;
             }
           }
-          // Handle valid numeric (px), percentage (%), or 'auto' values
           else if (
             /^\d+(\.\d+)?(px|%)?$/.test(cleanValue) ||
             cleanValue === "auto"
           ) {
             let newValueWithUnit = cleanValue;
-            // Add 'px' unit if only numbers are provided
             if (/^\d+(\.\d+)?$/.test(cleanValue)) {
               newValueWithUnit = `${cleanValue}px`;
             }
 
-            // Enforce minimum 50px if units are pixels
             if (newValueWithUnit.endsWith("px")) {
               const numericVal = parseFloat(newValueWithUnit);
               if (numericVal < 50) {
                 newValueWithUnit = "50px";
-                // Update the state driving the input field immediately
-                // This prevents the input from showing a value lower than 50
                 if (prop === "width") setImageWidth("50");
                 if (prop === "height") setImageHeight("50");
               }
             }
 
             const newPropStyle = `${prop}: ${newValueWithUnit};`;
-
-            // Replace existing style property or add new one
             if (newStyle.match(regex)) {
               const currentStyleValue = newStyle.match(regex)?.[0];
-              // Only update if the value actually changed
               if (
                 currentStyleValue?.toLowerCase() !== newPropStyle.toLowerCase()
               ) {
@@ -543,55 +468,43 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                 styleChanged = true;
               }
             } else {
-              // Add the new style property (prepend to avoid issues with missing semicolons)
               newStyle = `${newPropStyle} ${newStyle}`.trim();
               styleChanged = true;
             }
           } else {
-            // Log warning for invalid input values
             console.warn(
               `Invalid ${prop} value: "${value}". Must be numeric (px), percentage (%), 'auto', or empty.`
             );
           }
         };
 
-        // Update width and height styles
         updateStyleProp("width", attrs.width);
         updateStyleProp("height", attrs.height);
 
-        // Clean up the style string (remove double semicolons, trailing semicolon)
         newStyle = newStyle.replace(/;;/g, ";").replace(/;\s*$/, "").trim();
-        // If style string is empty after cleaning, set it to null
-        if (newStyle === "") newStyle = null as any; // Use 'as any' to bypass strict null check if needed
+        if (newStyle === "") newStyle = null as any; 
 
-        // Prepare the final attributes object to pass to Tiptap
         const finalAttrs: Record<string, any> = {};
-        // Include class if it changed
         if (attrs.class !== undefined && attrs.class !== currentAttrs.class) {
           finalAttrs.class = attrs.class;
         }
-        // Include style if it changed or was modified
         if (styleChanged || newStyle !== currentAttrs.style) {
           finalAttrs.style = newStyle;
         }
 
-        // Only run the Tiptap command if there are actual changes
         if (Object.keys(finalAttrs).length > 0) {
-          // Double-check editor state just before command execution
           if (editor.isActive("image")) {
             editor.chain().focus().updateAttributes("image", finalAttrs).run();
           }
         }
       },
       [editor]
-    ); // Removed setImageWidth/Height, as they are handled inside the function
+    ); 
 
     const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const newWidth = e.target.value;
-      setImageWidth(newWidth); // Update local state immediately for input responsiveness
-
+      setImageWidth(newWidth); 
       let newHeight = imageHeight;
-      // Calculate height based on aspect ratio if locked and width is valid number
       if (
         isRatioLocked &&
         currentAspectRatio &&
@@ -599,17 +512,14 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
         /^\d+(\.\d+)?$/.test(newWidth)
       ) {
         const numericWidth = parseFloat(newWidth);
-        // Ensure calculated height is at least 50
         newHeight = String(
           Math.max(50, Math.round(numericWidth / currentAspectRatio))
         );
-        setImageHeight(newHeight); // Update height state when locked
+        setImageHeight(newHeight); 
       } else if (!newWidth && isRatioLocked) {
-        // If width is cleared and ratio locked, clear height too
         newHeight = "";
         setImageHeight(newHeight);
       }
-      // Pass potentially updated width and height to Tiptap
       updateImageAttributes({
         width: newWidth || null,
         height: newHeight || null,
@@ -618,10 +528,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
 
     const handleHeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const newHeight = e.target.value;
-      setImageHeight(newHeight); // Update local state immediately
-
+      setImageHeight(newHeight); 
       let newWidth = imageWidth;
-      // Calculate width based on aspect ratio if locked and height is valid number
       if (
         isRatioLocked &&
         currentAspectRatio &&
@@ -629,30 +537,25 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
         /^\d+(\.\d+)?$/.test(newHeight)
       ) {
         const numericHeight = parseFloat(newHeight);
-        // Ensure calculated width is at least 50
         newWidth = String(
           Math.max(50, Math.round(numericHeight * currentAspectRatio))
         );
-        setImageWidth(newWidth); // Update width state when locked
+        setImageWidth(newWidth); 
       } else if (!newHeight && isRatioLocked) {
-        // If height is cleared and ratio locked, clear width too
         newWidth = "";
         setImageWidth(newWidth);
       }
-      // Pass potentially updated width and height to Tiptap
       updateImageAttributes({
         width: newWidth || null,
         height: newHeight || null,
       });
     };
 
-    // Set width to 100% and height to auto
     const setWidthTo100Percent = () => {
       const newWidth = "100%";
-      const newHeight = "auto"; // Let height adjust automatically
-      setImageWidth(newWidth); // Update state
-      setImageHeight(newHeight); // Update state
-      // Update Tiptap attributes
+      const newHeight = "auto"; 
+      setImageWidth(newWidth); 
+      setImageHeight(newHeight); 
       updateImageAttributes({ width: newWidth, height: newHeight });
     };
 
@@ -669,7 +572,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
       );
     }
 
-    // --- Toolbar Definition ---
     const toolbarItems = [
       {
         type: "button",
@@ -857,7 +759,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     ];
 
     const getActiveBlockLabel = () => {
-      if (!editor) return "Paragraph"; // Return default if editor not ready
+      if (!editor) return "Paragraph"; 
       if (editor.isActive("heading", { level: 1 })) return "Heading 1";
       if (editor.isActive("heading", { level: 2 })) return "Heading 2";
       if (editor.isActive("heading", { level: 3 })) return "Heading 3";
@@ -865,19 +767,14 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     };
 
     const shouldShowLinkBubbleMenu = ({
-      editor,
-      view,
-      state,
-      oldState,
+      editor: currentEditor,
       from,
       to,
     }: any): boolean => {
-      // Added check for editor existence
-      return !!editor && from === to && editor.isActive("link");
+      return !!currentEditor && from === to && currentEditor.isActive("link");
     };
-    const shouldShowImageBubbleMenu = ({ editor }: any): boolean => {
-      // Added check for editor existence
-      return !!editor && editor.isActive("image");
+    const shouldShowImageBubbleMenu = ({ editor: currentEditor }: any): boolean => {
+      return !!currentEditor && currentEditor.isActive("image");
     };
 
     return (
@@ -889,7 +786,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             className
           )}
         >
-          {/* Toolbar */}
           <div className="flex items-center px-2 py-1.5 border-b border-border flex-wrap gap-1 bg-muted/50 rounded-t-md flex-shrink-0">
             {toolbarItems.map((item) => {
               if (item.type === "separator") {
@@ -906,7 +802,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                   <DropdownMenu key={item.id}>
                     <DropdownMenuTrigger
                       asChild
-                      disabled={isSourceMode || !editor} // Disable if in source mode or editor not ready
+                      disabled={isSourceMode || !editor} 
                     >
                       <Button
                         variant="ghost"
@@ -923,7 +819,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                           key={subItem.label}
                           onClick={subItem.action}
                           className={cn(subItem.isActive && "bg-accent")}
-                          disabled={isSourceMode || !editor} // Disable dropdown items too
+                          disabled={isSourceMode || !editor} 
                         >
                           {subItem.label}
                         </DropdownMenuItem>
@@ -932,30 +828,27 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                   </DropdownMenu>
                 );
               }
-              // Default case: Render ToolbarButton
               return (
                 <ToolbarButton
                   key={item.id}
                   onClick={item.action}
                   isActive={item.isActive}
-                  disabled={item.disabled || !editor} // General disable check
+                  disabled={item.disabled || !editor} 
                   tooltip={item.tooltip}
                 >
-                  {/* Render the icon component */}
                   <item.icon className="w-4 h-4" />
                 </ToolbarButton>
               );
             })}
           </div>
 
-          {/* --- Bubble Menu for Link Editing --- */}
           {editor && isBubbleMenuMounted && editorContainerRef.current && (
             <BubbleMenu
               editor={editor}
               shouldShow={shouldShowLinkBubbleMenu}
               tippyOptions={{
                 duration: 100,
-                appendTo: () => editorContainerRef.current || document.body, // Fallback to document.body
+                appendTo: () => editorContainerRef.current || document.body, 
                 placement: "bottom",
               }}
               className="bg-background border border-border shadow-md rounded-md p-1 flex gap-1 items-center"
@@ -1005,23 +898,20 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             </BubbleMenu>
           )}
 
-          {/* --- Bubble Menu for Image Editing --- */}
           {editor && isBubbleMenuMounted && editorContainerRef.current && (
             <BubbleMenu
               editor={editor}
               shouldShow={shouldShowImageBubbleMenu}
               tippyOptions={{
                 duration: 100,
-                appendTo: () => editorContainerRef.current || document.body, // Fallback to document.body
+                appendTo: () => editorContainerRef.current || document.body, 
                 placement: "bottom",
-                // Keep the bubble menu open while interacting with its elements
-                hideOnClick: false, // Add this to keep it open
-                interactive: true, // Allow interaction within the bubble
+                hideOnClick: false, 
+                interactive: true, 
               }}
               className="bg-background border border-border shadow-md rounded-md p-2 flex gap-2 items-center flex-wrap"
               pluginKey="imageBubbleMenu"
             >
-              {/* Alignment Buttons */}
               <div className="flex gap-1 items-center">
                 <span className="text-xs text-muted-foreground mr-1">
                   Align:
@@ -1059,24 +949,19 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                 </ToolbarButton>
               </div>
               <Separator orientation="vertical" className="h-6 mx-1" />
-
-              {/* Width/Height & Aspect Ratio Lock */}
               <div className="flex gap-1 items-center">
                 <span className="text-xs text-muted-foreground mr-1">
                   Size (px):
                 </span>
                 <Input
-                  type="number" // Use number input
-                  min="50" // Set minimum value
+                  type="number" 
+                  min="50" 
                   placeholder="Width"
-                  // Display only the numeric part for editing, remove units
                   value={imageWidth.toString().replace(/px|%|auto/gi, "")}
                   onChange={handleWidthChange}
-                  // Disable input if width is set to 'auto' or '100%' which are handled by button
                   disabled={imageWidth === "auto" || imageWidth === "100%"}
                   className="w-16 h-7 text-xs px-1"
                 />
-                {/* Aspect Ratio Lock Button */}
                 <ToolbarButton
                   onClick={() => setIsRatioLocked(!isRatioLocked)}
                   tooltip={
@@ -1091,19 +976,16 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                   )}
                 </ToolbarButton>
                 <Input
-                  type="number" // Use number input
-                  min="50" // Set minimum value
+                  type="number" 
+                  min="50" 
                   placeholder="Height"
-                  // Display only the numeric part for editing, remove units
                   value={imageHeight.toString().replace(/px|%|auto/gi, "")}
                   onChange={handleHeightChange}
-                  // Disable input if height is set to 'auto'
                   disabled={imageHeight === "auto"}
                   className="w-16 h-7 text-xs px-1"
                 />
               </div>
               <Separator orientation="vertical" className="h-6 mx-1" />
-              {/* 100% Width Button */}
               <ToolbarButton
                 onClick={setWidthTo100Percent}
                 tooltip="Set Width to 100%"
@@ -1114,7 +996,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             </BubbleMenu>
           )}
 
-          {/* Editor Content Area or Source Textarea */}
           <div className="flex-1 overflow-y-auto editor-content-area-wrapper">
             {isSourceMode ? (
               <Textarea
@@ -1132,20 +1013,18 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
           </div>
         </div>
 
-        {/* Media Selector Dialog for Tiptap (returns URL) */}
         <MediaSelectorDialog
           isOpen={isMediaSelectorOpen}
           onOpenChange={setIsMediaSelectorOpen}
           onMediaSelect={handleMediaSelect}
-          returnType="url" // Specify return type as 'url'
+          returnType="url" 
         />
       </TooltipProvider>
     );
   }
 );
-TipTapEditor.displayName = "TipTapEditor"; // Add display name for memoized component
+TipTapEditor.displayName = "TipTapEditor"; 
 
-// Toolbar Button Component with Tooltip - Memoized
 const ToolbarButton = memo(
   ({
     children,
@@ -1171,7 +1050,6 @@ const ToolbarButton = memo(
         )}
         {...props}
       >
-        {/* Ensure children (icons) get consistent sizing */}
         {React.isValidElement(children)
           ? React.cloneElement(children as React.ReactElement, {
               className: cn(
@@ -1195,6 +1073,6 @@ const ToolbarButton = memo(
     );
   }
 );
-ToolbarButton.displayName = "ToolbarButton"; // Add display name for memoized component
+ToolbarButton.displayName = "ToolbarButton"; 
 
 export default TipTapEditor;
