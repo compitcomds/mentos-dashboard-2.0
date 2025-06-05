@@ -12,11 +12,11 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
-  SidebarTrigger,
+  SidebarTrigger, // Import SidebarTrigger from ui/sidebar
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  useSidebar,
+  useSidebar, // Import useSidebar to get state
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -34,7 +34,7 @@ interface SidebarNavProps {
 
 export default function SidebarNav({ menuItems }: SidebarNavProps) {
   const pathname = usePathname();
-  const { state } = useSidebar();
+  const { state } = useSidebar(); // Get sidebar state
 
   // menuItems prop already includes the updated label and path from DashboardLayout
   const updatedMenuItems = menuItems;
@@ -43,20 +43,31 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
     <Sidebar className="hidden lg:flex">
 
        <SidebarHeader className="border-b border-sidebar-border">
-         <div className="flex h-14 items-center gap-2 px-4 lg:px-6 ">
-           <Link href="/dashboard" className="flex items-left justify-between font-semibold flex-grow w-full ">
-            
-             <span className="">
-              {state === 'expanded'?"Mentos" :"M"}
-             </span>
+         <div
+           className={cn(
+             "flex h-14 items-center", // Base styles
+             state === 'expanded'
+               ? "px-4 lg:px-6 justify-between" // Expanded: padding, space between Brand and Trigger
+               : "px-2 flex-col justify-center items-center py-2 gap-0.5" // Collapsed: less padding, column, centered, small gap
+           )}
+         >
+           <Link
+             href="/dashboard"
+             className={cn(
+               "font-semibold",
+               state === 'expanded' ? "text-lg" : "text-xl font-bold" // "M" larger when collapsed
+             )}
+             aria-label={state === 'expanded' ? "Mentos Dashboard" : "M Dashboard"}
+           >
+             {state === 'expanded' ? "Mentos" : "M"}
            </Link>
-             <SidebarTrigger asChild className={cn("ml-auto", state === 'expanded' ? 'lg:flex' : 'flex')}>
-                 <Button variant="ghost" size="icon" className='h-7 w-7'>
-                  {state === 'expanded'?<ChevronLeft /> :<ChevronRight/>}
-                     
-                 </Button>
-             </SidebarTrigger>
 
+           <SidebarTrigger
+             className={cn("h-7 w-7")} // Basic styling, positioning handled by parent div's flex properties
+           >
+             {/* Explicitly pass the icons to SidebarTrigger */}
+             {state === 'expanded' ? <ChevronLeft /> : <ChevronRight />}
+           </SidebarTrigger>
          </div>
        </SidebarHeader>
 
@@ -91,3 +102,5 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
     </Sidebar>
   );
 }
+
+    

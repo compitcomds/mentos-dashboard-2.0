@@ -5,7 +5,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft, ChevronLeft } from "lucide-react" // Added ChevronLeft
+import { PanelLeft, ChevronLeft, ChevronRight } from "lucide-react"; // Added ChevronRight
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -154,8 +154,8 @@ const SidebarProvider = React.forwardRef<
 SidebarProvider.displayName = "SidebarProvider"
 
 const Sidebar = React.forwardRef<
-  HTMLDivElement, // Changed from aside to div for flexibility, applies classes for sidebar styling
-  React.ComponentProps<"div"> & { // Changed from aside to div
+  HTMLDivElement,
+  React.ComponentProps<"div"> & {
     side?: "left" | "right"
     variant?: "sidebar" | "floating" | "inset"
     collapsible?: "offcanvas" | "icon" | "none"
@@ -193,7 +193,7 @@ const Sidebar = React.forwardRef<
 
     // Desktop view using div with sidebar styling
     return (
-      <div // Changed from aside to div
+      <div
         ref={ref}
         className={cn(
           "group peer fixed inset-y-0 z-20 hidden h-full flex-col transition-[width] duration-300 ease-in-out lg:flex", // Basic sidebar styles
@@ -225,7 +225,7 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button> & { asChild?: boolean }
 >(({ className, onClick, asChild = false, children, ...props }, ref) => {
-  const { toggleSidebar, isMobile, state } = useSidebar();
+  const { toggleSidebar, state } = useSidebar();
   const Comp = asChild ? Slot : Button;
 
   return (
@@ -234,26 +234,18 @@ const SidebarTrigger = React.forwardRef<
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
-      className={cn(
-        "h-7 w-7",
-        // Always show trigger on mobile, controlled by Sheet state
-        // isMobile ? "flex" : "hidden",
-        // Show/hide on desktop based on expanded/collapsed state
-        !isMobile && state === 'expanded' ? 'lg:flex' : 'hidden',
-        className
-      )}
+      className={cn("h-7 w-7", className)} // Base classes, parent controls positioning/visibility
       onClick={(event) => {
         onClick?.(event);
         toggleSidebar();
       }}
       {...props}
     >
-      {/* Render children if asChild, otherwise default icon */}
-      {asChild ? children : (
-        <>
-          <ChevronLeft /> {/* Default icon if not asChild */}
-          <span className="sr-only">Toggle Sidebar</span>
-        </>
+      {children ? children : ( // Default icon logic if no children are provided
+          <>
+            {state === 'expanded' ? <ChevronLeft /> : <ChevronRight />}
+            <span className="sr-only">Toggle Sidebar</span>
+          </>
       )}
     </Comp>
   );
@@ -739,3 +731,5 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
+    
