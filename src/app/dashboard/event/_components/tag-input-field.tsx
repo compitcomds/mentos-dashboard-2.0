@@ -38,7 +38,7 @@ export default function TagInputField<TFieldValues extends FieldValues>({
   // Initialize tagsUI from RHF value when component mounts or field value changes
   React.useEffect(() => {
     if (typeof field.value === 'string') {
-      const initialTags = field.value.split(',').map(tag => tag.trim()).filter(Boolean);
+      const initialTags = field.value.split(',').map((tag:string) => tag.trim()).filter(Boolean);
       setTagsUI(initialTags);
     } else if (field.value === null || field.value === undefined) {
       setTagsUI([]);

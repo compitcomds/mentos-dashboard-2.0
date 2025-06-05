@@ -269,7 +269,7 @@ export const createBlog = async (blog: CreateBlogPayload): Promise<Blog> => {
 
 // Update a blog by its numeric id.
 export const updateBlog = async (
-  id: string,
+  id: Number,
   blog: Partial<CreateBlogPayload>,
   userTenentIdAuthContext: string
 ): Promise<Blog> => {

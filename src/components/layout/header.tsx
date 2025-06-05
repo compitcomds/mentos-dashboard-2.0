@@ -27,7 +27,7 @@ import {
 import NotificationBell from './notification-bell'; // Import NotificationBell
 
 
-interface MenuItem {
+export interface MenuItem {
   href: string;
   label: string;
   icon: LucideIcon;

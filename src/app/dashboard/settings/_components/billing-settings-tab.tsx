@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useGetPayments } from '@/lib/queries/payment';
-import type { Payment, BillingItem } from '@/types/payment';
+import type { Payment } from '@/types/payment';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +30,7 @@ import type { CardDetail, CreateCardDetailPayload } from '@/types/card-detail';
 import { toast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
+import { BillingItem } from '@/types/common';
 
 const formatBytesForDisplayLocal = (bytes?: number | null, decimals = 2): string => {
     if (bytes === null || bytes === undefined || bytes <= 0) return '0 Bytes';

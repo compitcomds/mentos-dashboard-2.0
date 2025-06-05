@@ -31,10 +31,12 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Event } from '@/types/event'; // Make sure this path is correct
 
+type deleteMutationTypes = UseMutationResult<Event | void, Error,string, unknown> | UseMutationResult<void | Event, Error, { documentId: string; numericId?: string | undefined; }, unknown>
+
 interface EventCardGridProps {
   events: Event[];
   onDelete: (id: string) => void;
-  deleteMutation: UseMutationResult<Event | void, Error, string, unknown>;
+  deleteMutation: deleteMutationTypes;
 }
 
 export default function EventCardGrid({
@@ -64,7 +66,7 @@ export default function EventCardGrid({
               )}
               <div className="flex items-center text-muted-foreground">
                 <MapPin className="mr-1.5 h-4 w-4" />
-                <span className="truncate" title={event.location}>
+                <span className="truncate" title={event.location?event.location:""}>
                     {event.location}
                 </span>
               </div>

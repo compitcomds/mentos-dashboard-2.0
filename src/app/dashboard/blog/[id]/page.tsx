@@ -479,7 +479,7 @@ export default function BlogFormPage() {
         {
           id: blogData.id, // Numeric ID for the API path for update
           blog: payload,
-          numericId: blogData.documentId, // String documentId for cache invalidation
+          documentIdForInvalidation: blogData.documentId, // String documentId for cache invalidation
         },
         mutationOptions
       );
