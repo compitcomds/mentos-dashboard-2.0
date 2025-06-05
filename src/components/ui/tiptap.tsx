@@ -6,7 +6,7 @@ import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
-import TiptapImage from "@tiptap/extension-image"; // Standard Tiptap Image extension
+import TiptapImage from "@tiptap/extension-image";
 import {
   Bold,
   Italic,
@@ -24,7 +24,7 @@ import {
   AlignCenter,
   AlignRight,
   AlignJustify,
-  Image as ImageIconLucide, // Renamed to avoid conflict
+  Image as ImageIconLucide,
   Pilcrow,
   Baseline,
   Unlink,
@@ -32,6 +32,8 @@ import {
   ChevronDown,
   Eraser,
   Video,
+  Expand, // Added for fullscreen
+  Minimize, // Added for fullscreen
 } from "lucide-react";
 
 import { Separator } from "./separator";
@@ -51,7 +53,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
-// Input is not directly used in the simplified version for image dimensions
 
 interface TipTapEditorProps {
   content?: string;
@@ -65,14 +66,15 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     const [sourceContent, setSourceContent] = useState(content);
     const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
     const [isBubbleMenuMounted, setIsBubbleMenuMounted] = useState(false);
+    const [isFullScreenView, setIsFullScreenView] = useState(false); // Fullscreen state
     const editorContainerRef = useRef<HTMLDivElement>(null);
 
     const editor = useEditor({
       extensions: [
         StarterKit.configure({
           heading: { levels: [1, 2, 3], HTMLAttributes: {} },
-          bulletList: { HTMLAttributes: {} },
-          orderedList: { HTMLAttributes: {} },
+          bulletList: { HTMLAttributes: { class: 'list-disc pl-6' } }, // Added classes for visibility
+          orderedList: { HTMLAttributes: { class: 'list-decimal pl-6' } }, // Added classes for visibility
           blockquote: { HTMLAttributes: {} },
           codeBlock: false,
           horizontalRule: false,
@@ -86,16 +88,15 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             rel: "noopener noreferrer nofollow",
           },
         }),
-        TiptapImage.configure({ // Using standard TiptapImage
+        TiptapImage.configure({
           inline: false,
           allowBase64: true,
-          // No custom attributes for alignment/style needed here for standard usage
         }),
         Placeholder.configure({
           placeholder: "Start writing your amazing content here…",
         }),
         TextAlign.configure({
-          types: ["heading", "paragraph"], // Removed 'image' from types
+          types: ["heading", "paragraph"],
           alignments: ["left", "center", "right", "justify"],
           defaultAlignment: "left",
         }),
@@ -145,27 +146,47 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
 
     const setLinkCallback = useCallback(() => {
       if (!editor) return;
-      const previousUrl = editor.getAttributes("link").href;
-      const url = window.prompt(
-        "Enter URL (leave empty to remove link)",
-        previousUrl || "https://"
-      );
+      const { from, to, empty } = editor.state.selection;
 
-      if (url === null) return;
-
-      if (url === "") {
-        editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      } else {
-        let finalUrl = url;
-        if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
-          finalUrl = `https://${url}`;
-        }
-        editor
-          .chain()
-          .focus()
-          .extendMarkRange("link")
-          .setLink({ href: finalUrl, target: "_blank" })
-          .run();
+      if (empty) { // No text selected, behavior can be to prompt or do nothing
+          const existingUrl = editor.getAttributes("link").href;
+          const url = window.prompt("Enter URL:", existingUrl || "https://");
+          if (url === null) return; // User cancelled
+          if (url === "") {
+              editor.chain().focus().extendMarkRange("link").unsetLink().run();
+          } else {
+              let finalUrl = url;
+              if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+                  finalUrl = `https://${url}`;
+              }
+              editor.chain().focus().setLink({ href: finalUrl, target: '_blank' }).run();
+          }
+      } else { // Text is selected
+          if (editor.isActive("link")) { // If selected text is already a link, open bubble to edit
+              // Tiptap's bubble menu for links should handle this when a link is clicked/focused.
+              // We can also explicitly unset it if we want a toggle behavior.
+              // For now, let's make it prompt like above for consistency, or rely on bubble menu.
+              const existingUrl = editor.getAttributes("link").href;
+              const url = window.prompt("Edit URL (leave empty to remove):", existingUrl || "https://");
+              if (url === null) return;
+              if (url === "") {
+                editor.chain().focus().extendMarkRange("link").unsetLink().run();
+              } else {
+                let finalUrl = url;
+                if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+                    finalUrl = `https://${url}`;
+                }
+                editor.chain().focus().extendMarkRange("link").setLink({ href: finalUrl, target: '_blank' }).run();
+              }
+          } else { // Apply new link to selected text
+              const url = window.prompt("Enter URL:", "https://");
+              if (url === null || url === "") return; // User cancelled or entered empty
+              let finalUrl = url;
+              if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+                  finalUrl = `https://${url}`;
+              }
+              editor.chain().focus().extendMarkRange("link").setLink({ href: finalUrl, target: '_blank' }).run();
+          }
       }
     }, [editor]);
 
@@ -181,7 +202,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
       const { fileUrl: mediaUrl, alt: altText, mime: mimeType, name } = media;
       if (editor && mediaUrl) {
         if (mimeType?.startsWith("image/")) {
-          // Standard image insertion
           editor
             .chain()
             .focus()
@@ -191,7 +211,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             })
             .run();
         } else {
-          // Insert non-image files as download links
           const displayText = `Download: ${name || altText || "File"}`;
           const downloadBtnHtml = `<p><a href="${mediaUrl}" download target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); text-decoration: none; border-radius: 0.375rem; font-weight: 500;">${displayText}</a></p>`;
           editor.chain().focus().insertContent(downloadBtnHtml).run();
@@ -205,27 +224,56 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     ) => {
       const newHtml = event.target.value;
       setSourceContent(newHtml);
+      // Only update editor content if not in source mode (will apply on toggle)
+      // Or, if desired, update editor content live from source mode:
+      // if (editor && !isSourceMode) { // This check is actually redundant due to how toggle works
+      // editor.commands.setContent(newHtml, false); // This would cause a loop if not careful
+      // }
       if (onContentChange) {
-        onContentChange(newHtml);
+        onContentChange(newHtml); // Update parent form state immediately
       }
     };
 
     const toggleSourceMode = () => {
       const newMode = !isSourceMode;
-      if (newMode && editor) {
-        setSourceContent(editor.getHTML());
-      } else if (!newMode && editor) {
-        const currentSource = sourceContent;
-        const editorHtml = editor.getHTML();
-        if (editorHtml !== currentSource) {
-          editor.commands.setContent(currentSource, true);
-        }
-        if (onContentChange) {
-          onContentChange(currentSource);
+      if (editor) {
+        if (newMode) { // Switching TO source mode
+          setSourceContent(editor.getHTML());
+        } else { // Switching FROM source mode (back to WYSIWYG)
+          const currentSource = sourceContent;
+          const editorHtml = editor.getHTML();
+           // Only set content if sourceContent has actually changed from what editor had
+           // or if the content prop changed externally while in source mode.
+          if (editorHtml !== currentSource || (content !== editorHtml && content !== currentSource)) {
+            editor.commands.setContent(currentSource, true); // true to parse and emit update
+          }
         }
       }
       setIsSourceMode(newMode);
     };
+
+    const toggleFullScreen = () => {
+      setIsFullScreenView(!isFullScreenView);
+    };
+
+    useEffect(() => {
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key === 'Escape' && isFullScreenView) {
+          setIsFullScreenView(false);
+        }
+      };
+      if (isFullScreenView) {
+        document.body.style.overflow = 'hidden'; // Prevent body scroll
+        window.addEventListener('keydown', handleEscape);
+      } else {
+        document.body.style.overflow = '';
+      }
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleEscape);
+      };
+    }, [isFullScreenView]);
+
 
     if (!editor) {
       return (
@@ -243,11 +291,19 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     const toolbarItems = [
       {
         type: "button",
+        icon: isFullScreenView ? Minimize : Expand,
+        action: toggleFullScreen,
+        tooltip: isFullScreenView ? "Exit Fullscreen" : "Fullscreen (Esc to exit)",
+        id: "fullscreen",
+      },
+      {
+        type: "button",
         icon: CodeXml,
         action: toggleSourceMode,
         tooltip: "View/Edit Source",
         isActive: isSourceMode,
         id: "source",
+        disabled: isFullScreenView && isSourceMode, // Example: disable source toggle in fullscreen
       },
       { type: "separator", id: "sep-source" },
       {
@@ -418,7 +474,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
       },
       {
         type: "button",
-        icon: ImageIconLucide, // Using renamed import
+        icon: ImageIconLucide,
         action: () => setIsMediaSelectorOpen(true),
         tooltip: "Attach Image/Video",
         id: "attach-media",
@@ -448,10 +504,13 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
           ref={editorContainerRef}
           className={cn(
             "border border-border rounded-md flex flex-col",
-            className
+            isFullScreenView ? "fixed inset-0 z-50 bg-background p-0" : className // Apply fullscreen styles
           )}
         >
-          <div className="flex items-center px-2 py-1.5 border-b border-border flex-wrap gap-1 bg-muted/50 rounded-t-md flex-shrink-0">
+          <div className={cn(
+              "flex items-center px-2 py-1.5 border-b border-border flex-wrap gap-1 bg-muted/50 flex-shrink-0",
+              isFullScreenView ? "rounded-t-none" : "rounded-t-md" // Adjust rounding for fullscreen
+            )}>
             {toolbarItems.map((item) => {
               if (item.type === "separator") {
                 return (
@@ -467,7 +526,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                   <DropdownMenu key={item.id}>
                     <DropdownMenuTrigger
                       asChild
-                      disabled={isSourceMode || !editor}
+                      disabled={(isSourceMode && item.id !== 'source') || !editor}
                     >
                       <Button
                         variant="ghost"
@@ -498,7 +557,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                   key={item.id}
                   onClick={item.action}
                   isActive={item.isActive}
-                  disabled={item.disabled || !editor}
+                  disabled={item.disabled || (!editor && item.id !== 'fullscreen' && item.id !== 'source')}
                   tooltip={item.tooltip}
                 >
                   <item.icon className="w-4 h-4" />
@@ -563,20 +622,24 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             </BubbleMenu>
           )}
 
-          {/* Image specific bubble menu removed */}
-
-          <div className="flex-1 overflow-y-auto editor-content-area-wrapper">
+          <div className={cn(
+              "flex-1 overflow-y-auto editor-content-area-wrapper",
+              isFullScreenView ? "p-4" : "" // Add padding in fullscreen
+            )}>
             {isSourceMode ? (
               <Textarea
                 value={sourceContent}
                 onChange={handleSourceChange}
-                className="w-full h-full font-mono text-sm p-3 rounded-b-md border-t-0 focus:outline-none resize-none focus-visible:ring-0 focus-visible:ring-offset-0 min-h-[300px]"
+                className="w-full h-full font-mono text-sm p-3 focus:outline-none resize-none focus-visible:ring-0 focus-visible:ring-offset-0 min-h-[300px] border-0 rounded-none"
                 placeholder="Edit HTML source..."
               />
             ) : (
               <EditorContent
                 editor={editor}
-                className="prose dark:prose-invert max-w-none p-4 h-full min-h-[300px] focus:outline-none rounded-b-md editor-content-area"
+                className={cn(
+                    "prose dark:prose-invert max-w-none p-4 h-full min-h-[300px] focus:outline-none editor-content-area",
+                    isFullScreenView ? "rounded-none" : "rounded-b-md"
+                )}
               />
             )}
           </div>
@@ -645,3 +708,4 @@ const ToolbarButton = memo(
 ToolbarButton.displayName = "ToolbarButton";
 
 export default TipTapEditor;
+

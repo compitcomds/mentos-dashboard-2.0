@@ -88,3 +88,19 @@
     /* Remove explicit font-family, let Next/font handle it */
   }
 }
+
+/* Custom styles for Tiptap list visibility if Tailwind prose is not sufficient */
+@layer components {
+  .tiptap-editor-styles .ProseMirror ul, .tiptap-editor-styles .ProseMirror ol {
+    @apply pl-6 my-2;
+  }
+  .tiptap-editor-styles .ProseMirror ul {
+    @apply list-disc;
+  }
+  .tiptap-editor-styles .ProseMirror ol {
+    @apply list-decimal;
+  }
+  .tiptap-editor-styles .ProseMirror li {
+    @apply my-1;
+  }
+}
