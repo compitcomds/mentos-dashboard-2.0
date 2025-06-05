@@ -60,20 +60,8 @@ export default function Header({ userName, onLogout, menuItems }: HeaderProps) {
                   <SheetTitle asChild>
                     <div className="flex h-14 items-center gap-2 px-4 lg:px-6">
                         <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-                          <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                                className="h-6 w-6 text-sidebar-primary"
-                          >
-                              <path d="M15 6.343a4.5 4.5 0 1 1 6.364 6.364L12 21.364l-9.364-9.364A4.5 4.5 0 1 1 9 6.343"/>
-                              <path d="M12 12.727a2.25 2.25 0 1 1 0-4.5 2.25 2.25 0 0 1 0 4.5Z"/>
-                          </svg>
-                          <span className="text-lg font-semibold">AuthFlow</span>
+                          
+                          <span className="text-lg font-semibold">Mentos</span>
                         </Link>
                     </div>
                   </SheetTitle>

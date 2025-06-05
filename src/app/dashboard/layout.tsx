@@ -38,14 +38,14 @@ const initialStaticMenuItems: MenuItem[] = [
   { href: '/dashboard/blog', label: 'Blog', icon: PenSquare },
   { href: '/dashboard/event', label: 'Events', icon: CalendarClock },
   { href: '/dashboard/categories', label: 'Categories', icon: LayoutList },
-  { href: '/dashboard/extra-content', label: 'Extra Content Management', icon: FileJson },
+  { href: '/dashboard/extra-content', label: 'Extra Content', icon: FileJson },
   // Dynamic items will be inserted after Extra Content Management
   { href: '/dashboard/web-media', label: 'Web Media', icon: ImageIconLucide },
   { href: '/dashboard/query-forms', label: 'Query Forms', icon: HelpCircle },
   { href: '/dashboard/notifications', label: 'Notifications', icon: Mail }, // Added Notifications link
-  { href: '/dashboard/developer-docs', label: 'Developer Docs', icon: BookText },
+  // { href: '/dashboard/developer-docs', label: 'Developer Docs', icon: BookText },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
-  { href: '/dashboard/settings?tab=billing', label: 'Billing', icon: CreditCard },
+  // { href: '/dashboard/settings?tab=billing', label: 'Billing', icon: CreditCard },
 ];
 
 export default function DashboardLayout({

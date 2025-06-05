@@ -5,7 +5,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronLeft, HelpCircle, LayoutList, FileJson } from 'lucide-react';
+import { ChevronLeft, HelpCircle, LayoutList, FileJson, ChevronRight } from 'lucide-react';
 
 import {
   Sidebar,
@@ -44,27 +44,16 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
 
        <SidebarHeader className="border-b border-sidebar-border">
          <div className="flex h-14 items-center gap-2 px-4 lg:px-6 ">
-           <Link href="/dashboard" className="flex items-center gap-2 font-semibold flex-grow overflow-hidden">
-             <svg
-                 xmlns="http://www.w3.org/2000/svg"
-                 viewBox="0 0 24 24"
-                 fill="none"
-                 stroke="currentColor"
-                 strokeWidth="2"
-                 strokeLinecap="round"
-                 strokeLinejoin="round"
-                 className="h-6 w-6 text-sidebar-primary flex-shrink-0"
-             >
-                 <path d="M15 6.343a4.5 4.5 0 1 1 6.364 6.364L12 21.364l-9.364-9.364A4.5 4.5 0 1 1 9 6.343"/>
-                 <path d="M12 12.727a2.25 2.25 0 1 1 0-4.5 2.25 2.25 0 0 1 0 4.5Z"/>
-             </svg>
-             <span className="text-lg font-semibold text-foreground group-data-[state=collapsed]:hidden whitespace-nowrap">
-                 AuthFlow
+           <Link href="/dashboard" className="flex items-left justify-between font-semibold flex-grow w-full ">
+            
+             <span className="">
+              {state === 'expanded'?"Mentos" :"M"}
              </span>
            </Link>
              <SidebarTrigger asChild className={cn("ml-auto", state === 'expanded' ? 'lg:flex' : 'flex')}>
                  <Button variant="ghost" size="icon" className='h-7 w-7'>
-                     <ChevronLeft />
+                  {state === 'expanded'?<ChevronLeft /> :<ChevronRight/>}
+                     
                  </Button>
              </SidebarTrigger>
 
@@ -96,7 +85,7 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
 
        <SidebarFooter className="p-4 lg:p-6 border-t border-sidebar-border w-full">
          <div className="text-xs text-muted-foreground group-data-[state=collapsed]:hidden text-center">
-           © {new Date().getFullYear()} AuthFlow
+           © {new Date().getFullYear()} Mentos
          </div>
        </SidebarFooter>
     </Sidebar>

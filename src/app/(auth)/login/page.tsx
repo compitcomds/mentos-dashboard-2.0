@@ -195,7 +195,7 @@ export default function LoginPage() {
           </Form>
 
           {/* Debug Section to Show Token */}
-          <div className="mt-6 border-t pt-4 text-center">
+          {/* <div className="mt-6 border-t pt-4 text-center">
               <Button variant="outline" size="sm" onClick={handleShowToken} className="mb-2">
                 Show Current Token (Debug)
               </Button>
@@ -208,16 +208,16 @@ export default function LoginPage() {
                   <pre className='whitespace-pre-wrap'>{displayedToken}</pre>
                 </div>
               )}
-          </div>
+          </div> */}
            {/* Display Full Login Response JSON */}
-          {loginResponseJson && (
+          {/* {loginResponseJson && (
             <div className="mt-4 border-t pt-4">
               <h4 className="text-sm font-semibold mb-2 text-center">Last Login Response:</h4>
               <pre className="text-xs bg-muted p-2 rounded-md overflow-auto max-h-48">
                 {loginResponseJson}
               </pre>
             </div>
-          )}
+          )} */}
 
         </CardContent>
         <CardFooter className="flex flex-col items-center space-y-2">
