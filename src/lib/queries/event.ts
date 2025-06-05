@@ -23,8 +23,9 @@ export interface UseGetEventsOptions {
   statusFilter?: string | null;
 }
 
+const EVENTS_QUERY_KEY_PREFIX = 'events'; // For simpler invalidation
 const EVENTS_QUERY_KEY = (userTenentId?: string, options?: UseGetEventsOptions) =>
-  ['events', userTenentId || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder, options?.titleFilter, options?.categoryFilter, options?.statusFilter];
+  [EVENTS_QUERY_KEY_PREFIX, userTenentId || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder, options?.titleFilter, options?.categoryFilter, options?.statusFilter];
 
 const EVENT_DETAIL_QUERY_KEY = (documentId?: string, userTenentId?: string) => ['event', documentId || 'new-detail-event', userTenentId || 'all'];
 
@@ -46,7 +47,7 @@ export const useCreateEvent = () => {
     onSuccess: (data) => {
       toast({ title: "Success", description: "Event created successfully." });
       const tenentIdForInvalidation = data.tenent_id || currentUser?.tenent_id;
-      queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(tenentIdForInvalidation) });
+      queryClient.invalidateQueries({ queryKey: [EVENTS_QUERY_KEY_PREFIX, tenentIdForInvalidation] });
       if (data.documentId) { // Use documentId from the response
         queryClient.invalidateQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(data.documentId, tenentIdForInvalidation) });
       }
@@ -120,7 +121,7 @@ export const useUpdateEvent = () => {
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Event updated successfully." });
       const tenentIdForInvalidation = data.tenent_id || currentUser?.tenent_id;
-      queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(tenentIdForInvalidation) });
+      queryClient.invalidateQueries({ queryKey: [EVENTS_QUERY_KEY_PREFIX, tenentIdForInvalidation] });
       // Use variables.documentId for detail invalidation
       if (variables.documentId) {
         queryClient.invalidateQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(variables.documentId, tenentIdForInvalidation) });
@@ -162,7 +163,7 @@ export const useDeleteEvent = () => {
     onSuccess: (data, variables) => { 
       toast({ title: "Success", description: "Event deleted successfully." });
       const tenentIdForInvalidation = (data as Event)?.tenent_id || currentUser?.tenent_id;
-      queryClient.invalidateQueries({ queryKey: EVENTS_QUERY_KEY(tenentIdForInvalidation) });
+      queryClient.invalidateQueries({ queryKey: [EVENTS_QUERY_KEY_PREFIX, tenentIdForInvalidation] });
       if (variables.documentId) {
         queryClient.removeQueries({ queryKey: EVENT_DETAIL_QUERY_KEY(variables.documentId, tenentIdForInvalidation) });
       }

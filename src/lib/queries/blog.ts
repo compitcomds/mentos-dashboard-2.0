@@ -20,8 +20,9 @@ export interface UseGetBlogsOptions {
   sortOrder?: 'asc' | 'desc';
 }
 
+const BLOGS_QUERY_KEY_PREFIX = 'blogs'; // For simpler invalidation
 const BLOGS_QUERY_KEY = (userTenentId?: string, options?: UseGetBlogsOptions) => 
-  ['blogs', userTenentId || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder];
+  [BLOGS_QUERY_KEY_PREFIX, userTenentId || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder];
 
 const BLOG_DETAIL_QUERY_KEY = (documentId?: string, userTenentId?: string) => 
   ['blog', documentId || 'new-detail', userTenentId || 'all'];
@@ -42,7 +43,7 @@ export const useCreateBlog = () => {
     },
     onSuccess: (data) => {
        toast({ title: "Success", description: "Blog post created successfully." });
-       queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) }); // Invalidate general list
+       queryClient.invalidateQueries({ queryKey: [BLOGS_QUERY_KEY_PREFIX, userTenentId] });
        if (data.documentId) {
         queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(data.documentId, userTenentId) });
        }
@@ -118,7 +119,7 @@ export const useUpdateBlog = () => {
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post updated successfully." });
-      queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) }); // Invalidate general list
+      queryClient.invalidateQueries({ queryKey: [BLOGS_QUERY_KEY_PREFIX, userTenentId] });
       if (variables.documentIdForInvalidation) {
         queryClient.invalidateQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(variables.documentIdForInvalidation, userTenentId) });
       } else if (data.documentId) { 
@@ -152,10 +153,9 @@ export const useDeleteBlog = () => {
     },
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Blog post deleted successfully." });
-      queryClient.invalidateQueries({ queryKey: BLOGS_QUERY_KEY(userTenentId) });
+      queryClient.invalidateQueries({ queryKey: [BLOGS_QUERY_KEY_PREFIX, userTenentId] });
       const idToInvalidate = variables.documentIdForInvalidation || variables.documentId;
       if (idToInvalidate) {
-        // Instead of just invalidating, remove the specific query from cache if it exists
         queryClient.removeQueries({ queryKey: BLOG_DETAIL_QUERY_KEY(idToInvalidate, userTenentId) });
       }
     },
