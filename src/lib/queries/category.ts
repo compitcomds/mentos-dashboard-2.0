@@ -20,8 +20,9 @@ export interface UseGetCategoriesOptions {
   sortOrder?: 'asc' | 'desc';
 }
 
+const CATEGORIES_QUERY_KEY_PREFIX = 'categories'; // For simpler invalidation
 const CATEGORIES_QUERY_KEY = (userTenentId?: string, options?: UseGetCategoriesOptions) =>
-  ['categories', userTenentId || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder];
+  [CATEGORIES_QUERY_KEY_PREFIX, userTenentId || 'all', options?.page, options?.pageSize, options?.sortField, options?.sortOrder];
 
 const CATEGORY_DETAIL_QUERY_KEY = (identifier?: string, userTenentId?: string) => ['category', identifier || 'new', userTenentId || 'all'];
 
@@ -42,7 +43,7 @@ export const useCreateCategory = () => {
     },
     onSuccess: (data) => {
       toast({ title: "Success", description: "Category created successfully." });
-      queryClient.invalidateQueries({ queryKey: CATEGORIES_QUERY_KEY(data.tenent_id || currentUser?.tenent_id) });
+      queryClient.invalidateQueries({ queryKey: [CATEGORIES_QUERY_KEY_PREFIX, data.tenent_id || currentUser?.tenent_id] });
     },
     onError: (error: any) => {
       const strapiError = error.response?.data?.error;
@@ -109,7 +110,7 @@ export const useUpdateCategory = () => {
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Category updated successfully." });
       const tenentIdForInvalidation = data.tenent_id || currentUser?.tenent_id;
-      queryClient.invalidateQueries({ queryKey: CATEGORIES_QUERY_KEY(tenentIdForInvalidation) });
+      queryClient.invalidateQueries({ queryKey: [CATEGORIES_QUERY_KEY_PREFIX, tenentIdForInvalidation] });
       queryClient.invalidateQueries({ queryKey: CATEGORY_DETAIL_QUERY_KEY(variables.documentId, tenentIdForInvalidation) });
     },
     onError: (error: any, variables) => {
@@ -144,7 +145,7 @@ export const useDeleteCategory = () => {
     onSuccess: (data, variables) => {
       toast({ title: "Success", description: "Category deleted successfully." });
       const tenentIdForInvalidation = variables.userKey || currentUser?.tenent_id;
-      queryClient.invalidateQueries({ queryKey: CATEGORIES_QUERY_KEY(tenentIdForInvalidation) });
+      queryClient.invalidateQueries({ queryKey: [CATEGORIES_QUERY_KEY_PREFIX, tenentIdForInvalidation] });
       queryClient.removeQueries({ queryKey: CATEGORY_DETAIL_QUERY_KEY(variables.documentId, tenentIdForInvalidation) });
     },
     onError: (error: any, variables) => {
