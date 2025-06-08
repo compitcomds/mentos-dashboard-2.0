@@ -15,7 +15,7 @@ interface TagFilterControlProps {
   onTagSelectionChange: (newSelectedTags: string[]) => void;
   onAddNewTag: (newTag: string) => void;
   isLoading?: boolean;
-  predefinedTags?: string[]; // To visually differentiate if needed, or for specific logic
+  predefinedTags?: string[];
 }
 
 export function TagFilterControl({
@@ -40,13 +40,16 @@ export function TagFilterControl({
     const newTag = inputValue.trim().toLowerCase();
     if (newTag) {
       if (allAvailableTags.includes(newTag)) {
-        // If tag already exists, just select it if not already selected
         if (!selectedTags.includes(newTag)) {
           onTagSelectionChange([...selectedTags, newTag]);
         }
          toast({ title: "Tag Exists", description: `"${newTag}" is already available and has been selected.` });
       } else {
-        onAddNewTag(newTag); // Parent will handle adding to available and selecting
+        onAddNewTag(newTag); 
+        // Also select the newly added tag immediately if not already handled by parent
+        if (!selectedTags.includes(newTag)) {
+          onTagSelectionChange([...selectedTags, newTag]);
+        }
       }
       setInputValue('');
     }
@@ -71,48 +74,51 @@ export function TagFilterControl({
 
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+    // Changed from space-y-3 to flex flex-nowrap for horizontal layout inside scroll container
+    <div className="flex items-center gap-2"> 
+      <div className="flex flex-nowrap gap-1.5 py-1 items-center"> {/* Container for tags */}
         {sortedAvailableTags.map((tag) => (
           <Button
             key={tag}
             type="button"
             variant={selectedTags.includes(tag) ? 'default' : 'outline'}
-            size="sm"
+            size="sm" // Keep size sm for tags
             onClick={() => handleTagClick(tag)}
             disabled={isLoading}
             className={cn(
-              "h-auto px-2.5 py-1 text-xs rounded-full",
+              "h-auto px-2 py-0.5 text-xs rounded-full flex-shrink-0", // Added flex-shrink-0
               selectedTags.includes(tag) && "bg-primary text-primary-foreground hover:bg-primary/90",
               !selectedTags.includes(tag) && "hover:bg-accent"
             )}
           >
-            <Tag className="mr-1.5 h-3 w-3" />
+            <Tag className="mr-1 h-3 w-3" />
             {tag}
-            {selectedTags.includes(tag) && <X className="ml-1.5 h-3 w-3" />}
+            {selectedTags.includes(tag) && <X className="ml-1 h-3 w-3" />}
           </Button>
         ))}
-        {allAvailableTags.length === 0 && <p className="text-xs text-muted-foreground">No tags available. Add some!</p>}
+        {allAvailableTags.length === 0 && <p className="text-xs text-muted-foreground flex-shrink-0">No tags available.</p>}
       </div>
-      <div className="flex items-center gap-2">
+      {/* Input and Add button could be styled to be more compact or hidden on very small screens if needed */}
+      <div className="flex items-center gap-1 pl-2 border-l ml-1 flex-shrink-0"> {/* Add new tag section */}
         <Input
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleInputKeyDown}
-          placeholder="Add new tag..."
-          className="h-9 text-xs flex-grow"
+          placeholder="New tag"
+          className="h-8 text-xs w-24" // Made input smaller
           disabled={isLoading}
         />
         <Button
           type="button"
           size="sm"
+          variant="ghost"
           onClick={handleAddCustomTag}
           disabled={isLoading || !inputValue.trim()}
-          className="h-9 px-3"
+          className="h-8 px-2" // Made button smaller
         >
-          <PlusCircle className="h-4 w-4" />
-          <span className="sr-only sm:not-sr-only sm:ml-1">Add</span>
+          <PlusCircle className="h-3.5 w-3.5" />
+           <span className="sr-only">Add Tag</span>
         </Button>
       </div>
     </div>

@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
+    // DialogHeader, // No longer using explicit DialogHeader
+    // DialogTitle, // Title will be implicit or part of content
+    // DialogDescription, // Description will be implicit or part of content
     DialogFooter,
     DialogClose,
 } from '@/components/ui/dialog';
@@ -44,7 +44,7 @@ const getFileTypeRenderIcon = (mime: string | null, className?: string): React.R
     return <FileQuestion className={iconClasses} />;
 };
 
-const DIALOG_PAGE_SIZE = 12;
+const DIALOG_PAGE_SIZE = 12; // Or a number that fits well with 2-3 columns on mobile
 
 export default function MediaSelectorDialog({
     isOpen,
@@ -78,7 +78,6 @@ export default function MediaSelectorDialog({
 
     const allMediaData = allMediaDataResponse;
     const pagination = allMediaData?.meta?.pagination;
-
 
     const [selectedMedia, setSelectedMedia] = React.useState<CombinedMediaData | null>(null);
 
@@ -119,6 +118,10 @@ export default function MediaSelectorDialog({
         onOpenChange(open);
         if (!open) {
             setSelectedMedia(null);
+            // Optionally reset filters when dialog closes
+            // setNameFilter('');
+            // setSelectedFilterTags([]);
+            // setCurrentPage(1);
         }
     };
 
@@ -135,61 +138,57 @@ export default function MediaSelectorDialog({
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent className={cn(
-                "max-h-[90vh] flex flex-col",
-                "w-[95vw] max-w-md", 
-                "sm:w-full sm:max-w-3xl",
-                "md:max-w-4xl",
-                "lg:max-w-5xl",
-                "xl:max-w-6xl"
+                "max-h-[95vh] flex flex-col p-0", // Removed default padding for full control
+                "w-[95vw] max-w-md",
+                "sm:w-full sm:max-w-2xl", // Slightly smaller than before for better mobile feel initially
+                "md:max-w-3xl",
+                "lg:max-w-4xl"
+                // xl:max-w-6xl - Can be added back if needed for very large screens
                 )}>
-                <DialogHeader className="pb-4 mb-2 border-b">
-                    <DialogTitle>Select Media</DialogTitle>
-                    <DialogDescription>
-                        Choose a file.
-                        {expectedMediaTypes.length > 0 && ` (Filtering for: ${expectedMediaTypes.join(', ')})`}
-                         {(isFetching || isLoading) && <Loader2 className="ml-2 inline-block h-4 w-4 animate-spin" />}
-                    </DialogDescription>
-                </DialogHeader>
 
-                <div className="py-3 border-y mb-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 items-end">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="media-name-filter-dialog" className="text-xs font-medium">Filter by Name</Label>
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    id="media-name-filter-dialog"
-                                    type="search"
-                                    placeholder="Search by media name..."
-                                    value={nameFilter}
-                                    onChange={(e) => { setNameFilter(e.target.value); setCurrentPage(1); }}
-                                    className="pl-8 h-9 text-xs w-full"
-                                    disabled={isLoading}
-                                />
-                            </div>
-                        </div>
+                {/* Top Bar: Search Input and Close Button */}
+                <div className="flex items-center p-3 border-b flex-shrink-0">
+                    <div className="relative flex-grow mr-2">
+                        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            id="media-name-filter-dialog"
+                            type="search"
+                            placeholder="Search media..."
+                            value={nameFilter}
+                            onChange={(e) => { setNameFilter(e.target.value); setCurrentPage(1); }}
+                            className="pl-9 h-10 text-sm w-full rounded-full bg-muted border-transparent focus:border-primary focus:bg-background"
+                            disabled={isLoading}
+                        />
+                    </div>
+                    <DialogClose asChild>
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full">
+                            <X className="h-5 w-5" />
+                        </Button>
+                    </DialogClose>
+                </div>
 
-                        <div className="space-y-1.5">
-                             <Label className="text-xs font-medium">Filter by Tags</Label>
-                             <TagFilterControl
-                                allAvailableTags={allAvailableTagsForDialog}
-                                selectedTags={selectedFilterTags}
-                                onTagSelectionChange={(tags) => { setSelectedFilterTags(tags); setCurrentPage(1); }}
-                                onAddNewTag={handleAddNewUserTagForDialog}
-                                isLoading={isLoading}
-                                predefinedTags={PREDEFINED_TAGS_FOR_WEB_MEDIA}
-                             />
-                        </div>
+                {/* Filter by Tag Section - Horizontally Scrollable */}
+                <div className="px-3 py-2 border-b flex-shrink-0">
+                    {/* <Label htmlFor="tag-filter-container" className="text-xs font-medium text-muted-foreground mb-1.5 block">Filter by Tag</Label> */}
+                    <div id="tag-filter-container" className="overflow-x-auto whitespace-nowrap pb-1 -mb-1">
+                         {/* The TagFilterControl's root div needs to be display: flex and flex-nowrap */}
+                         <TagFilterControl
+                            allAvailableTags={allAvailableTagsForDialog}
+                            selectedTags={selectedFilterTags}
+                            onTagSelectionChange={(tags) => { setSelectedFilterTags(tags); setCurrentPage(1); }}
+                            onAddNewTag={handleAddNewUserTagForDialog}
+                            isLoading={isLoading}
+                            predefinedTags={PREDEFINED_TAGS_FOR_WEB_MEDIA}
+                         />
                     </div>
                 </div>
 
-
-                <ScrollArea className="flex-1 pr-1 -mr-2 mt-0">
-                    <div className="py-4">
+                {/* Media Grid Area */}
+                <ScrollArea className="flex-1 px-3 py-2"> {/* Added padding here */}
+                    <div className="min-h-[200px]"> {/* Ensure scroll area has some min height */}
                         {isLoading && !allMediaDataResponse && (
-                            <div className="flex items-center justify-center h-64">
+                            <div className="flex items-center justify-center h-full">
                                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                                <p className="ml-2">Loading media...</p>
                             </div>
                         )}
                         {isError && !isFetching && (
@@ -206,12 +205,12 @@ export default function MediaSelectorDialog({
                             </Alert>
                         )}
                         {!isLoading && !isError && (!filteredMediaData || filteredMediaData.length === 0) && (
-                             <p className="text-center text-muted-foreground py-8">
-                                 {userKey ? `No media files found${nameFilter || selectedFilterTags.length > 0 ? ' matching filters' : (expectedMediaTypes.length > 0 ? ` for type: ${expectedMediaTypes.join(', ')}` : '')} for your key.` : 'User key not found.'}
+                             <p className="text-center text-muted-foreground py-8 text-sm">
+                                 {userKey ? `No media files found${nameFilter || selectedFilterTags.length > 0 ? ' matching filters' : (expectedMediaTypes.length > 0 ? ` for type: ${expectedMediaTypes.join(', ')}` : '')}.` : 'User key not found.'}
                              </p>
                         )}
                         {!isLoading && !isError && filteredMediaData && filteredMediaData.length > 0 && (
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"> {/* Adjusted sm columns */}
                                 {filteredMediaData.map((media) => {
                                     const isCurrentlySelectedInParentForm = media.fileId !== null && currentSelectionIds.includes(media.fileId);
                                     const isDialogSelected = selectedMedia?.webMediaId === media.webMediaId;
@@ -227,8 +226,8 @@ export default function MediaSelectorDialog({
                                         }}
                                         disabled={!hasValidIdForSelection}
                                         className={cn(
-                                            "relative group border rounded-md overflow-hidden aspect-square focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 flex flex-col items-center justify-center text-center transition-all duration-150",
-                                            isDialogSelected ? 'ring-2 ring-primary ring-offset-2 shadow-lg scale-105 border-primary' : 'border-border hover:border-primary/50',
+                                            "relative group border rounded-md overflow-hidden aspect-square focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 flex flex-col items-center justify-center text-center transition-all duration-150",
+                                            isDialogSelected ? 'ring-2 ring-primary ring-offset-1 shadow-lg scale-105 border-primary' : 'border-border hover:border-primary/50',
                                             isCurrentlySelectedInParentForm && !isDialogSelected && 'border-green-500 ring-1 ring-green-500',
                                             !hasValidIdForSelection && 'opacity-60 cursor-not-allowed bg-muted/30 hover:border-destructive/50',
                                             hasValidIdForSelection && 'bg-card hover:shadow-md'
@@ -245,29 +244,29 @@ export default function MediaSelectorDialog({
                                                 unoptimized
                                             />
                                         ) : (
-                                            <div className="flex flex-col items-center justify-center h-full p-2">
-                                                {getFileTypeRenderIcon(media.mime)}
-                                                <span className="mt-1 text-xs text-muted-foreground truncate max-w-full px-1">
+                                            <div className="flex flex-col items-center justify-center h-full p-1">
+                                                {getFileTypeRenderIcon(media.mime, "h-8 w-8 sm:h-10 sm:w-10")}
+                                                <span className="mt-1 text-[10px] sm:text-xs text-muted-foreground truncate max-w-full px-0.5">
                                                     {(media.mime?.split('/')[1] || 'File').toUpperCase()}
                                                 </span>
                                             </div>
                                         )}
                                         {isDialogSelected && hasValidIdForSelection && (
                                             <div className="absolute inset-0 bg-primary/70 flex items-center justify-center">
-                                                <CheckCircle className="w-10 h-10 text-primary-foreground" />
+                                                <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-primary-foreground" />
                                             </div>
                                         )}
                                         {isCurrentlySelectedInParentForm && !isDialogSelected && hasValidIdForSelection && (
-                                            <div className="absolute top-1.5 right-1.5 p-0.5 bg-green-600 rounded-full shadow-md">
-                                                <CheckCircle className="w-3.5 h-3.5 text-white" />
+                                            <div className="absolute top-1 right-1 p-0.5 bg-green-600 rounded-full shadow-md">
+                                                <CheckCircle className="w-3 h-3 text-white" />
                                             </div>
                                         )}
-                                        <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-gradient-to-t from-black/80 via-black/50 to-transparent">
-                                            <p className="text-xs text-white truncate font-semibold">{media.name}</p>
+                                        <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/70 via-black/40 to-transparent">
+                                            <p className="text-[10px] sm:text-xs text-white truncate font-medium">{media.name}</p>
                                         </div>
                                         {!hasValidIdForSelection && (
                                             <div className="absolute inset-0 bg-destructive/40 flex items-center justify-center p-1 backdrop-blur-sm">
-                                                <span className="text-xs text-destructive-foreground font-semibold text-center leading-tight">
+                                                <span className="text-[10px] sm:text-xs text-destructive-foreground font-semibold text-center leading-tight">
                                                     {returnType === 'id' ? 'No File ID' : 'No URL'}
                                                 </span>
                                             </div>
@@ -279,35 +278,40 @@ export default function MediaSelectorDialog({
                     </div>
                 </ScrollArea>
 
-                <DialogFooter className="mt-auto flex-shrink-0 flex-col sm:flex-row justify-between items-center gap-3 pt-4 border-t">
-                    <div className="text-xs text-muted-foreground">
+                {/* Footer: Pagination and Action Buttons */}
+                <DialogFooter className="p-3 border-t flex-shrink-0 flex flex-col sm:flex-row justify-between items-center gap-2">
+                    <div className="text-xs text-muted-foreground order-1 sm:order-none">
                         {pagination && pagination.total > 0 ? (
                             `Page ${pagination.page} of ${pagination.pageCount} (Total: ${pagination.total} items)`
                         ) : (
-                            isFetching || isLoading ? 'Loading pages...' : 'No media items'
+                            isFetching || isLoading ? 'Loading...' : 'No media'
                         )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 order-2 sm:order-none">
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                             disabled={currentPage === 1 || isLoading || isFetching || !pagination || pagination.pageCount === 0}
+                            className="px-3"
                         >
-                            <ChevronLeft className="mr-1 h-4 w-4" /> Previous
+                            <ChevronLeft className="h-4 w-4" />
+                            <span className="sr-only sm:not-sr-only sm:ml-1">Prev</span>
                         </Button>
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setCurrentPage(p => Math.min(pagination?.pageCount || 1, p + 1))}
                             disabled={!pagination || currentPage === pagination.pageCount || pagination.pageCount === 0 || isLoading || isFetching}
+                            className="px-3"
                         >
-                            Next <ChevronRight className="ml-1 h-4 w-4" />
+                            <span className="sr-only sm:not-sr-only sm:mr-1">Next</span>
+                            <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
-                    <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                        <DialogClose asChild className="w-full sm:w-auto">
-                            <Button type="button" variant="outline">
+                    <div className="flex gap-2 w-full sm:w-auto order-first sm:order-last">
+                        <DialogClose asChild className="flex-1 sm:flex-initial">
+                            <Button type="button" variant="outline" size="sm">
                                 Cancel
                             </Button>
                         </DialogClose>
@@ -315,7 +319,8 @@ export default function MediaSelectorDialog({
                             type="button"
                             onClick={handleSelect}
                             disabled={!canSelectMedia || isLoading || isFetching}
-                            className="w-full sm:w-auto"
+                            size="sm"
+                            className="flex-1 sm:flex-initial"
                         >
                             Select Media
                         </Button>
@@ -326,5 +331,3 @@ export default function MediaSelectorDialog({
     );
 }
 
-    
-    
