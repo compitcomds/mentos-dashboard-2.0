@@ -1,21 +1,20 @@
-
 'use client';
 
 import * as React from 'react';
 import Image from 'next/image';
-import { Loader2, AlertCircle, CheckCircle, FileText, Video, ImageIcon as FileTypeIcon, FileQuestion, Search, X, Filter, ChevronLeft, ChevronRight, Tag as TagIcon } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle, FileText, Video, ImageIcon as FileTypeIcon, FileQuestion, Search, X, Filter, ChevronLeft, ChevronRight, Tag as TagIcon, Check } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
-    DialogHeader, // Added DialogHeader
-    DialogTitle,  // Added DialogTitle
+    DialogHeader, 
+    DialogTitle,  
     DialogFooter,
     DialogClose,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle as AlertTitleComponentUI } from "@/components/ui/alert"; // Renamed AlertTitle import
+import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle as AlertTitleComponentUI } from "@/components/ui/alert"; 
 import { useFetchMedia } from '@/lib/queries/media';
 import { useCurrentUser } from '@/lib/queries/user';
 import type { CombinedMediaData } from '@/types/media';
@@ -78,7 +77,7 @@ export default function MediaSelectorDialog({
     const allMediaData = allMediaDataResponse;
     const pagination = allMediaData?.meta?.pagination;
 
-    const [selectedMedia, setSelectedMedia] = React.useState<CombinedMediaData | null>(null);
+    const [selectedMediaInDialog, setSelectedMediaInDialog] = React.useState<CombinedMediaData | null>(null);
 
     const isLoading = isLoadingUser || isLoadingMedia;
 
@@ -99,24 +98,28 @@ export default function MediaSelectorDialog({
     }, [allMediaData, expectedMediaTypes]);
 
 
-    const handleSelect = () => {
-        if (!selectedMedia) return;
-        if (returnType === 'id' && (selectedMedia.fileId === null || selectedMedia.fileId === undefined)) {
+    const handleConfirmSelection = () => {
+        if (!selectedMediaInDialog) return;
+        if (returnType === 'id' && (selectedMediaInDialog.fileId === null || selectedMediaInDialog.fileId === undefined)) {
             console.error("MediaSelectorDialog: Attempted to select media with null fileId when returnType is 'id'.");
             return;
         }
-        if (returnType === 'url' && !selectedMedia.fileUrl) {
+        if (returnType === 'url' && !selectedMediaInDialog.fileUrl) {
              console.error("MediaSelectorDialog: Attempted to select media with null fileUrl when returnType is 'url'.");
              return;
         }
-        onMediaSelect(selectedMedia);
+        onMediaSelect(selectedMediaInDialog);
         onOpenChange(false);
     };
 
     const handleOpenChange = (open: boolean) => {
         onOpenChange(open);
         if (!open) {
-            setSelectedMedia(null);
+            setSelectedMediaInDialog(null);
+            // Optionally reset filters on close:
+            // setNameFilter('');
+            // setSelectedFilterTags([]);
+            // setCurrentPage(1);
         }
     };
 
@@ -126,8 +129,8 @@ export default function MediaSelectorDialog({
         }
     };
 
-    const canSelectMedia = selectedMedia !== null &&
-        (returnType === 'id' ? (selectedMedia.fileId !== null && selectedMedia.fileId !== undefined) : !!selectedMedia.fileUrl);
+    const canConfirmSelection = selectedMediaInDialog !== null &&
+        (returnType === 'id' ? (selectedMediaInDialog.fileId !== null && selectedMediaInDialog.fileId !== undefined) : !!selectedMediaInDialog.fileUrl);
 
 
     return (
@@ -141,7 +144,7 @@ export default function MediaSelectorDialog({
                 "xl:max-w-6xl"
                 )}>
                 
-                <DialogHeader className="sr-only">
+                <DialogHeader className="sr-only"> {/* Visually hidden for accessibility */}
                     <DialogTitle>Select Media</DialogTitle>
                 </DialogHeader>
 
@@ -155,11 +158,11 @@ export default function MediaSelectorDialog({
                             placeholder="Search media by name..."
                             value={nameFilter}
                             onChange={(e) => { setNameFilter(e.target.value); setCurrentPage(1); }}
-                            className="pl-9 h-10 text-sm w-full rounded-full bg-muted border-transparent focus:border-primary focus:bg-background"
+                            className="pl-9 h-9 text-xs w-full rounded-full bg-muted border-transparent focus:border-primary focus:bg-background"
                             disabled={isLoading}
                         />
                     </div>
-                    {/* The DialogClose is part of DialogContent by default, no need to move */}
+                    {/* DialogClose is handled by Radix Primitive, no explicit button needed here unless custom styling */}
                 </div>
 
                 {/* Filter by Tag Section - Horizontally Scrollable */}
@@ -178,9 +181,9 @@ export default function MediaSelectorDialog({
 
                 {/* Media Grid Area */}
                 <ScrollArea className="flex-1 px-3 py-2">
-                    <div className="min-h-[200px]">
+                    <div className="min-h-[200px]"> {/* Ensure some min height for loading/empty states */}
                         {isLoading && !allMediaDataResponse && (
-                            <div className="flex items-center justify-center h-full">
+                            <div className="flex items-center justify-center h-full py-10">
                                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                             </div>
                         )}
@@ -198,7 +201,7 @@ export default function MediaSelectorDialog({
                             </Alert>
                         )}
                         {!isLoading && !isError && (!filteredMediaData || filteredMediaData.length === 0) && (
-                             <p className="text-center text-muted-foreground py-8 text-sm">
+                             <p className="text-center text-muted-foreground py-10 text-sm">
                                  {userKey ? `No media files found${nameFilter || selectedFilterTags.length > 0 ? ' matching filters' : (expectedMediaTypes.length > 0 ? ` for type: ${expectedMediaTypes.join(', ')}` : '')}.` : 'User key not found.'}
                              </p>
                         )}
@@ -206,65 +209,68 @@ export default function MediaSelectorDialog({
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 sm:gap-3">
                                 {filteredMediaData.map((media) => {
                                     const isCurrentlySelectedInParentForm = media.fileId !== null && currentSelectionIds.includes(media.fileId);
-                                    const isDialogSelected = selectedMedia?.webMediaId === media.webMediaId;
+                                    const isDialogSelected = selectedMediaInDialog?.webMediaId === media.webMediaId;
                                     const hasValidIdForSelection = returnType === 'id' ? (media.fileId !== null && media.fileId !== undefined) : !!media.fileUrl;
 
                                     return (
-                                    <button
+                                    <div
                                         key={media.webMediaId}
-                                        onClick={() => {
-                                            if (hasValidIdForSelection) {
-                                                setSelectedMedia(media);
-                                            }
-                                        }}
-                                        disabled={!hasValidIdForSelection}
                                         className={cn(
-                                            "relative group border rounded-md overflow-hidden aspect-square focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 flex flex-col items-center justify-center text-center transition-all duration-150",
-                                            isDialogSelected ? 'ring-2 ring-primary ring-offset-1 shadow-lg scale-105 border-primary' : 'border-border hover:border-primary/50',
+                                            "relative group border rounded-md overflow-hidden aspect-square flex flex-col text-center transition-all duration-150",
+                                            isDialogSelected && hasValidIdForSelection ? 'ring-2 ring-primary ring-offset-1 shadow-lg border-primary' : 'border-border',
                                             isCurrentlySelectedInParentForm && !isDialogSelected && 'border-green-500 ring-1 ring-green-500',
-                                            !hasValidIdForSelection && 'opacity-60 cursor-not-allowed bg-muted/30 hover:border-destructive/50',
-                                            hasValidIdForSelection && 'bg-card hover:shadow-md'
+                                            !hasValidIdForSelection && 'opacity-60 bg-muted/30'
                                         )}
-                                        aria-label={`Select ${media.name}${!hasValidIdForSelection ? ` (Invalid for selection type: ${returnType})` : ''}`}
                                     >
-                                         {media.mime?.startsWith('image/') && media.thumbnailUrl ? (
-                                            <Image
-                                                src={media.thumbnailUrl}
-                                                alt={media.alt || media.name || 'Media thumbnail'}
-                                                fill
-                                                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                                                className="object-cover transition-transform group-hover:scale-105"
-                                                unoptimized
-                                            />
-                                        ) : (
-                                            <div className="flex flex-col items-center justify-center h-full p-1">
-                                                {getFileTypeRenderIcon(media.mime, "h-8 w-8 sm:h-10 sm:w-10")}
-                                                <span className="mt-1 text-[10px] sm:text-xs text-muted-foreground truncate max-w-full px-0.5">
-                                                    {(media.mime?.split('/')[1] || 'File').toUpperCase()}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {isDialogSelected && hasValidIdForSelection && (
-                                            <div className="absolute inset-0 bg-primary/70 flex items-center justify-center">
-                                                <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-primary-foreground" />
-                                            </div>
-                                        )}
-                                        {isCurrentlySelectedInParentForm && !isDialogSelected && hasValidIdForSelection && (
-                                            <div className="absolute top-1 right-1 p-0.5 bg-green-600 rounded-full shadow-md">
-                                                <CheckCircle className="w-3 h-3 text-white" />
-                                            </div>
-                                        )}
-                                        <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/70 via-black/40 to-transparent">
-                                            <p className="text-[10px] sm:text-xs text-white truncate font-medium">{media.name}</p>
+                                        <div className="relative w-full aspect-[4/3] bg-muted flex-shrink-0"> {/* Preview area */}
+                                            {media.mime?.startsWith('image/') && media.thumbnailUrl ? (
+                                                <Image
+                                                    src={media.thumbnailUrl}
+                                                    alt={media.alt || media.name || 'Media thumbnail'}
+                                                    fill
+                                                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                                                    className="object-cover transition-transform group-hover:scale-105"
+                                                    unoptimized
+                                                />
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center h-full p-1">
+                                                    {getFileTypeRenderIcon(media.mime, "h-8 w-8 sm:h-10 sm:w-10")}
+                                                    <span className="mt-1 text-[10px] sm:text-xs text-muted-foreground truncate max-w-full px-0.5">
+                                                        {(media.mime?.split('/')[1] || 'File').toUpperCase()}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {isCurrentlySelectedInParentForm && !isDialogSelected && hasValidIdForSelection && (
+                                                <div className="absolute top-1 right-1 p-0.5 bg-green-600 rounded-full shadow-md" title="Already selected in form">
+                                                    <CheckCircle className="w-3 h-3 text-white" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="p-1.5 sm:p-2 flex flex-col flex-grow justify-between">
+                                            <p className="text-[10px] sm:text-xs text-foreground truncate font-medium leading-tight mb-1" title={media.name}>{media.name}</p>
+                                            <Button
+                                                size="xs"
+                                                variant={isDialogSelected && hasValidIdForSelection ? 'default' : 'outline'}
+                                                onClick={() => { if (hasValidIdForSelection) setSelectedMediaInDialog(media); }}
+                                                disabled={!hasValidIdForSelection}
+                                                className={cn(
+                                                    "w-full text-xs h-7 sm:h-8",
+                                                    !hasValidIdForSelection && "cursor-not-allowed"
+                                                )}
+                                                aria-label={isDialogSelected && hasValidIdForSelection ? `Deselect ${media.name}` : `Select ${media.name}`}
+                                            >
+                                                {isDialogSelected && hasValidIdForSelection ? <Check className="mr-1 h-3.5 w-3.5" /> : null}
+                                                {isDialogSelected && hasValidIdForSelection ? 'Selected' : 'Select'}
+                                            </Button>
                                         </div>
                                         {!hasValidIdForSelection && (
-                                            <div className="absolute inset-0 bg-destructive/40 flex items-center justify-center p-1 backdrop-blur-sm">
+                                            <div className="absolute inset-0 bg-destructive/40 flex items-center justify-center p-1 backdrop-blur-sm rounded-md">
                                                 <span className="text-[10px] sm:text-xs text-destructive-foreground font-semibold text-center leading-tight">
                                                     {returnType === 'id' ? 'No File ID' : 'No URL'}
                                                 </span>
                                             </div>
                                         )}
-                                    </button>
+                                    </div>
                                 )})}
                             </div>
                         )}
@@ -310,8 +316,8 @@ export default function MediaSelectorDialog({
                         </DialogClose>
                         <Button
                             type="button"
-                            onClick={handleSelect}
-                            disabled={!canSelectMedia || isLoading || isFetching}
+                            onClick={handleConfirmSelection}
+                            disabled={!canConfirmSelection || isLoading || isFetching}
                             size="sm"
                             className="flex-1 sm:flex-initial"
                         >
@@ -323,5 +329,3 @@ export default function MediaSelectorDialog({
         </Dialog>
     );
 }
-
-
