@@ -9,14 +9,13 @@ import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
-    // DialogHeader, // No longer using explicit DialogHeader
-    // DialogTitle, // Title will be implicit or part of content
-    // DialogDescription, // Description will be implicit or part of content
+    DialogHeader, // Added DialogHeader
+    DialogTitle,  // Added DialogTitle
     DialogFooter,
     DialogClose,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle as AlertTitleComponentUI } from "@/components/ui/alert"; // Renamed AlertTitle import
 import { useFetchMedia } from '@/lib/queries/media';
 import { useCurrentUser } from '@/lib/queries/user';
 import type { CombinedMediaData } from '@/types/media';
@@ -44,7 +43,7 @@ const getFileTypeRenderIcon = (mime: string | null, className?: string): React.R
     return <FileQuestion className={iconClasses} />;
 };
 
-const DIALOG_PAGE_SIZE = 12; // Or a number that fits well with 2-3 columns on mobile
+const DIALOG_PAGE_SIZE = 12;
 
 export default function MediaSelectorDialog({
     isOpen,
@@ -118,10 +117,6 @@ export default function MediaSelectorDialog({
         onOpenChange(open);
         if (!open) {
             setSelectedMedia(null);
-            // Optionally reset filters when dialog closes
-            // setNameFilter('');
-            // setSelectedFilterTags([]);
-            // setCurrentPage(1);
         }
     };
 
@@ -138,13 +133,17 @@ export default function MediaSelectorDialog({
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent className={cn(
-                "max-h-[95vh] flex flex-col p-0", // Removed default padding for full control
+                "max-h-[90vh] flex flex-col p-0",
                 "w-[95vw] max-w-md",
-                "sm:w-full sm:max-w-2xl", // Slightly smaller than before for better mobile feel initially
-                "md:max-w-3xl",
-                "lg:max-w-4xl"
-                // xl:max-w-6xl - Can be added back if needed for very large screens
+                "sm:w-full sm:max-w-3xl", 
+                "md:max-w-4xl",
+                "lg:max-w-5xl",
+                "xl:max-w-6xl"
                 )}>
+                
+                <DialogHeader className="sr-only">
+                    <DialogTitle>Select Media</DialogTitle>
+                </DialogHeader>
 
                 {/* Top Bar: Search Input and Close Button */}
                 <div className="flex items-center p-3 border-b flex-shrink-0">
@@ -153,25 +152,19 @@ export default function MediaSelectorDialog({
                         <Input
                             id="media-name-filter-dialog"
                             type="search"
-                            placeholder="Search media..."
+                            placeholder="Search media by name..."
                             value={nameFilter}
                             onChange={(e) => { setNameFilter(e.target.value); setCurrentPage(1); }}
                             className="pl-9 h-10 text-sm w-full rounded-full bg-muted border-transparent focus:border-primary focus:bg-background"
                             disabled={isLoading}
                         />
                     </div>
-                    <DialogClose asChild>
-                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full">
-                            <X className="h-5 w-5" />
-                        </Button>
-                    </DialogClose>
+                    {/* The DialogClose is part of DialogContent by default, no need to move */}
                 </div>
 
                 {/* Filter by Tag Section - Horizontally Scrollable */}
                 <div className="px-3 py-2 border-b flex-shrink-0">
-                    {/* <Label htmlFor="tag-filter-container" className="text-xs font-medium text-muted-foreground mb-1.5 block">Filter by Tag</Label> */}
-                    <div id="tag-filter-container" className="overflow-x-auto whitespace-nowrap pb-1 -mb-1">
-                         {/* The TagFilterControl's root div needs to be display: flex and flex-nowrap */}
+                     <div className="overflow-x-auto whitespace-nowrap pb-1 -mb-1 no-scrollbar"> 
                          <TagFilterControl
                             allAvailableTags={allAvailableTagsForDialog}
                             selectedTags={selectedFilterTags}
@@ -184,8 +177,8 @@ export default function MediaSelectorDialog({
                 </div>
 
                 {/* Media Grid Area */}
-                <ScrollArea className="flex-1 px-3 py-2"> {/* Added padding here */}
-                    <div className="min-h-[200px]"> {/* Ensure scroll area has some min height */}
+                <ScrollArea className="flex-1 px-3 py-2">
+                    <div className="min-h-[200px]">
                         {isLoading && !allMediaDataResponse && (
                             <div className="flex items-center justify-center h-full">
                                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -194,7 +187,7 @@ export default function MediaSelectorDialog({
                         {isError && !isFetching && (
                             <Alert variant="destructive" className="my-4">
                                 <AlertCircle className="h-4 w-4" />
-                                <AlertTitle>Error Loading Media</AlertTitle>
+                                <AlertTitleComponentUI>Error Loading Media</AlertTitleComponentUI>
                                 <AlertDescriptionComponent>
                                     Could not load media files. {error?.message || 'Unknown error'}
                                     <Button onClick={() => refetch()} variant="secondary" size="sm" className="ml-2 mt-2" disabled={isFetching}>
@@ -210,7 +203,7 @@ export default function MediaSelectorDialog({
                              </p>
                         )}
                         {!isLoading && !isError && filteredMediaData && filteredMediaData.length > 0 && (
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"> {/* Adjusted sm columns */}
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 sm:gap-3">
                                 {filteredMediaData.map((media) => {
                                     const isCurrentlySelectedInParentForm = media.fileId !== null && currentSelectionIds.includes(media.fileId);
                                     const isDialogSelected = selectedMedia?.webMediaId === media.webMediaId;
@@ -330,4 +323,5 @@ export default function MediaSelectorDialog({
         </Dialog>
     );
 }
+
 
