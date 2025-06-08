@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'; // Added CardFooter
 import MediaTable from './_components/media-table';
 import UploadButton from './_components/upload-button';
 import { useFetchMedia } from '@/lib/queries/media';
@@ -171,8 +171,8 @@ export default function WebMediaPage() {
                     <CardContent className="p-4">
                         <Accordion type="single" collapsible className="w-full">
                             <AccordionItem value="item-1">
-                                <AccordionTrigger>
-                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                <AccordionTrigger className="text-sm font-medium">
+                                    <div className="flex items-center gap-2">
                                         <Filter className="h-4 w-4" />
                                         <span>Filter & Sort Controls</span>
                                     </div>
