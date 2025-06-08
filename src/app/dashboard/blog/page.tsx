@@ -155,12 +155,11 @@ export default function BlogPage() {
         </div>
 
         <Card>
-            <CardHeader className="pb-0"> {/* Remove bottom padding from CardHeader */}
+            <CardHeader className="pb-2">
                  <CardTitle className="text-lg">Filter & Sort Options</CardTitle>
-                 <CardDescription>Use the options below to refine your blog post list.</CardDescription>
             </CardHeader>
             <CardContent className="p-4">
-                <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="item-1">
                         <AccordionTrigger>
                             <div className="flex items-center gap-2 text-sm font-medium">
@@ -168,50 +167,50 @@ export default function BlogPage() {
                                 <span>Filter & Sort Controls</span>
                             </div>
                         </AccordionTrigger>
-                        <AccordionContent className="pt-4 space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <AccordionContent className="pt-3 space-y-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="relative">
-                                    <Label htmlFor="search-blogs" className="text-xs text-muted-foreground">Search Title/Slug</Label>
-                                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground mt-2.5" />
-                                    <Input id="search-blogs" type="search" placeholder="Search by title or slug..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 h-9 text-xs" disabled={isLoadingBlogs} />
-                                    {searchTerm && (<Button variant="ghost" size="icon" className="absolute right-1.5 top-1/2 h-7 w-7 -translate-y-1/2 mt-2.5" onClick={() => setSearchTerm('')}><X className="h-4 w-4" /><span className="sr-only">Clear search</span></Button>)}
+                                    <Label htmlFor="search-blogs" className="text-xs text-muted-foreground mb-1 block">Search Title/Slug</Label>
+                                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground mt-2.5" />
+                                    <Input id="search-blogs" type="search" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 h-8 text-xs" disabled={isLoadingBlogs} />
+                                    {searchTerm && (<Button variant="ghost" size="icon" className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 mt-2.5" onClick={() => setSearchTerm('')}><X className="h-3.5 w-3.5" /><span className="sr-only">Clear search</span></Button>)}
                                 </div>
                                 <div>
-                                     <Label htmlFor="category-filter" className="text-xs text-muted-foreground">Filter by Category</Label>
+                                     <Label htmlFor="category-filter" className="text-xs text-muted-foreground mb-1 block">Filter by Category</Label>
                                     <Select 
                                         value={selectedCategoryId || ''} 
                                         onValueChange={(value) => setSelectedCategoryId(value === 'all' ? null : value)} 
                                         disabled={isLoadingCategories || !categories || categories.length === 0 || isLoadingBlogs}
                                     >
-                                        <SelectTrigger id="category-filter" className="h-9 text-xs"><SelectValue placeholder="Filter by category..." /></SelectTrigger>
+                                        <SelectTrigger id="category-filter" className="h-8 text-xs"><SelectValue placeholder="Category..." /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all" className="text-xs">All Categories</SelectItem>
                                             {categories?.map((category: Categorie) => (<SelectItem key={category.id} value={String(category.id)} className="text-xs">{category.name}</SelectItem>))}
-                                            {isLoadingCategories && <SelectItem value="loading" disabled className="text-xs">Loading categories...</SelectItem>}
-                                            {isCategoriesError && <SelectItem value="error" disabled className="text-xs">Error loading categories</SelectItem>}
+                                            {isLoadingCategories && <SelectItem value="loading" disabled className="text-xs">Loading...</SelectItem>}
+                                            {isCategoriesError && <SelectItem value="error" disabled className="text-xs">Error</SelectItem>}
                                         </SelectContent>
                                     </Select>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Sort By</Label>
                                     <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingBlogs}>
-                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
                                         <SelectContent>{SORT_FIELD_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Order</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Order</Label>
                                     <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingBlogs}>
-                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
                                         <SelectContent>{SORT_ORDER_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Items/Page</Label>
                                     <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingBlogs}>
-                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Per page" /></SelectTrigger>
                                         <SelectContent>{PAGE_SIZE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
@@ -352,4 +351,4 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
   );
 }
 
-
+    

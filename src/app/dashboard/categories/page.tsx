@@ -180,12 +180,11 @@ export default function CategoriesPage() {
         </div>
 
          <Card>
-            <CardHeader className="pb-0">
+            <CardHeader className="pb-2">
                 <CardTitle className="text-lg">Sort Options</CardTitle>
-                 <CardDescription>Adjust how categories are displayed.</CardDescription>
             </CardHeader>
             <CardContent className="p-4">
-                <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="item-1">
                         <AccordionTrigger>
                             <div className="flex items-center gap-2 text-sm font-medium">
@@ -193,26 +192,26 @@ export default function CategoriesPage() {
                                 <span>Sorting & Pagination</span>
                             </div>
                         </AccordionTrigger>
-                        <AccordionContent className="pt-4 space-y-4">
-                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                        <AccordionContent className="pt-3 space-y-3">
+                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Sort By</Label>
                                     <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingCategories || isFetching}>
-                                        <SelectTrigger className="w-full h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                        <SelectTrigger className="w-full h-8 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
                                         <SelectContent>{SORT_FIELD_OPTIONS_CATEGORIES.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Order</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Order</Label>
                                     <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingCategories || isFetching}>
-                                        <SelectTrigger className="w-full h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                        <SelectTrigger className="w-full h-8 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
                                         <SelectContent>{SORT_ORDER_OPTIONS_CATEGORIES.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Items/Page</Label>
                                     <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingCategories || isFetching}>
-                                        <SelectTrigger className="w-full h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                        <SelectTrigger className="w-full h-8 text-xs"><SelectValue placeholder="Per page" /></SelectTrigger>
                                         <SelectContent>{PAGE_SIZE_OPTIONS_CATEGORIES.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
@@ -350,3 +349,4 @@ function CategoryPageSkeleton() {
   );
 }
 
+    

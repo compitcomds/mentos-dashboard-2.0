@@ -145,12 +145,11 @@ export default function EventPage() {
          </div>
 
         <Card>
-            <CardHeader className="pb-0">
+            <CardHeader className="pb-2">
                  <CardTitle className="text-lg">Event Filters & Options</CardTitle>
-                 <CardDescription>Refine your event list or adjust display settings.</CardDescription>
             </CardHeader>
             <CardContent className="p-4">
-                <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="item-1">
                         <AccordionTrigger>
                             <div className="flex items-center gap-2 text-sm font-medium">
@@ -158,49 +157,49 @@ export default function EventPage() {
                                 <span>Filter & Sort Controls</span>
                             </div>
                         </AccordionTrigger>
-                        <AccordionContent className="pt-4 space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                        <AccordionContent className="pt-3 space-y-3">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
                                 <div>
-                                    <Label htmlFor="title-filter-input" className="text-xs text-muted-foreground">Filter by Title</Label>
-                                    <Input id="title-filter-input" type="search" placeholder="Event title..." value={localTitleFilter} onChange={(e) => setLocalTitleFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyFilters()} className="h-9 text-xs" disabled={isLoadingEvents || isFetching}/>
+                                    <Label htmlFor="title-filter-input" className="text-xs text-muted-foreground mb-1 block">Filter by Title</Label>
+                                    <Input id="title-filter-input" type="search" placeholder="Title..." value={localTitleFilter} onChange={(e) => setLocalTitleFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyFilters()} className="h-8 text-xs" disabled={isLoadingEvents || isFetching}/>
                                 </div>
                                 <div>
-                                    <Label htmlFor="category-filter-select" className="text-xs text-muted-foreground">Filter by Category</Label>
+                                    <Label htmlFor="category-filter-select" className="text-xs text-muted-foreground mb-1 block">Filter by Category</Label>
                                     <Select value={selectedCategoryFilter || 'all'} onValueChange={(value) => {setSelectedCategoryFilter(value === 'all' ? null : value); setCurrentPage(1);}} disabled={isLoadingEvents || isFetching}>
-                                        <SelectTrigger id="category-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Categories" /></SelectTrigger>
+                                        <SelectTrigger id="category-filter-select" className="h-8 text-xs"><SelectValue placeholder="Category..." /></SelectTrigger>
                                         <SelectContent>{['all', ...EVENT_CATEGORIES_MOCK].map(cat => <SelectItem key={cat} value={cat} className="text-xs capitalize">{cat === 'all' ? 'All Categories' : cat}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label htmlFor="status-filter-select" className="text-xs text-muted-foreground">Filter by Status</Label>
+                                    <Label htmlFor="status-filter-select" className="text-xs text-muted-foreground mb-1 block">Filter by Status</Label>
                                     <Select value={selectedStatusFilter || 'all'} onValueChange={(value) => {setSelectedStatusFilter(value === 'all' ? null : value); setCurrentPage(1);}} disabled={isLoadingEvents || isFetching}>
-                                        <SelectTrigger id="status-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+                                        <SelectTrigger id="status-filter-select" className="h-8 text-xs"><SelectValue placeholder="Status..." /></SelectTrigger>
                                         <SelectContent>{['all', ...EVENT_STATUSES].map(stat => <SelectItem key={stat} value={stat} className="text-xs capitalize">{stat === 'all' ? 'All Statuses' : stat}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                             </div>
-                            <Button onClick={applyFilters} className="h-9 text-xs mt-2" disabled={isLoadingEvents || isFetching}>
+                            <Button onClick={applyFilters} size="sm" className="h-8 text-xs mt-2 px-3 py-1" disabled={isLoadingEvents || isFetching}>
                                 <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Title Filter
                             </Button>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-2 border-t mt-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end pt-3 border-t mt-3">
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Sort By</Label>
                                     <Select value={sortField} onValueChange={(value) => setSortField(value as SortFieldEvent)} disabled={isLoadingEvents || isFetching}>
-                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
                                         <SelectContent>{SORT_FIELD_OPTIONS_EVENT.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Order</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Order</Label>
                                     <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrderEvent)} disabled={isLoadingEvents || isFetching}>
-                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
                                         <SelectContent>{SORT_ORDER_OPTIONS_EVENT.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Items/Page</Label>
                                     <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingEvents || isFetching}>
-                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Per page" /></SelectTrigger>
                                         <SelectContent>{PAGE_SIZE_OPTIONS_EVENT.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
@@ -469,3 +468,4 @@ function EventPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, pageSiz
     );
 }
 
+    

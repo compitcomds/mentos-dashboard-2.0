@@ -400,13 +400,13 @@ export default function QueryFormsPage() {
         group_id: downloadGroupId.trim(),
         dateFrom: downloadDateFrom,
         dateTo: downloadDateTo,
-        pageSize: 1000, // Fetch a large number for "all"
+        pageSize: 1000, 
         page: 1,
         sortField: 'createdAt',
         sortOrder: 'asc',
       };
       
-      if (!userKey) { // Use userKey from component scope
+      if (!userKey) {
           toast({ title: "Error", description: "User information not available for download.", variant: "destructive" });
           setIsDownloadingCsv(false);
           return;
@@ -536,12 +536,11 @@ export default function QueryFormsPage() {
         </div>
 
         <Card>
-            <CardHeader className="pb-0">
+            <CardHeader className="pb-2">
                 <CardTitle className="text-lg">Filter & Sort Options</CardTitle>
-                <CardDescription>Use the options below to refine your query form list.</CardDescription>
             </CardHeader>
             <CardContent className="p-4">
-                <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="item-1">
                         <AccordionTrigger>
                             <div className="flex items-center gap-2 text-sm font-medium">
@@ -549,40 +548,40 @@ export default function QueryFormsPage() {
                                 <span>Filter & Sort Controls</span>
                             </div>
                         </AccordionTrigger>
-                        <AccordionContent className="pt-4 space-y-4">
-                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                        <AccordionContent className="pt-3 space-y-3">
+                             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
                                 <div>
-                                    <Label htmlFor="type-filter-select" className="text-xs text-muted-foreground">Filter by Type</Label>
+                                    <Label htmlFor="type-filter-select" className="text-xs text-muted-foreground mb-1 block">Filter by Type</Label>
                                     <Select value={selectedTypeFilter || "all"} onValueChange={(value) => setSelectedTypeFilter(value === "all" ? null : value)} disabled={pageIsLoading || isFetching}>
-                                        <SelectTrigger id="type-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Types" /></SelectTrigger>
+                                        <SelectTrigger id="type-filter-select" className="h-8 text-xs"><SelectValue placeholder="Type..." /></SelectTrigger>
                                         <SelectContent>{["all", ...QUERY_FORM_TYPES_FILTER].map((type) => (<SelectItem key={type} value={type} className="text-xs capitalize">{type === "all" ? "All Types" : type}</SelectItem>))}</SelectContent>
                                     </Select>
                                 </div>
                                 <div className="relative md:col-span-1">
-                                    <Label htmlFor="group-id-filter-input" className="text-xs text-muted-foreground">Filter by Group ID</Label>
-                                    <Input id="group-id-filter-input" type="search" placeholder="Group ID..." value={localGroupIdFilter} onChange={(e) => setLocalGroupIdFilter(e.target.value)} onKeyDown={(e) => e.key === "Enter" && applyGroupIdFilter()} className="h-9 text-xs" disabled={pageIsLoading || isFetching} />
+                                    <Label htmlFor="group-id-filter-input" className="text-xs text-muted-foreground mb-1 block">Filter by Group ID</Label>
+                                    <Input id="group-id-filter-input" type="search" placeholder="Group ID..." value={localGroupIdFilter} onChange={(e) => setLocalGroupIdFilter(e.target.value)} onKeyDown={(e) => e.key === "Enter" && applyGroupIdFilter()} className="h-8 text-xs" disabled={pageIsLoading || isFetching} />
                                 </div>
-                                <Button onClick={applyGroupIdFilter} className="w-full md:w-auto h-9 text-xs" disabled={pageIsLoading || isFetching}><Search className="h-3.5 w-3.5 mr-1.5" /> Apply Group ID Filter</Button>
+                                <Button onClick={applyGroupIdFilter} size="sm" className="w-full md:w-auto h-8 text-xs px-3 py-1" disabled={pageIsLoading || isFetching}><Search className="h-3.5 w-3.5 mr-1.5" /> Apply Group ID</Button>
                              </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-2 border-t mt-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end pt-3 border-t mt-3">
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Sort By</Label>
                                     <Select value={sortField} onValueChange={(value) => setSortField(value as SortFieldQuery)} disabled={pageIsLoading || isFetching}>
-                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
                                         <SelectContent>{SORT_FIELD_OPTIONS_QUERY.map((opt) => (<SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>))}</SelectContent>
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Order</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Order</Label>
                                     <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrderQuery)} disabled={pageIsLoading || isFetching}>
-                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
                                         <SelectContent>{SORT_ORDER_OPTIONS_QUERY.map((opt) => (<SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>))}</SelectContent>
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                    <Label className="text-xs text-muted-foreground mb-1 block">Items/Page</Label>
                                     <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={pageIsLoading || isFetching}>
-                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Per page" /></SelectTrigger>
                                         <SelectContent>{PAGE_SIZE_OPTIONS_QUERY.map((opt) => (<SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>))}</SelectContent>
                                     </Select>
                                 </div>
@@ -705,27 +704,28 @@ export default function QueryFormsPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="download-group-id">Group ID <span className="text-destructive">*</span></Label>
+              <Label htmlFor="download-group-id" className="text-xs">Group ID <span className="text-destructive">*</span></Label>
               <Input
                 id="download-group-id"
                 value={downloadGroupId}
                 onChange={(e) => setDownloadGroupId(e.target.value)}
                 placeholder="Enter Group ID"
                 disabled={isDownloadingCsv}
+                className="h-8 text-sm mt-1"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="download-date-from">From Date</Label>
+                <Label htmlFor="download-date-from" className="text-xs">From Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       id="download-date-from"
                       variant={"outline"}
-                      className={cn("w-full justify-start text-left font-normal h-9", !downloadDateFrom && "text-muted-foreground")}
+                      className={cn("w-full justify-start text-left font-normal h-8 text-xs mt-1", !downloadDateFrom && "text-muted-foreground")}
                       disabled={isDownloadingCsv}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      <CalendarIcon className="mr-2 h-3.5 w-3.5" />
                       {downloadDateFrom ? format(downloadDateFrom, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
@@ -735,16 +735,16 @@ export default function QueryFormsPage() {
                 </Popover>
               </div>
               <div>
-                <Label htmlFor="download-date-to">To Date</Label>
+                <Label htmlFor="download-date-to" className="text-xs">To Date</Label>
                  <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       id="download-date-to"
                       variant={"outline"}
-                      className={cn("w-full justify-start text-left font-normal h-9", !downloadDateTo && "text-muted-foreground")}
+                      className={cn("w-full justify-start text-left font-normal h-8 text-xs mt-1", !downloadDateTo && "text-muted-foreground")}
                       disabled={isDownloadingCsv}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      <CalendarIcon className="mr-2 h-3.5 w-3.5" />
                       {downloadDateTo ? format(downloadDateTo, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
@@ -756,8 +756,8 @@ export default function QueryFormsPage() {
             </div>
           </div>
           <DialogFooter>
-            <DialogClose asChild><Button type="button" variant="outline" disabled={isDownloadingCsv}>Cancel</Button></DialogClose>
-            <Button onClick={handleDownloadCsv} disabled={isDownloadingCsv || !downloadGroupId.trim()}>
+            <DialogClose asChild><Button type="button" variant="outline" size="sm" disabled={isDownloadingCsv}>Cancel</Button></DialogClose>
+            <Button onClick={handleDownloadCsv} size="sm" disabled={isDownloadingCsv || !downloadGroupId.trim()}>
               {isDownloadingCsv && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Download CSV
             </Button>
@@ -971,3 +971,4 @@ function QueryFormsPageSkeleton({
   );
 }
 
+    

@@ -165,12 +165,11 @@ export default function WebMediaPage() {
                 </div>
 
                 <Card>
-                    <CardHeader className="pb-0">
+                    <CardHeader className="pb-2">
                         <CardTitle className="text-lg">Media Library Filters & Options</CardTitle>
-                        <CardDescription>Refine your media list or adjust display settings.</CardDescription>
                     </CardHeader>
                     <CardContent className="p-4">
-                        <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                        <Accordion type="single" collapsible className="w-full">
                             <AccordionItem value="item-1">
                                 <AccordionTrigger>
                                     <div className="flex items-center gap-2 text-sm font-medium">
@@ -178,23 +177,23 @@ export default function WebMediaPage() {
                                         <span>Filter & Sort Controls</span>
                                     </div>
                                 </AccordionTrigger>
-                                <AccordionContent className="pt-4 space-y-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                                <AccordionContent className="pt-3 space-y-3">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
                                         <div className="relative md:col-span-1">
-                                            <Label htmlFor="name-filter-input" className="text-xs text-muted-foreground">Filter by Name</Label>
-                                            <Input id="name-filter-input" type="search" placeholder="Media name..." value={localNameFilter} onChange={(e) => setLocalNameFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs" disabled={isLoadingMedia || isFetching}/>
+                                            <Label htmlFor="name-filter-input" className="text-xs text-muted-foreground mb-1 block">Filter by Name</Label>
+                                            <Input id="name-filter-input" type="search" placeholder="Name..." value={localNameFilter} onChange={(e) => setLocalNameFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-8 text-xs" disabled={isLoadingMedia || isFetching}/>
                                         </div>
                                         <div className="relative md:col-span-1">
-                                            <Label htmlFor="category-filter-input" className="text-xs text-muted-foreground">Filter by Category</Label>
-                                            <Input id="category-filter-input" type="search" placeholder="Category..." value={localCategoryFilter} onChange={(e) => setLocalCategoryFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs" disabled={isLoadingMedia || isFetching} />
+                                            <Label htmlFor="category-filter-input" className="text-xs text-muted-foreground mb-1 block">Filter by Category</Label>
+                                            <Input id="category-filter-input" type="search" placeholder="Category..." value={localCategoryFilter} onChange={(e) => setLocalCategoryFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-8 text-xs" disabled={isLoadingMedia || isFetching} />
                                         </div>
-                                        <Button onClick={applyTextFilters} className="w-full md:w-auto h-9 text-xs" disabled={isLoadingMedia || isFetching}>
+                                        <Button onClick={applyTextFilters} size="sm" className="w-full md:w-auto h-8 text-xs px-3 py-1" disabled={isLoadingMedia || isFetching}>
                                             <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Text Filters
                                         </Button>
                                     </div>
                                     
-                                    <div className="pt-2 border-t mt-4">
-                                        <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1.5">
+                                    <div className="pt-3 border-t mt-3">
+                                        <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1.5">
                                             <TagIcon className="h-3.5 w-3.5" /> Filter by Tags
                                         </Label>
                                         <TagFilterControl
@@ -207,25 +206,25 @@ export default function WebMediaPage() {
                                         />
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-2 border-t mt-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end pt-3 border-t mt-3">
                                         <div>
-                                            <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                            <Label className="text-xs text-muted-foreground mb-1 block">Sort By</Label>
                                             <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingMedia || isFetching}>
-                                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
                                                 <SelectContent>{SORT_FIELD_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                             </Select>
                                         </div>
                                         <div>
-                                            <Label className="text-xs text-muted-foreground">Order</Label>
+                                            <Label className="text-xs text-muted-foreground mb-1 block">Order</Label>
                                             <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingMedia || isFetching}>
-                                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
                                                 <SelectContent>{SORT_ORDER_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                             </Select>
                                         </div>
                                         <div>
-                                            <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                            <Label className="text-xs text-muted-foreground mb-1 block">Items/Page</Label>
                                             <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingMedia || isFetching}>
-                                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Per page" /></SelectTrigger>
                                                 <SelectContent>{PAGE_SIZE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                             </Select>
                                         </div>
