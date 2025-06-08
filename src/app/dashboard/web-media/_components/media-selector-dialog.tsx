@@ -76,7 +76,6 @@ export default function MediaSelectorDialog({
         tagsFilter: selectedFilterTags.length > 0 ? selectedFilterTags : null,
     });
 
-    // Correctly access allMediaData.data
     const allMediaData = allMediaDataResponse;
     const pagination = allMediaData?.meta?.pagination;
 
@@ -86,7 +85,7 @@ export default function MediaSelectorDialog({
     const isLoading = isLoadingUser || isLoadingMedia;
 
     const filteredMediaData = React.useMemo(() => {
-        if (!allMediaData?.data) return []; // Handle case where data isn't loaded yet
+        if (!allMediaData?.data) return [];
         if (expectedMediaTypes.length === 0) return allMediaData.data;
 
         return allMediaData.data.filter(media => {
@@ -120,10 +119,6 @@ export default function MediaSelectorDialog({
         onOpenChange(open);
         if (!open) {
             setSelectedMedia(null);
-            // Optionally reset filters when dialog closes
-            // setNameFilter('');
-            // setSelectedFilterTags([]);
-            // setCurrentPage(1);
         }
     };
 
@@ -140,9 +135,9 @@ export default function MediaSelectorDialog({
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent className={cn(
-                "max-h-[90vh] flex flex-col", // Base styles for layout
-                "w-[95vw] max-w-md", // Mobile: 95% width, capped at md (equivalent to ~512px if md is ~768px, or use max-w-lg if preferred)
-                "sm:w-full sm:max-w-3xl",    // Small screens and up: full width up to 3xl
+                "max-h-[90vh] flex flex-col",
+                "w-[95vw] max-w-md", 
+                "sm:w-full sm:max-w-3xl",
                 "md:max-w-4xl",
                 "lg:max-w-5xl",
                 "xl:max-w-6xl"
@@ -156,10 +151,8 @@ export default function MediaSelectorDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                {/* Filters Section */}
                 <div className="py-3 border-y mb-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 items-end">
-                        {/* Name Filter Group */}
                         <div className="space-y-1.5">
                             <Label htmlFor="media-name-filter-dialog" className="text-xs font-medium">Filter by Name</Label>
                             <div className="relative">
@@ -176,7 +169,6 @@ export default function MediaSelectorDialog({
                             </div>
                         </div>
 
-                        {/* Tag Filter Group */}
                         <div className="space-y-1.5">
                              <Label className="text-xs font-medium">Filter by Tags</Label>
                              <TagFilterControl
@@ -219,7 +211,7 @@ export default function MediaSelectorDialog({
                              </p>
                         )}
                         {!isLoading && !isError && filteredMediaData && filteredMediaData.length > 0 && (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                                 {filteredMediaData.map((media) => {
                                     const isCurrentlySelectedInParentForm = media.fileId !== null && currentSelectionIds.includes(media.fileId);
                                     const isDialogSelected = selectedMedia?.webMediaId === media.webMediaId;
@@ -333,4 +325,6 @@ export default function MediaSelectorDialog({
         </Dialog>
     );
 }
+
+    
     
