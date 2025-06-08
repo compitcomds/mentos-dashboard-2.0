@@ -139,8 +139,15 @@ export default function MediaSelectorDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[90vh] flex flex-col">
-                <DialogHeader className="pb-4 mb-2 border-b"> {/* Added padding and border */}
+            <DialogContent className={cn(
+                "max-h-[90vh] flex flex-col", // Base styles for layout
+                "w-[95vw] max-w-md", // Mobile: 95% width, capped at md (equivalent to ~512px if md is ~768px, or use max-w-lg if preferred)
+                "sm:w-full sm:max-w-3xl",    // Small screens and up: full width up to 3xl
+                "md:max-w-4xl",
+                "lg:max-w-5xl",
+                "xl:max-w-6xl"
+                )}>
+                <DialogHeader className="pb-4 mb-2 border-b">
                     <DialogTitle>Select Media</DialogTitle>
                     <DialogDescription>
                         Choose a file.
