@@ -8,10 +8,9 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Pencil, Trash2, Loader2, AlertCircle, Eye, ImageIcon, LayoutGrid, List, Search, X, ArrowUpDown, Filter, ChevronLeft, ChevronRight } from "lucide-react";
+import { PlusCircle, Pencil, Trash2, Loader2, AlertCircle, Eye, ImageIcon, LayoutGrid, List, Search, X, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -29,14 +28,14 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger, // Added this import
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"; 
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useGetBlogs, useDeleteBlog, type UseGetBlogsOptions } from "@/lib/queries/blog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertTitle, AlertDescription as AlertDescriptionComponent } from "@/components/ui/alert";
 import Image from 'next/image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Blog } from "@/types/blog";
@@ -50,6 +49,8 @@ import { useGetCategories } from '@/lib/queries/category';
 import type { Categorie } from '@/types/category'; 
 import { toast } from '@/hooks/use-toast';
 import { getStoredPreference, setStoredPreference } from '@/lib/storage';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Label } from '@/components/ui/label';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || '';
 
@@ -87,8 +88,8 @@ export default function BlogPage() {
    const blogQueryOptions: UseGetBlogsOptions = { page: currentPage, pageSize, sortField, sortOrder };
    const { data: blogData, isLoading: isLoadingBlogs, isError: isBlogsError, error: blogsError, refetch, isFetching } = useGetBlogs(blogQueryOptions);
    
-   const { data: categoriesData, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories(); // Removed userTenentId, hook handles it
-   const categories = categoriesData?.data; // Extract the array of categories
+   const { data: categoriesData, isLoading: isLoadingCategories, isError: isCategoriesError } = useGetCategories();
+   const categories = categoriesData?.data;
    const deleteMutation = useDeleteBlog();
 
    const [viewMode, setViewMode] = React.useState<ViewMode>(() => getStoredPreference('blogViewMode', 'table'));
@@ -154,45 +155,70 @@ export default function BlogPage() {
         </div>
 
         <Card>
-            <CardContent className="p-4 flex flex-col md:flex-row items-center gap-4">
-                <div className="relative w-full md:flex-grow">
-                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input type="search" placeholder="Search by title or slug..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 w-full" disabled={isLoadingBlogs} />
-                     {searchTerm && (<Button variant="ghost" size="icon" className="absolute right-1.5 top-1/2 h-7 w-7 -translate-y-1/2" onClick={() => setSearchTerm('')}><X className="h-4 w-4" /><span className="sr-only">Clear search</span></Button>)}
-                </div>
-                <div className="w-full md:w-auto md:min-w-[200px]">
-                    <Select 
-                        value={selectedCategoryId || ''} 
-                        onValueChange={(value) => setSelectedCategoryId(value === 'all' ? null : value)} 
-                        disabled={isLoadingCategories || !categories || categories.length === 0 || isLoadingBlogs}
-                    >
-                        <SelectTrigger><SelectValue placeholder="Filter by category..." /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Categories</SelectItem>
-                            {categories?.map((category: Categorie) => (<SelectItem key={category.id} value={String(category.id)}>{category.name}</SelectItem>))}
-                             {isLoadingCategories && <SelectItem value="loading" disabled>Loading categories...</SelectItem>}
-                             {isCategoriesError && <SelectItem value="error" disabled>Error loading categories</SelectItem>}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </CardContent>
-             <CardContent className="p-4 pt-0 flex flex-col sm:flex-row items-center gap-2 border-t">
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Sort:</span>
-                </div>
-                <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingBlogs}>
-                    <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
-                    <SelectContent>{SORT_FIELD_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingBlogs}>
-                    <SelectTrigger className="w-full sm:w-[120px] h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
-                    <SelectContent>{SORT_ORDER_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingBlogs}>
-                     <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
-                     <SelectContent>{PAGE_SIZE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-                </Select>
+            <CardHeader className="pb-0"> {/* Remove bottom padding from CardHeader */}
+                 <CardTitle className="text-lg">Filter & Sort Options</CardTitle>
+                 <CardDescription>Use the options below to refine your blog post list.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4">
+                <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                    <AccordionItem value="item-1">
+                        <AccordionTrigger>
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                                <Filter className="h-4 w-4" />
+                                <span>Filter & Sort Controls</span>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-4 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="relative">
+                                    <Label htmlFor="search-blogs" className="text-xs text-muted-foreground">Search Title/Slug</Label>
+                                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground mt-2.5" />
+                                    <Input id="search-blogs" type="search" placeholder="Search by title or slug..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 h-9 text-xs" disabled={isLoadingBlogs} />
+                                    {searchTerm && (<Button variant="ghost" size="icon" className="absolute right-1.5 top-1/2 h-7 w-7 -translate-y-1/2 mt-2.5" onClick={() => setSearchTerm('')}><X className="h-4 w-4" /><span className="sr-only">Clear search</span></Button>)}
+                                </div>
+                                <div>
+                                     <Label htmlFor="category-filter" className="text-xs text-muted-foreground">Filter by Category</Label>
+                                    <Select 
+                                        value={selectedCategoryId || ''} 
+                                        onValueChange={(value) => setSelectedCategoryId(value === 'all' ? null : value)} 
+                                        disabled={isLoadingCategories || !categories || categories.length === 0 || isLoadingBlogs}
+                                    >
+                                        <SelectTrigger id="category-filter" className="h-9 text-xs"><SelectValue placeholder="Filter by category..." /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all" className="text-xs">All Categories</SelectItem>
+                                            {categories?.map((category: Categorie) => (<SelectItem key={category.id} value={String(category.id)} className="text-xs">{category.name}</SelectItem>))}
+                                            {isLoadingCategories && <SelectItem value="loading" disabled className="text-xs">Loading categories...</SelectItem>}
+                                            {isCategoriesError && <SelectItem value="error" disabled className="text-xs">Error loading categories</SelectItem>}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                    <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingBlogs}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                        <SelectContent>{SORT_FIELD_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Order</Label>
+                                    <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingBlogs}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                        <SelectContent>{SORT_ORDER_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                    <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingBlogs}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                        <SelectContent>{PAGE_SIZE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
             </CardContent>
         </Card>
 
@@ -203,10 +229,10 @@ export default function BlogPage() {
              <Alert variant="destructive">
                  <AlertCircle className="h-4 w-4" />
                  <AlertTitle>Error Loading Data</AlertTitle>
-                 <AlertDescription>
+                 <AlertDescriptionComponent>
                    Could not fetch user data or blog posts. <br />
                    <span className="text-xs">{queryError?.message}</span>
-                 </AlertDescription>
+                 </AlertDescriptionComponent>
                   <Button onClick={() => refetch()} variant="secondary" size="sm" className="mt-2" disabled={isFetching}>
                      {isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
                      {isFetching ? 'Retrying...' : 'Retry'}
@@ -305,15 +331,9 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardContent className="p-4 flex flex-col md:flex-row items-center gap-4">
-          <Skeleton className="h-10 w-full md:flex-grow" />
-          <Skeleton className="h-10 w-full md:w-[200px]" />
-        </CardContent>
-         <CardContent className="p-4 pt-0 flex flex-col sm:flex-row items-center gap-2 border-t">
-            <Skeleton className="h-6 w-12" />
-            <Skeleton className="h-9 w-full sm:w-[180px]" />
-            <Skeleton className="h-9 w-full sm:w-[120px]" />
-            <Skeleton className="h-9 w-full sm:w-[150px]" />
+        <CardHeader className="pb-0"><Skeleton className="h-6 w-1/3" /></CardHeader>
+        <CardContent className="p-4">
+            <Skeleton className="h-10 w-full rounded-md" /> {/* Accordion Trigger Skeleton */}
         </CardContent>
       </Card>
 
@@ -331,4 +351,5 @@ function BlogPageSkeleton({ viewMode }: { viewMode: ViewMode }) {
     </div>
   );
 }
+
 

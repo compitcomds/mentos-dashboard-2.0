@@ -12,7 +12,6 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  CardFooter,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -47,7 +46,6 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -69,6 +67,8 @@ import {
 } from '@/lib/queries/category';
 import type { Categorie as Category, CreateCategoryPayload } from '@/types/category';
 import { getStoredPreference, setStoredPreference } from '@/lib/storage';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Label } from '@/components/ui/label';
 
 const categoryFormSchema = z.object({
   name: z.string().min(1, { message: 'Name is required.' }),
@@ -180,22 +180,46 @@ export default function CategoriesPage() {
         </div>
 
          <Card>
-            <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2"><Filter className="h-5 w-5"/>Filters & Sorting</CardTitle>
+            <CardHeader className="pb-0">
+                <CardTitle className="text-lg">Sort Options</CardTitle>
+                 <CardDescription>Adjust how categories are displayed.</CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col sm:flex-row items-center gap-2 pt-2">
-                <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingCategories || isFetching}>
-                    <SelectTrigger className="w-full sm:w-[180px] h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
-                    <SelectContent>{SORT_FIELD_OPTIONS_CATEGORIES.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingCategories || isFetching}>
-                    <SelectTrigger className="w-full sm:w-[120px] h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
-                    <SelectContent>{SORT_ORDER_OPTIONS_CATEGORIES.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingCategories || isFetching}>
-                     <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
-                     <SelectContent>{PAGE_SIZE_OPTIONS_CATEGORIES.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-                </Select>
+            <CardContent className="p-4">
+                <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                    <AccordionItem value="item-1">
+                        <AccordionTrigger>
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                                <Filter className="h-4 w-4" />
+                                <span>Sorting & Pagination</span>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-4 space-y-4">
+                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                    <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingCategories || isFetching}>
+                                        <SelectTrigger className="w-full h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                        <SelectContent>{SORT_FIELD_OPTIONS_CATEGORIES.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Order</Label>
+                                    <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={isLoadingCategories || isFetching}>
+                                        <SelectTrigger className="w-full h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                        <SelectContent>{SORT_ORDER_OPTIONS_CATEGORIES.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                    <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingCategories || isFetching}>
+                                        <SelectTrigger className="w-full h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                        <SelectContent>{PAGE_SIZE_OPTIONS_CATEGORIES.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                             </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
             </CardContent>
         </Card>
 
@@ -311,7 +335,12 @@ function CategoryPageSkeleton() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between"><Skeleton className="h-9 w-1/3" /><Skeleton className="h-10 w-32" /></div>
-      <Card><CardHeader className="pb-2"><Skeleton className="h-6 w-1/4" /></CardHeader><CardContent className="flex flex-col sm:flex-row items-center gap-2 pt-2"><Skeleton className="h-9 w-full sm:w-[180px]" /><Skeleton className="h-9 w-full sm:w-[120px]" /><Skeleton className="h-9 w-full sm:w-[150px]" /></CardContent></Card>
+      <Card>
+          <CardHeader className="pb-0"><Skeleton className="h-6 w-1/3" /></CardHeader>
+          <CardContent className="p-4">
+            <Skeleton className="h-10 w-full rounded-md" /> {/* Accordion Trigger Skeleton */}
+          </CardContent>
+      </Card>
       <Card>
         <CardHeader><Skeleton className="h-7 w-1/4 mb-2" /><Skeleton className="h-4 w-1/2" /></CardHeader>
         <CardContent><div className="rounded-md border"><Table><TableHeader><TableRow><TableHead><Skeleton className="h-5 w-1/3" /></TableHead><TableHead><Skeleton className="h-5 w-1/3" /></TableHead><TableHead className="hidden md:table-cell"><Skeleton className="h-5 w-1/2" /></TableHead><TableHead className="hidden sm:table-cell"><Skeleton className="h-5 w-1/3" /></TableHead><TableHead className="text-right"><Skeleton className="h-5 w-16" /></TableHead></TableRow></TableHeader><TableBody>{[...Array(3)].map((_, i) => (<TableRow key={i}><TableCell><Skeleton className="h-4 w-4/5" /></TableCell><TableCell><Skeleton className="h-4 w-3/4" /></TableCell><TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-full" /></TableCell><TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-3/4" /></TableCell><TableCell className="text-right"><div className="flex justify-end space-x-1"><Skeleton className="h-8 w-8" /><Skeleton className="h-8 w-8" /></div></TableCell></TableRow>))}</TableBody></Table></div></CardContent>
@@ -320,3 +349,4 @@ function CategoryPageSkeleton() {
     </div>
   );
 }
+

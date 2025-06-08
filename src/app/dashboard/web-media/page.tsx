@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'; // Added CardFooter
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import MediaTable from './_components/media-table';
 import UploadButton from './_components/upload-button';
 import { useFetchMedia } from '@/lib/queries/media';
@@ -19,7 +19,6 @@ import { useGetUserResource } from '@/lib/queries/user-resource';
 import { getStoredPreference, setStoredPreference } from '@/lib/storage';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { CombinedMediaData } from '@/types/media';
 import { Label } from '@/components/ui/label';
 import { TagFilterControl } from '@/components/ui/tag-filter-control';
 import {
@@ -31,7 +30,7 @@ import {
     TableCell,
 } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { PREDEFINED_TAGS_FOR_WEB_MEDIA } from '@/types/media'; // Import from types/media
+import { PREDEFINED_TAGS_FOR_WEB_MEDIA } from '@/types/media';
 
 type ViewMode = 'table' | 'card';
 type SortField = 'name' | 'category' | 'createdAt' | 'updatedAt' | 'publishedAt';
@@ -41,8 +40,6 @@ const DEFAULT_PAGE_SIZE_TABLE = 10;
 const DEFAULT_PAGE_SIZE_CARD = 12;
 const USER_DEFINED_TAGS_STORAGE_KEY = 'webMediaUserDefinedTags';
 const SELECTED_TAGS_STORAGE_KEY = 'webMediaSelectedFilterTags';
-
-// PREDEFINED_TAGS_FOR_WEB_MEDIA is now imported from types/media
 
 const PAGE_SIZE_OPTIONS = [
     { label: "10 per page", value: "10" }, { label: "12 per page", value: "12" },
@@ -168,37 +165,49 @@ export default function WebMediaPage() {
                 </div>
 
                 <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Filters & Display Options</CardTitle>
+                    <CardHeader className="pb-0">
+                        <CardTitle className="text-lg">Media Library Filters & Options</CardTitle>
+                        <CardDescription>Refine your media list or adjust display settings.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4 pt-2">
-                        {/* Visible Filters: Name and Category */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                            <div className="relative md:col-span-1">
-                                <Label htmlFor="name-filter-input" className="text-xs text-muted-foreground">Filter by Name</Label>
-                                <Input id="name-filter-input" type="search" placeholder="Media name..." value={localNameFilter} onChange={(e) => setLocalNameFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs" disabled={isLoadingMedia || isFetching}/>
-                            </div>
-                            <div className="relative md:col-span-1">
-                                <Label htmlFor="category-filter-input" className="text-xs text-muted-foreground">Filter by Category</Label>
-                                <Input id="category-filter-input" type="search" placeholder="Category..." value={localCategoryFilter} onChange={(e) => setLocalCategoryFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs" disabled={isLoadingMedia || isFetching} />
-                            </div>
-                            <Button onClick={applyTextFilters} className="w-full md:w-auto h-9 text-xs" disabled={isLoadingMedia || isFetching}>
-                                <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Text Filters
-                            </Button>
-                        </div>
-
-                        {/* Accordion for Advanced Filters & Sorting */}
-                        <Accordion type="single" collapsible className="w-full">
-                            <AccordionItem value="advanced-filters">
+                    <CardContent className="p-4">
+                        <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                            <AccordionItem value="item-1">
                                 <AccordionTrigger>
                                     <div className="flex items-center gap-2 text-sm font-medium">
                                         <Filter className="h-4 w-4" />
-                                        <span>Advanced Filters & Sorting</span>
+                                        <span>Filter & Sort Controls</span>
                                     </div>
                                 </AccordionTrigger>
                                 <AccordionContent className="pt-4 space-y-4">
-                                    {/* Sort Controls */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                                        <div className="relative md:col-span-1">
+                                            <Label htmlFor="name-filter-input" className="text-xs text-muted-foreground">Filter by Name</Label>
+                                            <Input id="name-filter-input" type="search" placeholder="Media name..." value={localNameFilter} onChange={(e) => setLocalNameFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs" disabled={isLoadingMedia || isFetching}/>
+                                        </div>
+                                        <div className="relative md:col-span-1">
+                                            <Label htmlFor="category-filter-input" className="text-xs text-muted-foreground">Filter by Category</Label>
+                                            <Input id="category-filter-input" type="search" placeholder="Category..." value={localCategoryFilter} onChange={(e) => setLocalCategoryFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyTextFilters()} className="h-9 text-xs" disabled={isLoadingMedia || isFetching} />
+                                        </div>
+                                        <Button onClick={applyTextFilters} className="w-full md:w-auto h-9 text-xs" disabled={isLoadingMedia || isFetching}>
+                                            <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Text Filters
+                                        </Button>
+                                    </div>
+                                    
+                                    <div className="pt-2 border-t mt-4">
+                                        <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1.5">
+                                            <TagIcon className="h-3.5 w-3.5" /> Filter by Tags
+                                        </Label>
+                                        <TagFilterControl
+                                            allAvailableTags={allAvailableTagsForFilter}
+                                            selectedTags={selectedFilterTags}
+                                            onTagSelectionChange={handleTagSelectionChange}
+                                            onAddNewTag={handleAddNewUserTag}
+                                            isLoading={isLoadingMedia || isFetching}
+                                            predefinedTags={PREDEFINED_TAGS_FOR_WEB_MEDIA}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-2 border-t mt-4">
                                         <div>
                                             <Label className="text-xs text-muted-foreground">Sort By</Label>
                                             <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)} disabled={isLoadingMedia || isFetching}>
@@ -220,20 +229,6 @@ export default function WebMediaPage() {
                                                 <SelectContent>{PAGE_SIZE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                             </Select>
                                         </div>
-                                    </div>
-                                    {/* Tag Filter */}
-                                    <div>
-                                        <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-                                        <TagIcon className="h-3.5 w-3.5" /> Filter by Tags (select one or more)
-                                        </Label>
-                                        <TagFilterControl
-                                            allAvailableTags={allAvailableTagsForFilter}
-                                            selectedTags={selectedFilterTags}
-                                            onTagSelectionChange={handleTagSelectionChange}
-                                            onAddNewTag={handleAddNewUserTag}
-                                            isLoading={isLoadingMedia || isFetching}
-                                            predefinedTags={PREDEFINED_TAGS_FOR_WEB_MEDIA}
-                                        />
                                     </div>
                                 </AccordionContent>
                             </AccordionItem>
@@ -319,14 +314,9 @@ function WebMediaPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, page
     return (
       <div className="space-y-4">
         <Card>
-            <CardHeader className="pb-2"><Skeleton className="h-5 w-1/4" /></CardHeader>
-            <CardContent className="space-y-4 pt-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                    <div className="md:col-span-1 space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
-                    <div className="md:col-span-1 space-y-1"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-9 w-full"/></div>
-                    <Skeleton className="h-9 w-full md:w-auto"/>
-                </div>
-                <Skeleton className="h-10 w-full rounded-md" />
+            <CardHeader className="pb-0"><Skeleton className="h-6 w-1/3" /></CardHeader>
+            <CardContent className="p-4">
+                 <Skeleton className="h-10 w-full rounded-md" /> {/* Accordion Trigger Skeleton */}
             </CardContent>
         </Card>
         <Card><CardHeader className="pb-2"><Skeleton className="h-5 w-1/4" /></CardHeader><CardContent><Skeleton className="h-4 w-1/2 mb-1" /><Skeleton className="h-2 w-full" /></CardContent></Card>

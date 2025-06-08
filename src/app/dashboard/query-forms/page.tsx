@@ -38,8 +38,6 @@ import {
   List,
   Eye,
   FileText,
-  ImageIcon as ImageIconLucide,
-  Video,
   Search,
   X,
   ChevronLeft,
@@ -47,7 +45,6 @@ import {
   Filter,
   Paperclip,
   Code2,
-  User,
   CalendarIcon,
   DownloadCloud,
 } from "lucide-react";
@@ -91,8 +88,8 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { toast } from "@/hooks/use-toast";
-import { useCurrentUser } from '@/lib/queries/user'; // Import useCurrentUser
-import { getQueryForms as getQueryFormsService } from '@/lib/services/query-form'; // Import the service
+import { useCurrentUser } from '@/lib/queries/user';
+import { getQueryForms as getQueryFormsService } from '@/lib/services/query-form';
 
 type ViewModeQuery = "card" | "table";
 type SortFieldQuery = "name" | "email" | "type" | "group_id" | "createdAt";
@@ -158,7 +155,7 @@ const MediaPreview: React.FC<{ mediaItem: Media }> = ({ mediaItem }) => {
   if (mediaItem.mime?.startsWith("video/") && displaySrc) {
     return (
       <div className="w-16 h-16 flex items-center justify-center bg-muted rounded border">
-        <Video className="w-8 h-8 text-purple-500" />
+        <FileText className="w-8 h-8 text-purple-500" /> {/* Placeholder for video, adjust as needed */}
       </div>
     );
   }
@@ -285,7 +282,7 @@ const QueryFormTable: React.FC<{
 };
 
 export default function QueryFormsPage() {
-  const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser(); // Call hook at top level
+  const { data: currentUser, isLoading: isLoadingUser, isError: isUserError } = useCurrentUser();
   const userKey = currentUser?.tenent_id;
 
   const [viewMode, setViewMode] = React.useState<ViewModeQuery>(() =>
@@ -338,8 +335,8 @@ export default function QueryFormsPage() {
   const {
     data: queryFormsData,
     isLoading,
-    isError: isQueryFormsError, // Renamed to avoid conflict
-    error: queryFormsError,    // Renamed to avoid conflict
+    isError: isQueryFormsError,
+    error: queryFormsError,
     refetch,
     isFetching,
   } = useGetQueryForms(queryFormOptions);
@@ -403,22 +400,21 @@ export default function QueryFormsPage() {
         group_id: downloadGroupId.trim(),
         dateFrom: downloadDateFrom,
         dateTo: downloadDateTo,
-        pageSize: 1000,
+        pageSize: 1000, // Fetch a large number for "all"
         page: 1,
         sortField: 'createdAt',
         sortOrder: 'asc',
       };
       
-      // Use userKey (derived from useCurrentUser at component top level)
-      if (!userKey) {
+      if (!userKey) { // Use userKey from component scope
           toast({ title: "Error", description: "User information not available for download.", variant: "destructive" });
           setIsDownloadingCsv(false);
           return;
       }
 
-      const response = await getQueryFormsService({ // Call the imported service function directly
+      const response = await getQueryFormsService({
         ...fetchAllParams,
-        userTenentId: userKey // Pass the tenant ID from component scope
+        userTenentId: userKey 
       });
       const dataToExport = response.data;
 
@@ -494,7 +490,7 @@ export default function QueryFormsPage() {
     }
   };
 
-  const pageIsLoading = isLoadingUser || isLoading; // Combined loading state
+  const pageIsLoading = isLoadingUser || isLoading;
   const pageIsError = isUserError || isQueryFormsError;
   const pageError = isUserError ? new Error("Failed to load user data") : queryFormsError;
 
@@ -540,165 +536,61 @@ export default function QueryFormsPage() {
         </div>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Filter Query Forms</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-2">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-              <div>
-                <Label
-                  htmlFor="type-filter-select"
-                  className="text-xs text-muted-foreground"
-                >
-                  Filter by Type
-                </Label>
-                <Select
-                  value={selectedTypeFilter || "all"}
-                  onValueChange={(value) =>
-                    setSelectedTypeFilter(value === "all" ? null : value)
-                  }
-                  disabled={pageIsLoading || isFetching}
-                >
-                  <SelectTrigger
-                    id="type-filter-select"
-                    className="h-9 text-xs"
-                  >
-                    <SelectValue placeholder="All Types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["all", ...QUERY_FORM_TYPES_FILTER].map((type) => (
-                      <SelectItem
-                        key={type}
-                        value={type}
-                        className="text-xs capitalize"
-                      >
-                        {type === "all" ? "All Types" : type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="relative md:col-span-1">
-                <Label
-                  htmlFor="group-id-filter-input"
-                  className="text-xs text-muted-foreground"
-                >
-                  Filter by Group ID
-                </Label>
-                <Input
-                  id="group-id-filter-input"
-                  type="search"
-                  placeholder="Group ID..."
-                  value={localGroupIdFilter}
-                  onChange={(e) => setLocalGroupIdFilter(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && applyGroupIdFilter()}
-                  className="h-9 text-xs"
-                  disabled={pageIsLoading || isFetching}
-                />
-              </div>
-              <Button
-                onClick={applyGroupIdFilter}
-                className="w-full md:w-auto h-9 text-xs"
-                disabled={pageIsLoading || isFetching}
-              >
-                <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Group ID Filter
-              </Button>
-            </div>
-
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="advanced-sort-pagination">
-                <AccordionTrigger className="text-sm font-medium">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4" />
-                    Advanced Sorting & Pagination
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="pt-4 space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Sort By
-                      </Label>
-                      <Select
-                        value={sortField}
-                        onValueChange={(value) =>
-                          setSortField(value as SortFieldQuery)
-                        }
-                        disabled={pageIsLoading || isFetching}
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder="Sort by..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SORT_FIELD_OPTIONS_QUERY.map((opt) => (
-                            <SelectItem
-                              key={opt.value}
-                              value={opt.value}
-                              className="text-xs"
-                            >
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Order
-                      </Label>
-                      <Select
-                        value={sortOrder}
-                        onValueChange={(value) =>
-                          setSortOrder(value as SortOrderQuery)
-                        }
-                        disabled={pageIsLoading || isFetching}
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder="Order..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SORT_ORDER_OPTIONS_QUERY.map((opt) => (
-                            <SelectItem
-                              key={opt.value}
-                              value={opt.value}
-                              className="text-xs"
-                            >
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Items/Page
-                      </Label>
-                      <Select
-                        value={String(pageSize)}
-                        onValueChange={(value) => setPageSize(Number(value))}
-                        disabled={pageIsLoading || isFetching}
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder="Items per page" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PAGE_SIZE_OPTIONS_QUERY.map((opt) => (
-                            <SelectItem
-                              key={opt.value}
-                              value={opt.value}
-                              className="text-xs"
-                            >
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </CardContent>
+            <CardHeader className="pb-0">
+                <CardTitle className="text-lg">Filter & Sort Options</CardTitle>
+                <CardDescription>Use the options below to refine your query form list.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4">
+                <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                    <AccordionItem value="item-1">
+                        <AccordionTrigger>
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                                <Filter className="h-4 w-4" />
+                                <span>Filter & Sort Controls</span>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-4 space-y-4">
+                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                                <div>
+                                    <Label htmlFor="type-filter-select" className="text-xs text-muted-foreground">Filter by Type</Label>
+                                    <Select value={selectedTypeFilter || "all"} onValueChange={(value) => setSelectedTypeFilter(value === "all" ? null : value)} disabled={pageIsLoading || isFetching}>
+                                        <SelectTrigger id="type-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Types" /></SelectTrigger>
+                                        <SelectContent>{["all", ...QUERY_FORM_TYPES_FILTER].map((type) => (<SelectItem key={type} value={type} className="text-xs capitalize">{type === "all" ? "All Types" : type}</SelectItem>))}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="relative md:col-span-1">
+                                    <Label htmlFor="group-id-filter-input" className="text-xs text-muted-foreground">Filter by Group ID</Label>
+                                    <Input id="group-id-filter-input" type="search" placeholder="Group ID..." value={localGroupIdFilter} onChange={(e) => setLocalGroupIdFilter(e.target.value)} onKeyDown={(e) => e.key === "Enter" && applyGroupIdFilter()} className="h-9 text-xs" disabled={pageIsLoading || isFetching} />
+                                </div>
+                                <Button onClick={applyGroupIdFilter} className="w-full md:w-auto h-9 text-xs" disabled={pageIsLoading || isFetching}><Search className="h-3.5 w-3.5 mr-1.5" /> Apply Group ID Filter</Button>
+                             </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-2 border-t mt-4">
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Sort By</Label>
+                                    <Select value={sortField} onValueChange={(value) => setSortField(value as SortFieldQuery)} disabled={pageIsLoading || isFetching}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                        <SelectContent>{SORT_FIELD_OPTIONS_QUERY.map((opt) => (<SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>))}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Order</Label>
+                                    <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrderQuery)} disabled={pageIsLoading || isFetching}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                        <SelectContent>{SORT_ORDER_OPTIONS_QUERY.map((opt) => (<SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>))}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Items/Page</Label>
+                                    <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={pageIsLoading || isFetching}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                        <SelectContent>{PAGE_SIZE_OPTIONS_QUERY.map((opt) => (<SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>))}</SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+            </CardContent>
         </Card>
 
         {(pageIsLoading && !queryFormsData) || (isFetching && !queryFormsData) ? (
@@ -1011,16 +903,11 @@ function QueryFormsPageSkeleton({
   return (
     <>
       <Card>
-        <CardHeader className="pb-2">
-          <Skeleton className="h-6 w-1/3" />
+        <CardHeader className="pb-0">
+            <Skeleton className="h-6 w-1/3" />
         </CardHeader>
-        <CardContent className="space-y-4 pt-2">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-          </div>
-          <Skeleton className="h-10 w-full rounded-md" />
+        <CardContent className="p-4">
+          <Skeleton className="h-10 w-full rounded-md" /> {/* Accordion Trigger Skeleton */}
         </CardContent>
       </Card>
       {viewMode === "card" ? (
@@ -1083,3 +970,4 @@ function QueryFormsPageSkeleton({
     </>
   );
 }
+

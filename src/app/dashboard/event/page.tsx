@@ -11,7 +11,6 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,7 +53,7 @@ type SortOrderEvent = 'asc' | 'desc';
 
 const DEFAULT_PAGE_SIZE_EVENT_TABLE = 10;
 const DEFAULT_PAGE_SIZE_EVENT_CARD = 9;
-const EVENT_CATEGORIES_MOCK = ["Conference", "Workshop", "Webinar", "Meetup", "Party", "Product Launch", "Networking", "Charity", "Sports", "Cultural"]; // Re-using from form page
+const EVENT_CATEGORIES_MOCK = ["Conference", "Workshop", "Webinar", "Meetup", "Party", "Product Launch", "Networking", "Charity", "Sports", "Cultural"];
 const EVENT_STATUSES = ["Draft", "Published"];
 
 const PAGE_SIZE_OPTIONS_EVENT = [
@@ -123,7 +122,6 @@ export default function EventPage() {
    
    const applyFilters = () => {
        setActiveTitleFilter(localTitleFilter.trim() === '' ? null : localTitleFilter.trim());
-       // Category and Status filters are already active via their select onChange
    };
 
    return (
@@ -147,41 +145,44 @@ export default function EventPage() {
          </div>
 
         <Card>
-            <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Filter Events</CardTitle>
+            <CardHeader className="pb-0">
+                 <CardTitle className="text-lg">Event Filters & Options</CardTitle>
+                 <CardDescription>Refine your event list or adjust display settings.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 pt-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                    <div>
-                        <Label htmlFor="title-filter-input" className="text-xs text-muted-foreground">Filter by Title</Label>
-                        <Input id="title-filter-input" type="search" placeholder="Event title..." value={localTitleFilter} onChange={(e) => setLocalTitleFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyFilters()} className="h-9 text-xs" disabled={isLoadingEvents || isFetching}/>
-                    </div>
-                    <div>
-                        <Label htmlFor="category-filter-select" className="text-xs text-muted-foreground">Filter by Category</Label>
-                        <Select value={selectedCategoryFilter || 'all'} onValueChange={(value) => {setSelectedCategoryFilter(value === 'all' ? null : value); setCurrentPage(1);}} disabled={isLoadingEvents || isFetching}>
-                            <SelectTrigger id="category-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Categories" /></SelectTrigger>
-                            <SelectContent>{['all', ...EVENT_CATEGORIES_MOCK].map(cat => <SelectItem key={cat} value={cat} className="text-xs capitalize">{cat === 'all' ? 'All Categories' : cat}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
-                     <div>
-                        <Label htmlFor="status-filter-select" className="text-xs text-muted-foreground">Filter by Status</Label>
-                        <Select value={selectedStatusFilter || 'all'} onValueChange={(value) => {setSelectedStatusFilter(value === 'all' ? null : value); setCurrentPage(1);}} disabled={isLoadingEvents || isFetching}>
-                            <SelectTrigger id="status-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Statuses" /></SelectTrigger>
-                            <SelectContent>{['all', ...EVENT_STATUSES].map(stat => <SelectItem key={stat} value={stat} className="text-xs capitalize">{stat === 'all' ? 'All Statuses' : stat}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                 <Button onClick={applyFilters} className="h-9 text-xs mt-2" disabled={isLoadingEvents || isFetching}>
-                    <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Title Filter
-                </Button>
-
-                 <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value="advanced-sort-pagination">
-                        <AccordionTrigger className="text-sm font-medium">
-                            <div className="flex items-center gap-2"><Filter className="h-4 w-4" />Advanced Sorting & Pagination</div>
+            <CardContent className="p-4">
+                <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                    <AccordionItem value="item-1">
+                        <AccordionTrigger>
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                                <Filter className="h-4 w-4" />
+                                <span>Filter & Sort Controls</span>
+                            </div>
                         </AccordionTrigger>
                         <AccordionContent className="pt-4 space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                                <div>
+                                    <Label htmlFor="title-filter-input" className="text-xs text-muted-foreground">Filter by Title</Label>
+                                    <Input id="title-filter-input" type="search" placeholder="Event title..." value={localTitleFilter} onChange={(e) => setLocalTitleFilter(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyFilters()} className="h-9 text-xs" disabled={isLoadingEvents || isFetching}/>
+                                </div>
+                                <div>
+                                    <Label htmlFor="category-filter-select" className="text-xs text-muted-foreground">Filter by Category</Label>
+                                    <Select value={selectedCategoryFilter || 'all'} onValueChange={(value) => {setSelectedCategoryFilter(value === 'all' ? null : value); setCurrentPage(1);}} disabled={isLoadingEvents || isFetching}>
+                                        <SelectTrigger id="category-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Categories" /></SelectTrigger>
+                                        <SelectContent>{['all', ...EVENT_CATEGORIES_MOCK].map(cat => <SelectItem key={cat} value={cat} className="text-xs capitalize">{cat === 'all' ? 'All Categories' : cat}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label htmlFor="status-filter-select" className="text-xs text-muted-foreground">Filter by Status</Label>
+                                    <Select value={selectedStatusFilter || 'all'} onValueChange={(value) => {setSelectedStatusFilter(value === 'all' ? null : value); setCurrentPage(1);}} disabled={isLoadingEvents || isFetching}>
+                                        <SelectTrigger id="status-filter-select" className="h-9 text-xs"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+                                        <SelectContent>{['all', ...EVENT_STATUSES].map(stat => <SelectItem key={stat} value={stat} className="text-xs capitalize">{stat === 'all' ? 'All Statuses' : stat}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <Button onClick={applyFilters} className="h-9 text-xs mt-2" disabled={isLoadingEvents || isFetching}>
+                                <Search className="h-3.5 w-3.5 mr-1.5" /> Apply Title Filter
+                            </Button>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-2 border-t mt-4">
                                 <div>
                                     <Label className="text-xs text-muted-foreground">Sort By</Label>
                                     <Select value={sortField} onValueChange={(value) => setSortField(value as SortFieldEvent)} disabled={isLoadingEvents || isFetching}>
@@ -403,15 +404,9 @@ function EventPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, pageSiz
     return (
       <div className="space-y-4">
         <Card>
-            <CardHeader className="pb-2"><Skeleton className="h-6 w-1/3" /></CardHeader>
-            <CardContent className="space-y-4 pt-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                    <Skeleton className="h-9 w-full"/>
-                    <Skeleton className="h-9 w-full"/>
-                    <Skeleton className="h-9 w-full"/>
-                </div>
-                <Skeleton className="h-9 w-24"/>
-                <Skeleton className="h-10 w-full rounded-md" />
+            <CardHeader className="pb-0"><Skeleton className="h-6 w-1/3" /></CardHeader>
+            <CardContent className="p-4">
+                 <Skeleton className="h-10 w-full rounded-md" /> {/* Accordion Trigger Skeleton */}
             </CardContent>
         </Card>
         {viewMode === 'table' ? (
@@ -473,3 +468,4 @@ function EventPageSkeleton({ viewMode, pageSize }: { viewMode: ViewMode, pageSiz
       </div>
     );
 }
+
