@@ -21,10 +21,22 @@ export const metadata: Metadata = {
   title: 'Mentos 2.0',
   description: 'Modern application built with Next.js, TanStack Query, Shadcn UI, Axios, and Zod.',
   manifest: '/manifest.json', // Link to the manifest file
+  icons: {
+    icon: '/app-logo.png', // Standard favicon
+    shortcut: '/app-logo.png', // For some browsers
+    apple: '/app-logo.png', // Apple touch icon
+    other: [
+      {
+        rel: 'apple-touch-icon-precomposed',
+        url: '/app-logo.png',
+      },
+    ],
+  },
   appleWebApp: { // For iOS PWA behavior
     capable: true,
     statusBarStyle: 'default',
     title: 'Mentos 2.0',
+    // startupImage: ['/apple-touch-startup-image.png'], // Optional: Add startup images for different iOS devices
   },
 };
 
@@ -49,9 +61,9 @@ export default function RootLayout({
           <AppProviders>
           {children}
           <Toaster />
-          <InstallPWAButton /> 
+          <InstallPWAButton />
         </AppProviders>
-        </Suspense> 
+        </Suspense>
       </body>
     </html>
   );
