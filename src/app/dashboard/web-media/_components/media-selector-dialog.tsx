@@ -180,7 +180,7 @@ export default function MediaSelectorDialog({
                 </div>
 
                 {/* Media Grid Area */}
-                <ScrollArea className="flex-1 px-3 py-2">
+                <ScrollArea className="flex-1 px-3 py-8 overflow-scroll bg-slate-200 ">
                     <div className="min-h-[200px]"> {/* Ensure some min height for loading/empty states */}
                         {isLoading && !allMediaDataResponse && (
                             <div className="flex items-center justify-center h-full py-10">
@@ -249,7 +249,7 @@ export default function MediaSelectorDialog({
                                         <div className="p-1.5 sm:p-2 flex flex-col flex-grow justify-between">
                                             <p className="text-[10px] sm:text-xs text-foreground truncate font-medium leading-tight mb-1" title={media.name}>{media.name}</p>
                                             <Button
-                                                size="xs"
+                                                size="sm"
                                                 variant={isDialogSelected && hasValidIdForSelection ? 'default' : 'outline'}
                                                 onClick={() => { if (hasValidIdForSelection) setSelectedMediaInDialog(media); }}
                                                 disabled={!hasValidIdForSelection}
