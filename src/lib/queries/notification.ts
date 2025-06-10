@@ -48,40 +48,90 @@ export function useMarkNotificationAsReadMutation() {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
-  return useMutation<Notification, Error, { documentId: string }>({ // Changed notificationId to documentId
-    mutationFn: ({ documentId }) => markNotificationAsReadService(documentId), // Pass documentId
-    onSuccess: (updatedNotification, variables) => { // variables now { documentId: string }
+  return useMutation<Notification, Error, { documentId: string }>({
+    mutationFn: ({ documentId }) => markNotificationAsReadService(documentId),
+    onSuccess: (updatedNotification, variables) => {
+      // Invalidate broad queries to ensure freshness for other views/pages.
+      // This is a safe fallback if optimistic updates are too complex or miss some cases.
       queryClient.invalidateQueries({ queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id] });
 
-      // Optimistic update using documentId to find the notification, then its numeric id for matching in cache
+      // Optimistically update the "unread" list (isRead: false, page 1 implicitly if not specified)
       queryClient.setQueryData<NotificationsResponse>(
-        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined),
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, false, undefined), // Targets 'unread' list, default page
         (oldData) => {
-          if (!oldData) return oldData;
+          const defaultPageSize = oldData?.meta?.pagination?.pageSize || 10;
+          if (!oldData) {
+            // If 'unread' list wasn't cached (e.g., never fetched or was empty),
+            // after marking one as read, it effectively remains empty or reflects no *other* unread items.
+            return { data: [], meta: { pagination: { page: 1, pageSize: defaultPageSize, pageCount: 0, total: 0 } } };
+          }
+          // If oldData exists, filter out the item being marked as read.
+          const newDataArray = oldData.data.filter(n =>
+            !(n.documentId === variables.documentId || (updatedNotification && n.id === updatedNotification.id))
+          );
+          const itemsRemovedCount = oldData.data.length - newDataArray.length;
+          const newTotal = Math.max(0, oldData.meta.pagination.total - itemsRemovedCount);
+          const newPageCount = Math.ceil(newTotal / (oldData.meta.pagination.pageSize || defaultPageSize)) || 0;
+          
           return {
             ...oldData,
-            data: oldData.data.map(n =>
-              n.documentId === variables.documentId || n.id === updatedNotification.id // Match by documentId or numeric id
-                ? { ...n, isRead: true }
-                : n
-            ),
+            data: newDataArray,
+            meta: {
+              ...oldData.meta,
+              pagination: {
+                ...oldData.meta.pagination,
+                total: newTotal,
+                pageCount: newPageCount,
+                // page should remain the same unless it becomes invalid (e.g., last item on last page removed)
+                // For simplicity, not adjusting page here, relying on invalidation if needed for complex cases.
+              },
+            },
           };
         }
       );
+
+      // Optimistically update the "all statuses" list (isRead: null, page 1 implicitly if not specified)
       queryClient.setQueryData<NotificationsResponse>(
-        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, false, undefined),
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined), // Targets 'all_status_explicit' list, default page
         (oldData) => {
-          if (!oldData) return oldData;
+          const defaultPageSize = oldData?.meta?.pagination?.pageSize || 10;
+          if (!updatedNotification) { 
+            // This case should ideally not happen if the mutation was successful.
+            // If oldData is also undefined, returning a default empty state is safest.
+            if (!oldData) return { data: [], meta: { pagination: { page: 1, pageSize: defaultPageSize, pageCount: 0, total: 0 } } };
+            return oldData; // Return oldData if updatedNotification is missing for some reason.
+          }
+
+          if (!oldData) {
+            // If 'all' list wasn't cached, initialize it with just the updated notification.
+            // updatedNotification should have isRead: true from the backend response.
+            return {
+              data: [{ ...updatedNotification, isRead: true }], // Ensure isRead is true
+              meta: { pagination: { page: 1, pageSize: defaultPageSize, pageCount: 1, total: 1 } }
+            };
+          }
+          // If oldData exists, map and update the specific notification.
+          const itemExistsInOldData = oldData.data.some(n => n.documentId === variables.documentId || n.id === updatedNotification.id);
+          
+          let newDataArray;
+          if (itemExistsInOldData) {
+            newDataArray = oldData.data.map(n =>
+              (n.documentId === variables.documentId || n.id === updatedNotification.id)
+                ? { ...updatedNotification, isRead: true } // Ensure it uses the data from the server response and sets isRead
+                : n
+            );
+          } else {
+            // If item not in current page/cache of 'all', add it.
+            // This might make totals inaccurate if not careful, invalidation helps.
+            newDataArray = [{ ...updatedNotification, isRead: true }, ...oldData.data]; 
+            // For simplicity, not adjusting total here, relying on main invalidation.
+          }
+          
           return {
             ...oldData,
-            data: oldData.data.filter(n => !(n.documentId === variables.documentId || n.id === updatedNotification.id)),
-            meta: {
-                ...oldData.meta,
-                pagination: {
-                    ...oldData.meta.pagination,
-                    total: Math.max(0, oldData.meta.pagination.total - 1)
-                }
-            }
+            data: newDataArray,
+            // 'total' and 'pageCount' for 'all' list generally don't change when marking one item as read.
+            // If adding, it might change, but invalidation handles this.
           };
         }
       );
@@ -114,33 +164,38 @@ export function useMarkAllNotificationsAsReadMutation() {
         queryKey: ['notifications', currentUser?.id, currentUser?.tenent_id]
       });
 
+      // Optimistically clear the 'unread' list (isRead: false)
       queryClient.setQueryData<NotificationsResponse>(
         NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, false, undefined),
         (oldData) => {
           const defaultPageSize = oldData?.meta?.pagination?.pageSize || 10;
-          if (!oldData) {
-            return {
-              data: [],
-              meta: {
-                pagination: { page: 1, pageSize: defaultPageSize, pageCount: 0, total: 0 }
-              }
-            };
-          }
+          // Regardless of oldData, the unread list is now empty.
           return {
-            ...oldData,
             data: [],
             meta: {
-                ...oldData.meta,
-                pagination: {
-                    ...oldData.meta.pagination,
-                    total: 0,
-                    pageCount: 0,
-                    page: 1
-                }
+              pagination: { page: 1, pageSize: defaultPageSize, pageCount: 0, total: 0 }
             }
           };
         }
      );
+     // Optimistically update the 'all' list (isRead: null) to mark all as read
+     queryClient.setQueryData<NotificationsResponse>(
+        NOTIFICATIONS_QUERY_KEY(currentUser?.id, currentUser?.tenent_id, null, undefined),
+        (oldData) => {
+          if (!oldData) {
+            // If 'all' list isn't cached, we can't update it accurately.
+            // Invalidation above will handle refetching.
+            // Return a default empty state to prevent 'undefined' data.
+            const defaultPageSize = 10;
+            return { data: [], meta: { pagination: { page: 1, pageSize: defaultPageSize, pageCount: 0, total: 0 } } };
+          }
+          return {
+            ...oldData,
+            data: oldData.data.map(n => ({ ...n, isRead: true })),
+            // Pagination meta (total, pageCount) remains the same for 'all' list.
+          };
+        }
+      );
     },
     onError: (error: any) => {
       toast({
