@@ -6,6 +6,7 @@ import type { FindMany, FindOne } from "@/types/strapi_response";
 import axiosInstance from "@/lib/axios";
 import { getAccessToken } from "@/lib/actions/auth";
 import { AxiosError } from 'axios';
+import { getMetaFormat } from './meta-format'; // Import the service to fetch MetaFormat
 
 async function getAuthHeader() {
   const token = await getAccessToken();
@@ -91,10 +92,31 @@ export const getMetaDataEntries = async (params: GetMetaDataEntriesParams): Prom
 // Create a new MetaData entry
 export const createMetaDataEntry = async (payload: CreateMetaDataPayload): Promise<MetaData> => {
   const url = '/meta-datas';
-  console.log(`[createMetaDataEntry] Creating MetaData entry with payload:`, { data: payload });
+
+  if (!payload.tenent_id) {
+    throw new Error('User tenent_id is required in the payload.');
+  }
+  if (!payload.meta_format) { // payload.meta_format is the string documentId
+    throw new Error('MetaFormat documentId is required in the payload.');
+  }
+
+  // Fetch the MetaFormat using its documentId to get its numeric ID
+  const metaFormatEntry = await getMetaFormat(payload.meta_format, payload.tenent_id);
+  if (!metaFormatEntry || typeof metaFormatEntry.id !== 'number') {
+    throw new Error(`Could not find or resolve MetaFormat with documentId: ${payload.meta_format} for tenent_id: ${payload.tenent_id}`);
+  }
+  const numericMetaFormatId = metaFormatEntry.id;
+
+  // Create the final payload for Strapi, replacing the string documentId with the numeric id
+  const finalPayloadForStrapi = {
+    ...payload,
+    meta_format: numericMetaFormatId, // Use numeric ID for the relation
+  };
+  
+  console.log(`[createMetaDataEntry] Creating MetaData entry with resolved numeric meta_format ID. Final payload for Strapi:`, { data: finalPayloadForStrapi });
   try {
     const headers = await getAuthHeader();
-    const response = await axiosInstance.post<FindOne<MetaData>>(url, { data: payload }, { headers, params: { populate: ['meta_format', 'user'] } });
+    const response = await axiosInstance.post<FindOne<MetaData>>(url, { data: finalPayloadForStrapi }, { headers, params: { populate: ['meta_format', 'user'] } });
     if (!response.data || !response.data.data) {
       throw new Error('Unexpected API response structure after creating MetaData entry.');
     }
@@ -109,15 +131,17 @@ export const createMetaDataEntry = async (payload: CreateMetaDataPayload): Promi
       
       if (errorBody?.details?.errorCode === 'DUPLICATE_ENTRY' && errorBody?.details?.details?.handle) {
         // Construct a specific message for duplicate handle errors
-        message = `DUPLICATE_HANDLE_ERROR: Handle '${errorBody.details.details.handle}' is already taken.`;
+        message = `DUPLICATE_HANDLE_ERROR: Handle '${errorBody.details.details.handle}' is already taken for this form type.`;
       } else {
-        message = `API Error (Status ${status}): ${errorMessage}. ${errorBody?.details ? 'Details: ' + JSON.stringify(errorBody.details) : ''}`;
+        message = `API Error (Status ${status || 'unknown'}): ${errorMessage}. ${errorBody?.details ? 'Details: ' + JSON.stringify(errorBody.details) : ''}`;
       }
-      console.error(`[createMetaDataEntry] Failed (${status}):`, error.response?.data);
+      console.error(`[createMetaDataEntry] Failed to create. Status: ${status || 'unknown'} Body:`, error.response?.data);
     } else if (error instanceof Error) {
       message = error.message;
+       console.error(`[createMetaDataEntry] Failed to create (Non-Axios Error):`, error);
+    } else {
+       console.error(`[createMetaDataEntry] Failed to create (Unknown Error):`, error);
     }
-    console.error(`[createMetaDataEntry] Error: ${message}`, error);
     throw new Error(message);
   }
 };
@@ -165,11 +189,11 @@ export const updateMetaDataEntry = async (documentId: string, payload: Partial<O
       const errorMessage = errorBody?.message || error.response?.data?.message || error.message;
       
       if (errorBody?.details?.errorCode === 'DUPLICATE_ENTRY' && errorBody?.details?.details?.handle) {
-        message = `DUPLICATE_HANDLE_ERROR: Handle '${errorBody.details.details.handle}' is already taken.`;
+        message = `DUPLICATE_HANDLE_ERROR: Handle '${errorBody.details.details.handle}' is already taken for this form type.`;
       } else {
-        message = `API Error (Status ${status}): ${errorMessage}. ${errorBody?.details ? 'Details: ' + JSON.stringify(errorBody.details) : ''}`;
+        message = `API Error (Status ${status || 'unknown'}): ${errorMessage}. ${errorBody?.details ? 'Details: ' + JSON.stringify(errorBody.details) : ''}`;
       }
-      console.error(`[updateMetaDataEntry] Failed (${status}):`, error.response?.data);
+      console.error(`[updateMetaDataEntry] Failed (${status || 'unknown'}):`, error.response?.data);
     } else if (error instanceof Error) {
       message = error.message;
     }
@@ -201,8 +225,8 @@ export const deleteMetaDataEntry = async (documentId: string, userTenentId: stri
       const status = error.response?.status;
       const errorDetails = error.response?.data?.error?.details;
       const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || error.message;
-      message = `API Error (Status ${status}): ${errorMessage}. ${errorDetails ? 'Details: ' + JSON.stringify(errorDetails) : ''}`;
-      console.error(`[deleteMetaDataEntry] Failed (${status}):`, error.response?.data);
+      message = `API Error (Status ${status || 'unknown'}): ${errorMessage}. ${errorDetails ? 'Details: ' + JSON.stringify(errorDetails) : ''}`;
+      console.error(`[deleteMetaDataEntry] Failed (${status || 'unknown'}):`, error.response?.data);
     } else if (error instanceof Error) {
       message = error.message;
     }
