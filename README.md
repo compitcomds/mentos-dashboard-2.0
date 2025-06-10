@@ -1,4 +1,5 @@
 # Firebase Studio
+
 mentos2.2
 
 This is a NextJS starter in Firebase Studio.
