@@ -104,7 +104,7 @@ export default function Header({ userName, onLogout, menuItems }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-1 h-auto focus-visible:ring-0 focus-visible:ring-offset-0">
               <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
-                <AvatarImage src="https://picsum.photos/40/40" alt={userName} data-ai-hint="profile user" />
+                <AvatarImage src="https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" alt={userName} data-ai-hint="profile user" />
                 <AvatarFallback><UserCircle className="h-4 w-4 sm:h-5 sm:w-5" /></AvatarFallback>
               </Avatar>
               <span className="text-sm font-medium hidden md:inline-block">{userName}</span>
