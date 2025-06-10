@@ -1,8 +1,11 @@
 
 {
-  "name": "Mentos 2.0",
+  "name": "Mentos",
   "short_name": "Mentos",
-  "description": "Modern application built with Next.js, TanStack Query, Shadcn UI, Axios, and Zod.",
+  "description": "App Develop by Compitcom Digital Solutions Pvt. Ltd. for managing your website efficiently.",
+  "version": "2.0.0",
+  "dir": "ltr",
+  "lang": "en-US",
   "icons": [
     {
       "src": "/logo192.png",
