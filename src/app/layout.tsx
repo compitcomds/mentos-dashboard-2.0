@@ -1,9 +1,11 @@
+
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { AppProviders } from '@/components/providers';
 import { Toaster } from '@/components/ui/toaster';
 import { Suspense } from 'react';
+import InstallPWAButton from '@/components/pwa/InstallPWAButton'; // Import the PWA button
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -47,6 +49,7 @@ export default function RootLayout({
           <AppProviders>
           {children}
           <Toaster />
+          <InstallPWAButton /> 
         </AppProviders>
         </Suspense> 
       </body>
