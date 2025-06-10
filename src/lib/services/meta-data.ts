@@ -146,43 +146,77 @@ export const createMetaDataEntry = async (payload: CreateMetaDataPayload): Promi
   }
 };
 
-// Get a single MetaData entry by its documentId
+// Get a single MetaData entry by its string documentId using filters
 export const getMetaDataEntry = async (documentId: string, userTenentId: string): Promise<MetaData | null> => {
-  if (!documentId || !userTenentId) return null;
-  const url = `/meta-datas/${documentId}`;
-  console.log(`[getMetaDataEntry] Fetching MetaData entry from ${url}`);
+  if (!documentId || !userTenentId) {
+      console.warn(`[Service getMetaDataEntry]: documentId or userTenentId is missing.`);
+      return null;
+  }
+  
+  const params = {
+    'filters[documentId][$eq]': documentId,
+    'filters[tenent_id][$eq]': userTenentId,
+    'populate': ['meta_format', 'user'],
+    'pagination[limit]': 1
+  };
+  const url = `/meta-datas`; // Fetch from the collection endpoint with filters
+  console.log(`[getMetaDataEntry] Fetching MetaData entry from ${url} with filters:`, JSON.stringify(params));
+  
   try {
     const headers = await getAuthHeader();
-    const response = await axiosInstance.get<FindOne<MetaData>>(url, { headers, params: { populate: ['meta_format', 'user'] } });
-    if (!response.data || !response.data.data) return null;
-    if (response.data.data.tenent_id !== userTenentId) {
-      console.warn(`[getMetaDataEntry] Tenent ID mismatch for MetaData ${documentId}.`);
+    const response = await axiosInstance.get<FindMany<MetaData>>(url, { headers, params });
+    
+    if (!response.data || !response.data.data || response.data.data.length === 0) {
+      console.warn(`[getMetaDataEntry] MetaData entry with documentId ${documentId} for tenent ${userTenentId} not found.`);
       return null;
     }
-    return response.data.data;
+    // The tenent_id check is implicitly handled by the filter, but good for sanity.
+    if (response.data.data[0].tenent_id !== userTenentId) {
+        console.warn(`[getMetaDataEntry] Tenent ID mismatch for MetaData ${documentId}. This should not happen with current filters.`);
+        return null;
+    }
+    return response.data.data[0]; // Return the first (and should be only) item
   } catch (error: unknown) {
-    console.error(`[getMetaDataEntry] Error fetching MetaData ${documentId}:`, error);
-    return null;
+    let message = `Failed to fetch MetaData entry with documentId ${documentId}.`;
+    if (error instanceof AxiosError) {
+      const status = error.response?.status;
+      const errorDataMessage = error.response?.data?.error?.message || error.message;
+      if (status === 404) {
+        console.warn(`[getMetaDataEntry] MetaData entry ${documentId} not found (404).`);
+        return null; // Explicitly return null for not found
+      }
+      message = `API Error (${status}): ${errorDataMessage}`;
+    } else if (error instanceof Error) {
+      message = error.message;
+    }
+    console.error(`[getMetaDataEntry] Error fetching MetaData ${documentId}:`, message, error);
+    // Depending on query hook needs, you might throw or return null
+    // For get queries, often returning null is preferred if the item not being found isn't a critical app error.
+    throw new Error(message); // Or return null;
   }
 };
 
+
 // Update a MetaData entry
-export const updateMetaDataEntry = async (documentId: string, payload: Partial<Omit<CreateMetaDataPayload, 'meta_format' | 'tenent_id'>>, userTenentId: string): Promise<MetaData> => {
-  const url = `/meta-datas/${documentId}`;
-  console.log(`[updateMetaDataEntry] Updating MetaData ${documentId} with payload:`, { data: payload });
+export const updateMetaDataEntry = async (stringDocumentId: string, payload: Partial<Omit<CreateMetaDataPayload, 'meta_format' | 'tenent_id'>>, userTenentId: string): Promise<MetaData> => {
+  // Fetch the entry using its stringDocumentId to get its numeric id
+  const existingEntry = await getMetaDataEntry(stringDocumentId, userTenentId);
+  if (!existingEntry || typeof existingEntry.id !== 'number') {
+    throw new Error(`MetaData entry with documentId ${stringDocumentId} not found or lacks a numeric ID.`);
+  }
+  const numericId = existingEntry.id;
+  const url = `/meta-datas/${numericId}`; // Use numeric ID for the PUT request
+
+  console.log(`[updateMetaDataEntry] Updating MetaData (numeric ID: ${numericId}, string docId: ${stringDocumentId}) with payload:`, { data: payload });
   try {
     const headers = await getAuthHeader();
-    // Pre-check ownership (optional, backend should enforce)
-    const existingEntry = await getMetaDataEntry(documentId, userTenentId);
-    if (!existingEntry) throw new Error(`MetaData entry ${documentId} not found or not authorized for update.`);
-
     const response = await axiosInstance.put<FindOne<MetaData>>(url, { data: payload }, { headers, params: { populate: ['meta_format', 'user'] } });
     if (!response.data || !response.data.data) {
       throw new Error('Unexpected API response structure after updating MetaData entry.');
     }
     return response.data.data;
   } catch (error: unknown) {
-    let message = `Failed to update MetaData entry ${documentId}.`;
+    let message = `Failed to update MetaData entry ${stringDocumentId}.`;
      if (error instanceof AxiosError) {
       const status = error.response?.status;
       const errorBody = error.response?.data?.error; // Strapi error object
@@ -204,14 +238,17 @@ export const updateMetaDataEntry = async (documentId: string, payload: Partial<O
 
 // Delete a MetaData entry
 export const deleteMetaDataEntry = async (documentId: string, userTenentId: string): Promise<MetaData | void> => {
-  const url = `/meta-datas/${documentId}`;
-  console.log(`[deleteMetaDataEntry] Deleting MetaData entry ${documentId}`);
+  // Fetch the entry using its stringDocumentId to get its numeric id for deletion URL
+  const existingEntry = await getMetaDataEntry(documentId, userTenentId);
+  if (!existingEntry || typeof existingEntry.id !== 'number') {
+    throw new Error(`MetaData entry with documentId ${documentId} not found or lacks a numeric ID for deletion.`);
+  }
+  const numericId = existingEntry.id;
+  const url = `/meta-datas/${numericId}`; // Use numeric ID for the DELETE request
+
+  console.log(`[deleteMetaDataEntry] Deleting MetaData entry (numeric ID: ${numericId}, string docId: ${documentId})`);
   try {
     const headers = await getAuthHeader();
-    // Pre-check ownership (optional, backend should enforce)
-    const existingEntry = await getMetaDataEntry(documentId, userTenentId);
-    if (!existingEntry) throw new Error(`MetaData entry ${documentId} not found or not authorized for deletion.`);
-    
     const response = await axiosInstance.delete<FindOne<MetaData>>(url, { headers });
      if (response.status === 200 && response.data?.data) {
       return response.data.data;
@@ -234,3 +271,5 @@ export const deleteMetaDataEntry = async (documentId: string, userTenentId: stri
     throw new Error(message);
   }
 };
+
+    
