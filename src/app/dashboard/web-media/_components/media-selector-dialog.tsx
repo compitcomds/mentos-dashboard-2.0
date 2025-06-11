@@ -136,8 +136,8 @@ export default function MediaSelectorDialog({
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent className={cn(
-                "max-h-[90vh] flex flex-col p-0",
-                "w-[95vw] max-w-md",
+                "max-h-[100vh] flex flex-col p-2",
+                "w-[100vw] max-w-md",
                 "sm:w-full sm:max-w-3xl", 
                 "md:max-w-4xl",
                 "lg:max-w-5xl",
@@ -150,7 +150,7 @@ export default function MediaSelectorDialog({
 
                 {/* Top Bar: Search Input and Close Button */}
                 <div className="flex items-center p-3 border-b flex-shrink-0">
-                    <div className="relative flex-grow mr-2">
+                    <div className="relative flex-grow  mr-5">
                         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                             id="media-name-filter-dialog"
@@ -206,7 +206,7 @@ export default function MediaSelectorDialog({
                              </p>
                         )}
                         {!isLoading && !isError && filteredMediaData && filteredMediaData.length > 0 && (
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 sm:gap-3">
+                            <div className="grid p-2 grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 sm:gap-3">
                                 {filteredMediaData.map((media) => {
                                     const isCurrentlySelectedInParentForm = media.fileId !== null && currentSelectionIds.includes(media.fileId);
                                     const isDialogSelected = selectedMediaInDialog?.webMediaId === media.webMediaId;
@@ -216,7 +216,7 @@ export default function MediaSelectorDialog({
                                     <div
                                         key={media.webMediaId}
                                         className={cn(
-                                            "relative group border rounded-md overflow-hidden aspect-square flex flex-col text-center transition-all duration-150",
+                                            "relative bg-slate-300 group border rounded-md aspect-square flex flex-col text-center transition-all duration-150",
                                             isDialogSelected && hasValidIdForSelection ? 'ring-2 ring-primary ring-offset-1 shadow-lg border-primary' : 'border-border',
                                             isCurrentlySelectedInParentForm && !isDialogSelected && 'border-green-500 ring-1 ring-green-500',
                                             !hasValidIdForSelection && 'opacity-60 bg-muted/30'
@@ -258,7 +258,7 @@ export default function MediaSelectorDialog({
                                                     !hasValidIdForSelection && "cursor-not-allowed"
                                                 )}
                                                 aria-label={isDialogSelected && hasValidIdForSelection ? `Deselect ${media.name}` : `Select ${media.name}`}
-                                            >
+                                            >   
                                                 {isDialogSelected && hasValidIdForSelection ? <Check className="mr-1 h-3.5 w-3.5" /> : null}
                                                 {isDialogSelected && hasValidIdForSelection ? 'Selected' : 'Select'}
                                             </Button>
