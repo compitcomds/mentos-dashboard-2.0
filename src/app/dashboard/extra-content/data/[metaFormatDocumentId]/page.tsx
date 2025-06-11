@@ -47,6 +47,7 @@ import {
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
+  type CarouselApi, // Import CarouselApi type
 } from "@/components/ui/carousel";
 import MediaRenderer from '../_components/media-renderer';
 
@@ -84,6 +85,76 @@ const SORT_FIELD_OPTIONS_METADATA: { label: string; value: SortFieldMetaData }[]
 const SORT_ORDER_OPTIONS_METADATA: { label: string; value: SortOrderMetaData }[] = [
   { label: "Ascending", value: "asc" }, { label: "Descending", value: "desc" },
 ];
+
+// New component for rendering individual carousels with lazy loading
+const EntryCarousel: React.FC<{ entry: MetaData; entryMediaIds: number[] }> = ({ entry, entryMediaIds }) => {
+  const [carouselApi, setCarouselApi] = React.useState<CarouselApi | undefined>();
+  const [loadedSlides, setLoadedSlides] = React.useState<Set<number>>(new Set([0])); // Load first slide by default
+
+  React.useEffect(() => {
+    if (!carouselApi) {
+      return;
+    }
+
+    const handleSelect = () => {
+      const selectedSnap = carouselApi.selectedScrollSnap();
+      setLoadedSlides(prev => new Set(prev).add(selectedSnap));
+    };
+    
+    // Initial load check
+    const initialSnap = carouselApi.selectedScrollSnap();
+    if (!loadedSlides.has(initialSnap)) {
+        setLoadedSlides(prev => new Set(prev).add(initialSnap));
+    }
+
+    carouselApi.on("select", handleSelect);
+
+    return () => {
+      if (carouselApi && typeof carouselApi.off === 'function') { // Check if off is a function
+          carouselApi.off("select", handleSelect);
+      }
+    };
+  }, [carouselApi, loadedSlides]); // Added loadedSlides to dependencies
+
+  if (entryMediaIds.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="bg-muted border-b">
+      {entryMediaIds.length === 1 && entryMediaIds[0] !== null && !isNaN(entryMediaIds[0]) ? (
+        <MediaRenderer mediaId={entryMediaIds[0]} className="w-full h-48 object-cover" />
+      ) : entryMediaIds.length > 1 ? (
+        <Carousel
+          className="w-full"
+          opts={{ loop: entryMediaIds.length > 1 }}
+          setApi={setCarouselApi}
+        >
+          <CarouselContent>
+            {entryMediaIds.map((mediaId, index) => (
+              mediaId !== null && !isNaN(mediaId) && (
+                <CarouselItem key={`${entry.documentId}-media-${index}`}>
+                  <div className="p-0 aspect-video flex items-center justify-center bg-muted/30">
+                    {loadedSlides.has(index) ? (
+                      <MediaRenderer mediaId={mediaId} className="w-full h-48 object-cover" />
+                    ) : (
+                      <div className="w-full h-48 flex items-center justify-center">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                </CarouselItem>
+              )
+            ))}
+          </CarouselContent>
+          {entryMediaIds.length > 1 && <CarouselPrevious className="left-2 disabled:opacity-30 bg-background/50 hover:bg-background/80" />}
+          {entryMediaIds.length > 1 && <CarouselNext className="right-2 disabled:opacity-30 bg-background/50 hover:bg-background/80" />}
+        </Carousel>
+      ) : null}
+    </div>
+  );
+};
+
 
 export default function MetaDataListingPage() {
   const router = useRouter();
@@ -327,29 +398,7 @@ export default function MetaDataListingPage() {
 
                 return (
                     <Card key={entry.documentId || entry.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow rounded-lg overflow-hidden">
-                        {entryMediaIds.length > 0 && (
-                            <div className="bg-muted border-b">
-                                {entryMediaIds.length === 1 && entryMediaIds[0] !== null && !isNaN(entryMediaIds[0]) ? (
-                                    <MediaRenderer mediaId={entryMediaIds[0]} className="w-full h-48 object-cover" />
-                                ) : entryMediaIds.length > 1 ? (
-                                    <Carousel className="w-full" opts={{ loop: entryMediaIds.length > 1 }}>
-                                        <CarouselContent>
-                                            {entryMediaIds.map((mediaId, index) => (
-                                                mediaId !== null && !isNaN(mediaId) && (
-                                                <CarouselItem key={`${entry.documentId}-media-${index}`}>
-                                                    <div className="p-0 aspect-video flex items-center justify-center">
-                                                         <MediaRenderer mediaId={mediaId} className="w-full h-48 object-cover" />
-                                                    </div>
-                                                </CarouselItem>
-                                                )
-                                            ))}
-                                        </CarouselContent>
-                                        {entryMediaIds.length > 1 && <CarouselPrevious className="left-2 disabled:opacity-30 bg-background/50 hover:bg-background/80" />}
-                                        {entryMediaIds.length > 1 && <CarouselNext className="right-2 disabled:opacity-30 bg-background/50 hover:bg-background/80"/>}
-                                    </Carousel>
-                                ) : null }
-                            </div>
-                        )}
+                        <EntryCarousel entry={entry} entryMediaIds={entryMediaIds} />
                         <CardHeader className={entryMediaIds.length > 0 ? "pt-4 pb-2" : "pb-2"}>
                             <CardTitle className="text-base font-semibold text-foreground">
                                 {entry.handle || `Data Entry ID: ${entry.documentId || 'N/A'}`}
@@ -516,7 +565,7 @@ export default function MetaDataListingPage() {
                                             value ? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Yes</span> : <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">No</span>
                                         ) : Array.isArray(value) ? (
                                             value.map((item, i) => <code key={i} className="text-xs bg-muted px-1 py-0.5 rounded mr-1 mb-1 inline-block">{String(item)}</code>)
-                                        ) : typeof value === 'string' && value.startsWith('<') ? (
+                                        ) : typeof value === 'string' && value.startsWith('<') && value.endsWith('>') ? ( // Basic check for HTML content
                                             <div className="prose prose-sm dark:prose-invert max-w-none border rounded p-2 bg-background" dangerouslySetInnerHTML={{ __html: value }} />
                                         ) : (
                                             String(value)
