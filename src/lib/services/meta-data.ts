@@ -6,7 +6,7 @@ import type { FindMany, FindOne } from "@/types/strapi_response";
 import axiosInstance from "@/lib/axios";
 import { getAccessToken } from "@/lib/actions/auth";
 import { AxiosError } from 'axios';
-import { getMetaFormat } from './meta-format'; // Import the service to fetch MetaFormat
+// Note: getMetaFormat is dynamically imported in createMetaDataEntry to avoid potential circular dependencies
 
 async function getAuthHeader() {
   const token = await getAccessToken();
@@ -31,10 +31,10 @@ export const getMetaDataEntries = async (params: GetMetaDataEntriesParams): Prom
   const {
     metaFormatDocumentId,
     userTenentId,
-    page = 1, // Default page
-    pageSize = 10, // Default page size
-    sortField = 'createdAt', // Default sort field
-    sortOrder = 'desc', // Default sort order
+    page = 1, 
+    pageSize = 10, 
+    sortField = 'createdAt', 
+    sortOrder = 'desc', 
     handleFilter,
   } = params;
 
@@ -91,118 +91,120 @@ export const getMetaDataEntries = async (params: GetMetaDataEntriesParams): Prom
 
 // Create a new MetaData entry
 export const createMetaDataEntry = async (payload: CreateMetaDataPayload): Promise<MetaData> => {
-  const url = '/meta-datas';
+    const { getMetaFormat } = await import('./meta-format'); // Dynamically import to avoid circular dependency issues if any
+    const url = '/meta-datas';
 
-  if (!payload.tenent_id) {
-    throw new Error('User tenent_id is required in the payload.');
-  }
-  if (!payload.meta_format) { // payload.meta_format is the string documentId
-    throw new Error('MetaFormat documentId is required in the payload.');
-  }
-
-  // Fetch the MetaFormat using its documentId to get its numeric ID
-  const metaFormatEntry = await getMetaFormat(payload.meta_format, payload.tenent_id);
-  if (!metaFormatEntry || typeof metaFormatEntry.id !== 'number') {
-    throw new Error(`Could not find or resolve MetaFormat with documentId: ${payload.meta_format} for tenent_id: ${payload.tenent_id}`);
-  }
-  const numericMetaFormatId = metaFormatEntry.id;
-
-  // Create the final payload for Strapi, replacing the string documentId with the numeric id
-  const finalPayloadForStrapi = {
-    ...payload,
-    meta_format: numericMetaFormatId, // Use numeric ID for the relation
-  };
-  
-  console.log(`[createMetaDataEntry] Creating MetaData entry with resolved numeric meta_format ID. Final payload for Strapi:`, { data: finalPayloadForStrapi });
-  try {
-    const headers = await getAuthHeader();
-    const response = await axiosInstance.post<FindOne<MetaData>>(url, { data: finalPayloadForStrapi }, { headers, params: { populate: ['meta_format', 'user'] } });
-    if (!response.data || !response.data.data) {
-      throw new Error('Unexpected API response structure after creating MetaData entry.');
+    if (!payload.tenent_id) {
+        throw new Error('User tenent_id is required in the payload.');
     }
-    console.log(`[createMetaDataEntry] Created MetaData entry:`, response.data.data);
-    return response.data.data;
-  } catch (error: unknown) {
-    let message = `Failed to create MetaData entry.`;
-    if (error instanceof AxiosError) {
-      const status = error.response?.status;
-      const errorBody = error.response?.data?.error; // Strapi error object
-      const errorMessage = errorBody?.message || error.response?.data?.message || error.message;
-      
-      if (errorBody?.details?.errorCode === 'DUPLICATE_ENTRY' && errorBody?.details?.details?.handle) {
-        // Construct a specific message for duplicate handle errors
-        message = `DUPLICATE_HANDLE_ERROR: Handle '${errorBody.details.details.handle}' is already taken for this form type.`;
-      } else {
-        message = `API Error (Status ${status || 'unknown'}): ${errorMessage}. ${errorBody?.details ? 'Details: ' + JSON.stringify(errorBody.details) : ''}`;
-      }
-      console.error(`[createMetaDataEntry] Failed to create. Status: ${status || 'unknown'} Body:`, error.response?.data);
-    } else if (error instanceof Error) {
-      message = error.message;
-       console.error(`[createMetaDataEntry] Failed to create (Non-Axios Error):`, error);
-    } else {
-       console.error(`[createMetaDataEntry] Failed to create (Unknown Error):`, error);
+    if (!payload.meta_format) { // payload.meta_format is the string documentId
+        throw new Error('MetaFormat documentId is required in the payload.');
     }
-    throw new Error(message);
-  }
+
+    const metaFormatEntry = await getMetaFormat(payload.meta_format, payload.tenent_id);
+    if (!metaFormatEntry || typeof metaFormatEntry.id !== 'number') {
+        throw new Error(`Could not find or resolve MetaFormat with documentId: ${payload.meta_format} for tenent_id: ${payload.tenent_id}`);
+    }
+    const numericMetaFormatId = metaFormatEntry.id;
+
+    const finalPayloadForStrapi = {
+        ...payload,
+        meta_format: numericMetaFormatId,
+    };
+
+    console.log(`[createMetaDataEntry] Creating MetaData entry. Final payload for Strapi:`, { data: finalPayloadForStrapi });
+    try {
+        const headers = await getAuthHeader();
+        const response = await axiosInstance.post<FindOne<MetaData>>(url, { data: finalPayloadForStrapi }, { headers, params: { populate: ['meta_format', 'user'] } });
+        if (!response.data || !response.data.data) {
+        throw new Error('Unexpected API response structure after creating MetaData entry.');
+        }
+        console.log(`[createMetaDataEntry] Created MetaData entry:`, response.data.data);
+        return response.data.data;
+    } catch (error: unknown) {
+        let message = `Failed to create MetaData entry.`;
+        if (error instanceof AxiosError) {
+        const status = error.response?.status;
+        const errorBody = error.response?.data?.error; 
+        const errorMessage = errorBody?.message || error.response?.data?.message || error.message;
+        
+        if (errorBody?.details?.errorCode === 'DUPLICATE_ENTRY' && errorBody?.details?.details?.handle) {
+            message = `DUPLICATE_HANDLE_ERROR: Handle '${errorBody.details.details.handle}' is already taken for this form type.`;
+        } else {
+            message = `API Error (Status ${status || 'unknown'}): ${errorMessage}. ${errorBody?.details ? 'Details: ' + JSON.stringify(errorBody.details) : ''}`;
+        }
+        console.error(`[createMetaDataEntry] Failed to create. Status: ${status || 'unknown'} Body:`, error.response?.data);
+        } else if (error instanceof Error) {
+        message = error.message;
+        console.error(`[createMetaDataEntry] Failed to create (Non-Axios Error):`, error);
+        } else {
+        console.error(`[createMetaDataEntry] Failed to create (Unknown Error):`, error);
+        }
+        throw new Error(message);
+    }
 };
 
 // Get a single MetaData entry by its string documentId using filters
 export const getMetaDataEntry = async (documentId: string, userTenentId: string): Promise<MetaData | null> => {
   if (!documentId || !userTenentId) {
-      console.warn(`[Service getMetaDataEntry]: documentId or userTenentId is missing.`);
+      console.warn(`[Service getMetaDataEntry]: documentId ('${documentId}') or userTenentId ('${userTenentId}') is missing.`);
       return null;
   }
   
   const params = {
     'filters[documentId][$eq]': documentId,
     'filters[tenent_id][$eq]': userTenentId,
-    'populate': ['meta_format', 'user'],
-    'pagination[limit]': 1
+    'populate': ['meta_format', 'user'], // Ensure relations are populated
+    'pagination[limit]': 1 // We only expect one entry
   };
-  const url = `/meta-datas`; // Fetch from the collection endpoint with filters
+  const url = `/meta-datas`; // Query the collection endpoint
   console.log(`[getMetaDataEntry] Fetching MetaData entry from ${url} with filters:`, JSON.stringify(params));
   
   try {
     const headers = await getAuthHeader();
-    const response = await axiosInstance.get<FindMany<MetaData>>(url, { headers, params });
+    const response = await axiosInstance.get<FindMany<MetaData>>(url, { headers, params }); // Expect FindMany
     
     if (!response.data || !response.data.data || response.data.data.length === 0) {
       console.warn(`[getMetaDataEntry] MetaData entry with documentId ${documentId} for tenent ${userTenentId} not found.`);
       return null;
     }
-    // The tenent_id check is implicitly handled by the filter, but good for sanity.
-    if (response.data.data[0].tenent_id !== userTenentId) {
-        console.warn(`[getMetaDataEntry] Tenent ID mismatch for MetaData ${documentId}. This should not happen with current filters.`);
+    
+    const entry = response.data.data[0];
+    // Double-check tenent_id consistency, although filter should handle it.
+    if (entry.tenent_id !== userTenentId) {
+        console.warn(`[getMetaDataEntry] Tenent ID mismatch for MetaData ${documentId}. Expected ${userTenentId}, got ${entry.tenent_id}. This indicates a filter logic issue or unexpected data.`);
         return null;
     }
-    return response.data.data[0]; // Return the first (and should be only) item
+    if (typeof entry.id !== 'number') {
+        console.error(`[getMetaDataEntry] Fetched MetaData entry for documentId ${documentId} is missing a numeric 'id'. Entry:`, entry);
+        throw new Error(`Fetched MetaData entry for documentId ${documentId} is missing a numeric 'id'.`);
+    }
+    console.log(`[getMetaDataEntry] Successfully fetched MetaData entry for documentId ${documentId}:`, entry);
+    return entry; 
   } catch (error: unknown) {
     let message = `Failed to fetch MetaData entry with documentId ${documentId}.`;
     if (error instanceof AxiosError) {
       const status = error.response?.status;
-      const errorDataMessage = error.response?.data?.error?.message || error.message;
-      if (status === 404) {
-        console.warn(`[getMetaDataEntry] MetaData entry ${documentId} not found (404).`);
-        return null; // Explicitly return null for not found
+      const errorDataMessage = error.response?.data?.error?.message || error.message; // Prefer error.message if specific API error is not present
+      if (status === 404) { // This condition might not be hit if the filters return empty array instead of 404
+        console.warn(`[getMetaDataEntry] MetaData entry ${documentId} not found (404 status).`);
+        return null; 
       }
       message = `API Error (${status}): ${errorDataMessage}`;
     } else if (error instanceof Error) {
       message = error.message;
     }
     console.error(`[getMetaDataEntry] Error fetching MetaData ${documentId}:`, message, error);
-    // Depending on query hook needs, you might throw or return null
-    // For get queries, often returning null is preferred if the item not being found isn't a critical app error.
-    throw new Error(message); // Or return null;
+    throw new Error(message); 
   }
 };
 
 
 // Update a MetaData entry
 export const updateMetaDataEntry = async (stringDocumentId: string, payload: Partial<Omit<CreateMetaDataPayload, 'meta_format' | 'tenent_id'>>, userTenentId: string): Promise<MetaData> => {
-  // Fetch the entry using its stringDocumentId to get its numeric id
   const existingEntry = await getMetaDataEntry(stringDocumentId, userTenentId);
   if (!existingEntry || typeof existingEntry.id !== 'number') {
-    throw new Error(`MetaData entry with documentId ${stringDocumentId} not found or lacks a numeric ID.`);
+    throw new Error(`MetaData entry with documentId '${stringDocumentId}' not found or lacks a numeric ID for update.`);
   }
   const numericId = existingEntry.id;
   const url = `/meta-datas/${numericId}`; // Use numeric ID for the PUT request
@@ -219,7 +221,7 @@ export const updateMetaDataEntry = async (stringDocumentId: string, payload: Par
     let message = `Failed to update MetaData entry ${stringDocumentId}.`;
      if (error instanceof AxiosError) {
       const status = error.response?.status;
-      const errorBody = error.response?.data?.error; // Strapi error object
+      const errorBody = error.response?.data?.error; 
       const errorMessage = errorBody?.message || error.response?.data?.message || error.message;
       
       if (errorBody?.details?.errorCode === 'DUPLICATE_ENTRY' && errorBody?.details?.details?.handle) {
@@ -238,10 +240,9 @@ export const updateMetaDataEntry = async (stringDocumentId: string, payload: Par
 
 // Delete a MetaData entry
 export const deleteMetaDataEntry = async (documentId: string, userTenentId: string): Promise<MetaData | void> => {
-  // Fetch the entry using its stringDocumentId to get its numeric id for deletion URL
   const existingEntry = await getMetaDataEntry(documentId, userTenentId);
   if (!existingEntry || typeof existingEntry.id !== 'number') {
-    throw new Error(`MetaData entry with documentId ${documentId} not found or lacks a numeric ID for deletion.`);
+    throw new Error(`MetaData entry with documentId '${documentId}' not found or lacks a numeric ID for deletion.`);
   }
   const numericId = existingEntry.id;
   const url = `/meta-datas/${numericId}`; // Use numeric ID for the DELETE request
@@ -252,9 +253,10 @@ export const deleteMetaDataEntry = async (documentId: string, userTenentId: stri
     const response = await axiosInstance.delete<FindOne<MetaData>>(url, { headers });
      if (response.status === 200 && response.data?.data) {
       return response.data.data;
-    } else if (response.status === 204) {
+    } else if (response.status === 204) { // Strapi might return 204 No Content on successful delete
       return;
     }
+    console.warn(`[deleteMetaDataEntry] Unexpected success status ${response.status} when deleting ${documentId}. Data:`, response.data);
     throw new Error(`Failed to delete MetaData entry ${documentId}. Status: ${response.status}`);
   } catch (error: unknown) {
     let message = `Failed to delete MetaData entry ${documentId}.`;
