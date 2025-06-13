@@ -92,7 +92,7 @@ const SORT_ORDER_OPTIONS_METADATA: { label: string; value: SortOrderMetaData }[]
 ];
 
 const getPaginationItems = (currentPage: number, totalPages: number, maxPagesToShow: number = 5): (number | string)[] => {
-    if (totalPages <= 1) return []; // No pagination needed for 0 or 1 page
+    if (totalPages <= 1) return [];
     
     const items: (number | string)[] = [];
     if (totalPages <= maxPagesToShow) {
@@ -100,41 +100,29 @@ const getPaginationItems = (currentPage: number, totalPages: number, maxPagesToS
         return items;
     }
 
-    // Always show first page
     items.push(1);
+    let startPage = Math.max(2, currentPage - Math.floor((maxPagesToShow - 3) / 2));
+    let endPage = Math.min(totalPages - 1, currentPage + Math.floor((maxPagesToShow - 2) / 2));
 
-    // Calculate start and end for the middle segment of pages
-    let startPage, endPage;
-    if (currentPage <= Math.ceil(maxPagesToShow / 2)) {
-        // Current page is near the beginning
-        startPage = 2;
-        endPage = maxPagesToShow - 2; // -2 for first and last page
-    } else if (currentPage + Math.floor(maxPagesToShow / 2) -1 >= totalPages) {
-        // Current page is near the end
-        startPage = totalPages - (maxPagesToShow - 3); // -3 for first, last and one ellipsis
-        endPage = totalPages - 1;
-    } else {
-        // Current page is somewhere in the middle
-        startPage = currentPage - Math.floor((maxPagesToShow - 3) / 2); // -3 for first, last, and two ellipses
-        endPage = currentPage + Math.floor((maxPagesToShow - 3) / 2);
+    if (currentPage - 1 <= Math.floor((maxPagesToShow - 3) / 2)) {
+      endPage = maxPagesToShow - 2;
+    }
+    if (totalPages - currentPage <= Math.floor((maxPagesToShow - 2) / 2)) {
+      startPage = totalPages - (maxPagesToShow - 3);
     }
     
-    // Add left ellipsis if needed
     if (startPage > 2) {
         items.push('...');
     }
 
-    // Add middle page numbers
-    for (let i = Math.max(2, startPage); i <= Math.min(totalPages - 1, endPage); i++) {
+    for (let i = startPage; i <= endPage; i++) {
         items.push(i);
     }
 
-    // Add right ellipsis if needed
     if (endPage < totalPages - 1) {
         items.push('...');
     }
     
-    // Always show last page
     items.push(totalPages);
     return items;
 };
@@ -215,14 +203,11 @@ export default function MetaDataListingPage() {
   const sortOrder = (searchParams.get('order') as SortOrderMetaData | null) || getStoredPreference('metaDataSortOrder', DEFAULT_SORT_ORDER);
   const activeHandleFilter = searchParams.get('handle') || null;
   
-  // Local state for the input field, separate from active filter for debouncing or explicit apply
   const [localHandleFilter, setLocalHandleFilter] = React.useState(activeHandleFilter || '');
 
-  // Update localHandleFilter if activeHandleFilter changes (e.g., via back/forward navigation)
   React.useEffect(() => {
     setLocalHandleFilter(activeHandleFilter || '');
   }, [activeHandleFilter]);
-
 
   const { data: metaFormat, isLoading: isLoadingMetaFormat, isError: isErrorMetaFormat, error: errorMetaFormat } = useGetMetaFormat(metaFormatDocumentId);
   
@@ -242,30 +227,30 @@ export default function MetaDataListingPage() {
 
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [metaDataToDelete, setMetaDataToDelete] = React.useState<MetaData | null>(null);
-
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [selectedEntryData, setSelectedEntryData] = React.useState<Record<string, any> | null>(null);
   const [selectedEntryForDialog, setSelectedEntryForDialog] = React.useState<MetaData | null>(null);
 
   const updateUrl = React.useCallback((newParams: Record<string, string | null>) => {
-    const current = new URLSearchParams(searchParams.toString());
-    let resetPage = false;
+    const current = new URLSearchParams(Array.from(searchParams.entries()));
+    let resetPageTo1 = false;
 
     Object.entries(newParams).forEach(([key, value]) => {
       const oldValue = current.get(key);
-      if (value === null || value === '' || (key === 'page' && value === '1')) {
-        if (oldValue !== null) current.delete(key);
+      if (value === null || value === '') {
+        current.delete(key);
       } else {
-        if (oldValue !== value) current.set(key, value);
+        current.set(key, value);
       }
-      // If a filter, sort, or limit is changing, and it's not the page itself, mark to reset page
       if (key !== 'page' && oldValue !== value) {
-        resetPage = true;
+        resetPageTo1 = true;
       }
     });
-
-    if (resetPage && newParams.page === undefined) { // only reset if page wasn't part of this specific update call
-      current.delete('page'); // Resets to page 1 by removing the 'page' param
+    
+    if (resetPageTo1 && !newParams.hasOwnProperty('page')) { // If a filter/sort changed, and page isn't explicitly set in this update
+      current.delete('page'); // This implies page 1
+    } else if (newParams.page === '1') { // If explicitly setting to page 1, remove the param for cleaner URL
+      current.delete('page');
     }
     
     router.push(`${pathname}?${current.toString()}`, { scroll: false });
@@ -279,7 +264,7 @@ export default function MetaDataListingPage() {
 
   const handlePageSizeChange = (value: string) => {
     setStoredPreference('metaDataPageSize', Number(value));
-    updateUrl({ limit: value, page: null }); // page: null will reset to page 1
+    updateUrl({ limit: value, page: null }); 
   };
 
   const handleSortFieldChange = (value: SortFieldMetaData) => {
@@ -296,7 +281,6 @@ export default function MetaDataListingPage() {
     updateUrl({ handle: localHandleFilter.trim() || null, page: null });
   };
 
-
   const handleDeleteConfirmation = (entry: MetaData) => {
     setMetaDataToDelete(entry);
     setIsAlertOpen(true);
@@ -308,18 +292,16 @@ export default function MetaDataListingPage() {
         { documentId: metaDataToDelete.documentId, metaFormatDocumentId: metaFormatDocumentId },
         {
           onSuccess: () => {
-            if (metaDataEntries.length === 1 && currentPage > 1) {
-              // If it was the last item on a page > 1, go to previous page
-              updateUrl({ page: String(currentPage - 1) });
-            } else {
-              // Otherwise, refetch current page (invalidation is handled by hook, but URL ensures state)
-              // We might not need explicit refetch if query key changes, but to be safe:
-               router.push(`${pathname}?${searchParams.toString()}`, { scroll: false }); // Re-push current URL to trigger effect
-            }
             setIsAlertOpen(false);
             setMetaDataToDelete(null);
+            // Logic for page adjustment
+            if (metaDataEntries.length === 1 && currentPage > 1) {
+              updateUrl({ page: String(currentPage - 1) }); // Navigate to previous page
+            } else {
+              // refetchMetaData(); // No need to call refetch, URL change will trigger TanStack Query
+            }
           },
-          onError: () => setIsAlertOpen(false)
+          onError: () => setIsAlertOpen(false) // Toast handled by hook
         }
       );
     }
@@ -347,7 +329,7 @@ export default function MetaDataListingPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
           <AlertDescription>{(error as Error)?.message || 'Could not load data.'}</AlertDescription>
-           <Button onClick={() => refetchMetaData()} className="mt-2" disabled={isFetchingMetaData}>
+           <Button onClick={() => router.refresh()} className="mt-2" disabled={isFetchingMetaData}>
              {isFetchingMetaData && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Retry
            </Button>
         </Alert>
@@ -508,7 +490,7 @@ export default function MetaDataListingPage() {
                 return (
                     <Card key={entry.documentId || entry.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow rounded-lg overflow-hidden">
                         <EntryCarousel entry={entry} entryMediaIds={entryMediaIds} />
-                        <CardHeader className={entryMediaIds.length > 0 ? "pt-4 pb-2" : "pb-2"}>
+                        <CardHeader className={cn(entryMediaIds.length > 0 ? "pt-4 pb-2" : "pb-2")}>
                             <CardTitle className="text-base font-semibold text-foreground">
                                 {entry.handle || `Data Entry ID: ${entry.documentId || 'N/A'}`}
                             </CardTitle>
@@ -652,9 +634,9 @@ export default function MetaDataListingPage() {
                             const fieldName = getFieldName(component);
                             let value = selectedEntryData[fieldName];
 
-                            if (component.__component === 'dynamic-component.text-field' && component.inputType === 'tip-tap' && typeof value === 'string' && value.startsWith('<') && value.endsWith('>')) {
-                                // Special rendering for TipTap HTML handled below
-                            } else if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
+                            const isHtmlContent = typeof value === 'string' && /<\/?[a-z][\s\S]*>/i.test(value) && (component.__component === 'dynamic-component.text-field' && component.inputType === 'tip-tap');
+
+                            if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '' && !isHtmlContent)) {
                                 return (
                                      <div key={component.id} className="grid grid-cols-3 gap-2 items-start py-1 border-b">
                                         <strong className="col-span-1 break-words text-muted-foreground/70">{component.label || fieldName}:</strong>
@@ -662,7 +644,6 @@ export default function MetaDataListingPage() {
                                     </div>
                                 );
                             }
-
 
                             return (
                                 <div key={component.id} className="grid grid-cols-3 gap-2 items-start py-2 border-b last:border-b-0">
@@ -694,7 +675,7 @@ export default function MetaDataListingPage() {
                                             value ? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Yes</span> : <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">No</span>
                                         ) : Array.isArray(value) ? (
                                             value.map((item, i) => <code key={i} className="text-xs bg-muted px-1 py-0.5 rounded mr-1 mb-1 inline-block">{String(item)}</code>)
-                                        ) : component.__component === 'dynamic-component.text-field' && component.inputType === 'tip-tap' && typeof value === 'string' && value.startsWith('<') && value.endsWith('>') ? (
+                                        ) : isHtmlContent ? (
                                             <div className="prose prose-sm dark:prose-invert max-w-none border rounded p-2 bg-background" dangerouslySetInnerHTML={{ __html: value }} />
                                         ) : (
                                             String(value)
@@ -775,3 +756,4 @@ function MetaDataPageSkeleton() {
   );
 }
     
+
