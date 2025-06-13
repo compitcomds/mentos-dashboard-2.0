@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/carousel";
 import MediaRenderer from '../_components/media-renderer';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const getFieldName = (component: FormFormatComponent): string => {
   if (component.label && component.label.trim() !== '') {
@@ -89,6 +90,74 @@ const SORT_FIELD_OPTIONS_METADATA: { label: string; value: SortFieldMetaData }[]
 const SORT_ORDER_OPTIONS_METADATA: { label: string; value: SortOrderMetaData }[] = [
   { label: "Ascending", value: "asc" }, { label: "Descending", value: "desc" },
 ];
+
+const getPaginationItems = (currentPage: number, totalPages: number, maxPagesToShow: number = 5): (number | string)[] => {
+    const items: (number | string)[] = [];
+    if (totalPages <= maxPagesToShow) {
+        for (let i = 1; i <= totalPages; i++) items.push(i);
+        return items;
+    }
+
+    let leftEllipsis = false;
+    let rightEllipsis = false;
+
+    // Always show first page
+    items.push(1);
+
+    // Calculate pages to show around current page
+    // The total number of page numbers to show is (maxPagesToShow - 2) for first/last, and potentially 2 for ellipses
+    const corePagesCount = maxPagesToShow - 2; // Max slots for numbers between first/last and ellipses
+
+    if (currentPage > 2 + Math.floor(corePagesCount / 2) && corePagesCount < totalPages - 2) {
+        items.push('...');
+        leftEllipsis = true;
+    }
+    
+    const startPage = leftEllipsis ? Math.max(2, currentPage - Math.floor((corePagesCount - (leftEllipsis ? 1 : 0) - (rightEllipsis ? 1 : 0)) / 2) ) : 2;
+    const endPage = Math.min(totalPages - 1, startPage + corePagesCount - (leftEllipsis ? 1 : 0) - (rightEllipsis ? 1 : 0) -1 );
+
+
+    for (let i = startPage; i <= endPage; i++) {
+        if (items.length < maxPagesToShow -1) { // Ensure we don't exceed max items (excluding last page)
+             if (i > 1 && i < totalPages) items.push(i);
+        }
+    }
+    
+    // Adjust endPage if currentPage is near the end
+    let actualEndPage = items[items.length-1];
+    if (typeof actualEndPage !== 'number') actualEndPage = currentPage; // fallback
+
+    if (actualEndPage < totalPages - 1 && items.length < maxPagesToShow -1) {
+         items.push('...');
+    }
+    
+    // Always show last page
+    items.push(totalPages);
+
+    // Refine: Ensure current page is visible if it got cut by ellipses logic, this is a bit tricky.
+    // A simpler approach for core pages might be:
+    let pages: number[] = [];
+    if (totalPages <= maxPagesToShow) {
+        for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+        pages.push(1);
+        const PAGER_LENGTH = maxPagesToShow - 2; // for first, last
+        const sideLength = Math.floor((PAGER_LENGTH -1) / 2); // -1 for current page
+
+        let L = currentPage - sideLength;
+        let R = currentPage + sideLength;
+
+        if (L <= 1) { L=2; R=L+PAGER_LENGTH-1; }
+        if (R >= totalPages) { R=totalPages-1; L=R-PAGER_LENGTH+1; }
+        
+        if (L > 2) pages.push("...");
+        for (let i=L; i <= R; i++) pages.push(i);
+        if (R < totalPages -1) pages.push("...");
+        pages.push(totalPages);
+    }
+    return pages;
+};
+
 
 const EntryCarousel: React.FC<{ entry: MetaData; entryMediaIds: number[] }> = ({ entry, entryMediaIds }) => {
   const [carouselApi, setCarouselApi] = React.useState<CarouselApi | undefined>();
@@ -153,17 +222,20 @@ const EntryCarousel: React.FC<{ entry: MetaData; entryMediaIds: number[] }> = ({
 export default function MetaDataListingPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParamsHook = useSearchParams();
+  const searchParams = useSearchParams();
   const params = useParams();
   const { toast } = useToast();
   const metaFormatDocumentId = params.metaFormatDocumentId as string;
 
+  // State variables for URL-driven view
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE_METADATA);
   const [sortField, setSortField] = React.useState<SortFieldMetaData>(DEFAULT_SORT_FIELD);
   const [sortOrder, setSortOrder] = React.useState<SortOrderMetaData>(DEFAULT_SORT_ORDER);
-  const [localHandleFilter, setLocalHandleFilter] = React.useState('');
   const [activeHandleFilter, setActiveHandleFilter] = React.useState<string | null>(null);
+  
+  // Local state for the input field, separate from active filter for debouncing or explicit apply
+  const [localHandleFilter, setLocalHandleFilter] = React.useState('');
 
   const { data: metaFormat, isLoading: isLoadingMetaFormat, isError: isErrorMetaFormat, error: errorMetaFormat } = useGetMetaFormat(metaFormatDocumentId);
   
@@ -188,41 +260,67 @@ export default function MetaDataListingPage() {
   const [selectedEntryData, setSelectedEntryData] = React.useState<Record<string, any> | null>(null);
   const [selectedEntryForDialog, setSelectedEntryForDialog] = React.useState<MetaData | null>(null);
 
-  // Initialize state from URL or localStorage/defaults
+  // Effect to initialize state from URL and update localStorage for defaults
   React.useEffect(() => {
-    const pageFromUrl = parseInt(searchParamsHook.get('page') || '1', 10);
-    const limitFromUrl = parseInt(searchParamsHook.get('limit') || String(getStoredPreference('metaDataPageSize', DEFAULT_PAGE_SIZE_METADATA)), 10);
-    const sortByFromUrl = (searchParamsHook.get('sortBy') as SortFieldMetaData | null) || getStoredPreference('metaDataSortField', DEFAULT_SORT_FIELD);
-    const orderFromUrl = (searchParamsHook.get('order') as SortOrderMetaData | null) || getStoredPreference('metaDataSortOrder', DEFAULT_SORT_ORDER);
-    const handleFromUrl = searchParamsHook.get('handle') || '';
+    const pageFromUrl = parseInt(searchParams.get('page') || '1', 10);
+    const limitFromUrl = parseInt(searchParams.get('limit') || String(getStoredPreference('metaDataPageSize', DEFAULT_PAGE_SIZE_METADATA)), 10);
+    const sortByFromUrl = (searchParams.get('sortBy') as SortFieldMetaData | null) || getStoredPreference('metaDataSortField', DEFAULT_SORT_FIELD);
+    const orderFromUrl = (searchParams.get('order') as SortOrderMetaData | null) || getStoredPreference('metaDataSortOrder', DEFAULT_SORT_ORDER);
+    const handleFromUrl = searchParams.get('handle') || '';
 
     setCurrentPage(isNaN(pageFromUrl) ? 1 : pageFromUrl);
     setPageSize(isNaN(limitFromUrl) ? DEFAULT_PAGE_SIZE_METADATA : limitFromUrl);
-    setSortField(sortByFromUrl as SortFieldMetaData);
-    setSortOrder(orderFromUrl as SortOrderMetaData);
-    setActiveHandleFilter(handleFromUrl || null); // Set active filter directly
-    setLocalHandleFilter(handleFromUrl); // Sync local input
-  }, [searchParamsHook]);
+    setSortField(sortByFromUrl);
+    setSortOrder(orderFromUrl);
+    setActiveHandleFilter(handleFromUrl || null);
+    setLocalHandleFilter(handleFromUrl); // Sync local input with URL
 
+    // Store preferences if they were derived from defaults or localStorage initially
+    if (!searchParams.get('limit')) setStoredPreference('metaDataPageSize', limitFromUrl);
+    if (!searchParams.get('sortBy')) setStoredPreference('metaDataSortField', sortByFromUrl);
+    if (!searchParams.get('order')) setStoredPreference('metaDataSortOrder', orderFromUrl);
 
-  // Update URL when state changes
-  React.useEffect(() => {
-    const newSearchParams = new URLSearchParams();
-    if (currentPage !== 1) newSearchParams.set('page', String(currentPage));
-    if (pageSize !== DEFAULT_PAGE_SIZE_METADATA) newSearchParams.set('limit', String(pageSize));
-    if (sortField !== DEFAULT_SORT_FIELD) newSearchParams.set('sortBy', sortField);
-    if (sortOrder !== DEFAULT_SORT_ORDER) newSearchParams.set('order', sortOrder);
-    if (activeHandleFilter) newSearchParams.set('handle', activeHandleFilter);
+  }, [searchParams]);
+
+  const updateUrl = (newParams: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value === null || value === '') {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
+    });
+    // Reset page to 1 if filters or sort change, but not if only page changes
+    if (newParams.page === undefined && (newParams.limit || newParams.sortBy || newParams.order || newParams.handle !== undefined)) {
+        current.delete('page'); // Will default to 1 in effect
+    }
     
-    const query = newSearchParams.toString();
-    router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    router.push(`${pathname}?${current.toString()}`, { scroll: false });
+  };
+  
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= (paginationInfo?.pageCount || 1)) {
+      updateUrl({ page: String(newPage) });
+    }
+  };
 
-    // Save preferences
-    setStoredPreference('metaDataPageSize', pageSize);
-    setStoredPreference('metaDataSortField', sortField);
-    setStoredPreference('metaDataSortOrder', sortOrder);
-    // No need to store activeHandleFilter in localStorage as it's URL driven
-  }, [currentPage, pageSize, sortField, sortOrder, activeHandleFilter, pathname, router]);
+  const handlePageSizeChange = (value: string) => {
+    updateUrl({ limit: value, page: null }); // Reset page to 1
+  };
+
+  const handleSortFieldChange = (value: SortFieldMetaData) => {
+    updateUrl({ sortBy: value });
+  };
+
+  const handleSortOrderChange = (value: SortOrderMetaData) => {
+    updateUrl({ order: value });
+  };
+
+  const applyHandleFilter = () => {
+    updateUrl({ handle: localHandleFilter.trim() || null, page: null }); // Reset page to 1
+  };
+
 
   const handleDeleteConfirmation = (entry: MetaData) => {
     setMetaDataToDelete(entry);
@@ -235,19 +333,19 @@ export default function MetaDataListingPage() {
         { documentId: metaDataToDelete.documentId, metaFormatDocumentId: metaFormatDocumentId },
         {
           onSuccess: () => {
-            // The hook's invalidation will cause a refetch.
-            // Check if the page would become empty.
+            // If last item on a page > 1, navigate to previous page
             if (metaDataEntries.length === 1 && currentPage > 1) {
-              setCurrentPage(currentPage - 1); // This will trigger URL update and refetch for new page
+              updateUrl({ page: String(currentPage - 1) });
+            } else {
+              // Otherwise, refetch current page (invalidation handled by hook)
+              // To be safe, we can explicitly re-push current URL to trigger our state update
+               const currentUrlParams = new URLSearchParams(searchParams.toString());
+               router.push(`${pathname}?${currentUrlParams.toString()}`, { scroll: false });
             }
             setIsAlertOpen(false);
             setMetaDataToDelete(null);
-            // Toast handled by mutation hook
           },
-          onError: () => {
-            setIsAlertOpen(false);
-            // Toast handled by mutation hook
-          }
+          onError: () => setIsAlertOpen(false)
         }
       );
     }
@@ -257,11 +355,6 @@ export default function MetaDataListingPage() {
     setSelectedEntryData(entry.meta_data || {});
     setSelectedEntryForDialog(entry);
     setIsDetailDialogOpen(true);
-  };
-
-  const applyHandleFilter = () => {
-    setCurrentPage(1); // Reset to first page when filter changes
-    setActiveHandleFilter(localHandleFilter.trim() === '' ? null : localHandleFilter.trim());
   };
 
   const isLoading = isLoadingMetaFormat || isLoadingMetaData;
@@ -353,21 +446,21 @@ export default function MetaDataListingPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                             <div>
                                 <Label className="text-xs text-muted-foreground">Sort By</Label>
-                                <Select value={sortField} onValueChange={(value) => setSortField(value as SortFieldMetaData)} disabled={isLoadingMetaData || isFetchingMetaData}>
+                                <Select value={sortField} onValueChange={handleSortFieldChange} disabled={isLoadingMetaData || isFetchingMetaData}>
                                     <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="Sort by..." /></SelectTrigger>
                                     <SelectContent>{SORT_FIELD_OPTIONS_METADATA.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                             <div>
                                 <Label className="text-xs text-muted-foreground">Order</Label>
-                                <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrderMetaData)} disabled={isLoadingMetaData || isFetchingMetaData}>
+                                <Select value={sortOrder} onValueChange={handleSortOrderChange} disabled={isLoadingMetaData || isFetchingMetaData}>
                                     <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="Order..." /></SelectTrigger>
                                     <SelectContent>{SORT_ORDER_OPTIONS_METADATA.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                             <div>
                                 <Label className="text-xs text-muted-foreground">Items/Page</Label>
-                                <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingMetaData || isFetchingMetaData}>
+                                <Select value={String(pageSize)} onValueChange={handlePageSizeChange} disabled={isLoadingMetaData || isFetchingMetaData}>
                                     <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="Items per page" /></SelectTrigger>
                                     <SelectContent>{PAGE_SIZE_OPTIONS_METADATA.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                 </Select>
@@ -428,7 +521,7 @@ export default function MetaDataListingPage() {
                              } catch { displayValue = String(value); }
                           }
 
-                          if (typeof displayValue === 'string' && displayValue.length > 60) {
+                          if (typeof displayValue === 'string' && displayValue.length > 60 && !(component.__component === 'dynamic-component.text-field' && component.inputType === 'tip-tap')) {
                              displayValue = `${displayValue.substring(0, 57)}...`;
                           }
                           if (component.__component !== 'dynamic-component.media-field') {
@@ -508,13 +601,30 @@ export default function MetaDataListingPage() {
 
       {paginationInfo && paginationInfo.pageCount > 1 && (
         <div className="flex items-center justify-between pt-4">
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1 || isFetchingMetaData}>
+            <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1 || isFetchingMetaData}>
                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
             </Button>
-            <span className="text-sm text-muted-foreground">
-                Page {paginationInfo.page} of {paginationInfo.pageCount} (Total: {paginationInfo.total} entries)
-            </span>
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(paginationInfo.pageCount, prev + 1))} disabled={currentPage === paginationInfo.pageCount || isFetchingMetaData}>
+            
+            <div className="flex items-center gap-1">
+                {getPaginationItems(currentPage, paginationInfo.pageCount).map((item, index) =>
+                    typeof item === 'number' ? (
+                        <Button
+                            key={`page-${item}-${index}`}
+                            variant={currentPage === item ? 'default' : 'outline'}
+                            size="icon"
+                            className="h-8 w-8 text-xs"
+                            onClick={() => handlePageChange(item)}
+                            disabled={isFetchingMetaData}
+                        >
+                            {item}
+                        </Button>
+                    ) : (
+                        <span key={`ellipsis-${index}`} className="px-1.5 py-1 text-xs flex items-center justify-center h-8 w-8">...</span>
+                    )
+                )}
+            </div>
+
+            <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === paginationInfo.pageCount || isFetchingMetaData}>
                 Next <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
         </div>
@@ -566,9 +676,12 @@ export default function MetaDataListingPage() {
                         </div>
                         {metaFormat.from_formate.map(component => {
                             const fieldName = getFieldName(component);
-                            const value = selectedEntryData[fieldName];
+                            let value = selectedEntryData[fieldName];
 
-                            if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
+                            // Handle TipTap HTML content
+                             if (component.__component === 'dynamic-component.text-field' && component.inputType === 'tip-tap' && typeof value === 'string' && value.startsWith('<') && value.endsWith('>')) {
+                                // Special rendering for TipTap HTML
+                            } else if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
                                 return (
                                      <div key={component.id} className="grid grid-cols-3 gap-2 items-start py-1 border-b">
                                         <strong className="col-span-1 break-words text-muted-foreground/70">{component.label || fieldName}:</strong>
@@ -576,6 +689,7 @@ export default function MetaDataListingPage() {
                                     </div>
                                 );
                             }
+
 
                             return (
                                 <div key={component.id} className="grid grid-cols-3 gap-2 items-start py-2 border-b last:border-b-0">
@@ -607,7 +721,7 @@ export default function MetaDataListingPage() {
                                             value ? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Yes</span> : <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">No</span>
                                         ) : Array.isArray(value) ? (
                                             value.map((item, i) => <code key={i} className="text-xs bg-muted px-1 py-0.5 rounded mr-1 mb-1 inline-block">{String(item)}</code>)
-                                        ) : typeof value === 'string' && value.startsWith('<p>') && value.endsWith('</p>') && component.inputType === 'tip-tap' ? ( // Check for tip-tap specifically
+                                        ) : component.__component === 'dynamic-component.text-field' && component.inputType === 'tip-tap' && typeof value === 'string' && value.startsWith('<') && value.endsWith('>') ? (
                                             <div className="prose prose-sm dark:prose-invert max-w-none border rounded p-2 bg-background" dangerouslySetInnerHTML={{ __html: value }} />
                                         ) : (
                                             String(value)
@@ -687,3 +801,5 @@ function MetaDataPageSkeleton() {
     </div>
   );
 }
+
+    
