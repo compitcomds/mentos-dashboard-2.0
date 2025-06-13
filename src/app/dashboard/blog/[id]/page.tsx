@@ -11,7 +11,6 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-// import { Label } from "@/components/ui/label"; // Not directly used, FormLabel is
 import {
   Select,
   SelectContent,
@@ -21,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation"; // Added useSearchParams
 import { useEffect, useState, useCallback } from "react";
 import {
   useForm,
@@ -66,7 +65,6 @@ import { useGetCategories } from "@/lib/queries/category";
 import { format } from "date-fns";
 import type { CombinedMediaData } from "@/types/media";
 
-// Get the API base URL from environment variables, remove trailing '/api' if present
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || "";
 
 const getMediaUrl: GetMediaUrlFunction = (mediaField) => {
@@ -79,7 +77,6 @@ const getMediaUrl: GetMediaUrlFunction = (mediaField) => {
   return fullUrl;
 };
 
-// Updated to get numeric ID from media object
 const getMediaId = (mediaField: Media | null | undefined): number | null => {
   return mediaField?.id ?? null;
 };
@@ -95,8 +92,6 @@ const formatStructuredData = (data: any): string | null => {
       JSON.parse(data);
       return data;
     } catch {
-      // If parsing fails but it's a non-empty string, return it as is, assuming it might be pre-formatted or a simple string keyword.
-      // If it's an empty string, fall back to default.
       return data.trim() !== ""
         ? data
         : '{ "@context": "https://schema.org", "@type": "Article" }';
@@ -108,7 +103,6 @@ const formatStructuredData = (data: any): string | null => {
       return '{ "@context": "https://schema.org", "@type": "Article" }';
     }
   }
-  // Default for null, undefined, or unparseable objects
   return '{ "@context": "https://schema.org", "@type": "Article" }';
 };
 
@@ -125,7 +119,6 @@ const defaultFormValues: BlogFormValues = {
   view: 0,
   Blog_status: "draft",
   seo_blog: {
-    // Ensure this matches SeoBlogPayload structure for defaults
     metaTitle: "",
     metaDescription: "",
     metaImage: null,
@@ -147,21 +140,23 @@ const defaultFormValues: BlogFormValues = {
 
 export default function BlogFormPage() {
   const params = useParams();
+  const searchParams = useSearchParams(); // Get searchParams
   const blogDocumentIdFromUrl = params?.id as string | undefined;
   const isEditing = blogDocumentIdFromUrl && blogDocumentIdFromUrl !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
+  const returnUrl = searchParams.get("returnUrl"); // Read returnUrl
 
   const {
-    data: fetchedCategoriesData, // Renamed to reflect it's FindMany<Categorie>
+    data: fetchedCategoriesData,
     isLoading: isLoadingCategories,
     isError: isCategoriesError,
-  } = useGetCategories(); // Removed userTenentId, hook handles it
-  const fetchedCategories = fetchedCategoriesData?.data; // Actual array of categories
+  } = useGetCategories(); 
+  const fetchedCategories = fetchedCategoriesData?.data; 
 
-  const [isLoadingComponent, setIsLoadingComponent] = useState(true); // Renamed from isLoading to avoid conflict
+  const [isLoadingComponent, setIsLoadingComponent] = useState(true); 
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
@@ -186,7 +181,7 @@ export default function BlogFormPage() {
     isLoading: isLoadingBlog,
     isError: isErrorBlog,
     error: errorBlog,
-  } = useGetBlog(isEditing ? blogDocumentIdFromUrl : null); // Use string documentId for fetching
+  } = useGetBlog(isEditing ? blogDocumentIdFromUrl : null); 
 
   const createMutation = useCreateBlog();
   const updateMutation = useUpdateBlog();
@@ -226,7 +221,7 @@ export default function BlogFormPage() {
           title: "Authorization Error",
           description: "You are not authorized to edit this blog post.",
         });
-        router.push("/dashboard/blog");
+        router.push(returnUrl || "/dashboard/blog");
         setIsLoadingComponent(false);
         return;
       }
@@ -289,7 +284,6 @@ export default function BlogFormPage() {
     } else if (!isEditing) {
       setImagePreviews({ featured: null, meta: null, og: null });
       setTags([]);
-      // For new posts, ensure tenent_id is set if available from current user
       if (userTenentId) {
         initialValues.tenent_id = userTenentId;
       }
@@ -301,13 +295,14 @@ export default function BlogFormPage() {
     isEditing,
     blogData,
     isLoadingBlog,
-    fetchedCategories, // Use the array here
+    fetchedCategories, 
     reset,
     isLoadingUser,
     userTenentId,
     router,
     toast,
     isCategoriesError,
+    returnUrl, // Add returnUrl to dependency array
   ]);
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -431,7 +426,7 @@ export default function BlogFormPage() {
             isEditing ? "updated" : "created"
           } successfully`,
         });
-        router.push("/dashboard/blog");
+        router.push(returnUrl || "/dashboard/blog"); // Use returnUrl or fallback
       },
       onError: (err: any) => {
         setSubmissionPayloadJson(
@@ -452,8 +447,6 @@ export default function BlogFormPage() {
           .map((tagVal) => ({ tag_value: tagVal }))
       : [];
     
-    // Destructure 'author' from data and use it for the 'author' field in payload.
-    // The rest of 'data' (which excludes 'author' if it was named differently in formValues) is spread.
     const { author: formAuthor, ...restOfData } = data;
 
 
@@ -461,14 +454,14 @@ export default function BlogFormPage() {
       ...restOfData,
       tags: tagsPayload,
       tenent_id: userTenentId,
-      categories: data.categories, // This is already the single category ID from form
+      categories: data.categories, 
       seo_blog: data.seo_blog
         ? {
             ...data.seo_blog,
             openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}),
           }
         : undefined,
-      author: formAuthor, // Map the form field 'author' to the API field 'author'
+      author: formAuthor, 
       sub_category: data.sub_category || null,
     };
 
@@ -477,9 +470,9 @@ export default function BlogFormPage() {
     if (isEditing && blogData?.id && blogData.documentId) {
       updateMutation.mutate(
         {
-          id: blogData.id, // Numeric ID for the API path for update
+          id: blogData.id, 
           blog: payload,
-          documentIdForInvalidation: blogData.documentId, // String documentId for cache invalidation
+          documentIdForInvalidation: blogData.documentId, 
         },
         mutationOptions
       );
@@ -1338,7 +1331,7 @@ export default function BlogFormPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.back()}
+                  onClick={() => router.push(returnUrl || "/dashboard/blog")} // Use returnUrl or fallback
                   disabled={isSubmittingForm}
                 >
                   Cancel
@@ -1404,7 +1397,6 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
             <Skeleton className="h-4 w-1/6 mb-1" />
             <Skeleton className="h-full w-full flex-1 rounded-md" />
           </div>
-          {/* Skeleton for Sub Category */}
           <div className="space-y-1.5">
             <Skeleton className="h-4 w-1/4 mb-1" />
             <Skeleton className="h-10 w-full" />

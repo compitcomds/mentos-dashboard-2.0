@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation"; // Added useSearchParams
 import { useEffect, useState, useCallback } from "react";
 import { useForm, SubmitHandler, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -99,12 +99,14 @@ const mockCategories = ["Conference", "Workshop", "Webinar", "Meetup", "Party", 
 
 export default function EventFormPage() {
   const params = useParams();
+  const searchParams = useSearchParams(); // Get searchParams
   const eventId = params?.id as string | undefined;
   const isEditing = eventId && eventId !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
+  const returnUrl = searchParams.get("returnUrl"); // Read returnUrl
 
 
   const [componentIsLoading, setComponentIsLoading] = useState(true);
@@ -147,7 +149,7 @@ export default function EventFormPage() {
       console.error("[EventForm] useEffect: User tenent_id is missing for new event. Cannot proceed.");
       toast({ variant: "destructive", title: "User Error", description: "Cannot create a new event without user tenant ID." });
       setComponentIsLoading(false); 
-      router.push('/dashboard/event'); 
+      router.push(returnUrl || '/dashboard/event'); 
       return;
     }
   
@@ -164,7 +166,7 @@ export default function EventFormPage() {
         console.error("[EventForm] useEffect (Edit Mode): Error loading event data or eventData is null. Error:", errorEvent, "Data:", eventData);
         toast({ variant: "destructive", title: "Error Loading Event", description: errorEvent?.message || "The requested event could not be loaded." });
         setComponentIsLoading(false);
-        router.push('/dashboard/event');
+        router.push(returnUrl || '/dashboard/event');
         return;
       }
   
@@ -172,7 +174,7 @@ export default function EventFormPage() {
         console.error("[EventForm] useEffect (Edit Mode): Authorization Error - User tenent_id does not match event tenent_id.");
         toast({ variant: "destructive", title: "Authorization Error", description: "You are not authorized to edit this event." });
         setComponentIsLoading(false);
-        router.push('/dashboard/event');
+        router.push(returnUrl || '/dashboard/event');
         return;
       }
 
@@ -225,7 +227,7 @@ export default function EventFormPage() {
     reset(newInitialValues);
     setComponentIsLoading(false);
   
-  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast, eventId]);
+  }, [isEditing, eventData, isLoadingEvent, isErrorEvent, errorEvent, reset, isLoadingUser, userTenentId, router, toast, eventId, returnUrl]);
   
 
   const openMediaSelector = (target: 'poster' | { type: 'speaker'; index: number }) => {
@@ -244,7 +246,7 @@ export default function EventFormPage() {
         return;
       }
 
-      const fileIdToSet = selectedMediaItem.fileId; // This is numeric Media.id
+      const fileIdToSet = selectedMediaItem.fileId; 
       const previewUrl = selectedMediaItem.thumbnailUrl || selectedMediaItem.fileUrl;
       console.log(`[EventForm handleMediaSelect] fileIdToSet (Media ID): ${fileIdToSet}, previewUrl: ${previewUrl}`);
 
@@ -301,17 +303,15 @@ export default function EventFormPage() {
     };
     
     const transformedSpeakers: ApiSpeakerComponent[] | null = data.speakers ? data.speakers.map(speaker => {
-        const apiSpeaker: Partial<ApiSpeakerComponent> = { // Use Partial for building
+        const apiSpeaker: Partial<ApiSpeakerComponent> = { 
             name: speaker.name || null,
             image: speaker.image_id === undefined ? null : speaker.image_id,
             excerpt: speaker.excerpt || null,
         };
-        // Only include 'id' if it's a number (existing speaker being updated)
-        // For new speakers, 'id' will be undefined and thus omitted from apiSpeaker object sent to backend.
         if (typeof speaker.id === 'number') {
             apiSpeaker.id = speaker.id;
         }
-        return apiSpeaker as ApiSpeakerComponent; // Cast to full type
+        return apiSpeaker as ApiSpeakerComponent; 
     }) : null;
     console.log("[EventForm onSubmit] Transformed speakers for payload:", JSON.stringify(transformedSpeakers, null, 2));
 
@@ -333,7 +333,7 @@ export default function EventFormPage() {
     const options = {
       onSuccess: () => {
         toast({ title: "Success", description: `Event ${isEditing ? "updated" : "created"}.` });
-        router.push("/dashboard/event");
+        router.push(returnUrl || "/dashboard/event"); // Use returnUrl or fallback
       },
       onError: (err: any) => {
         setSubmissionPayloadJson(`Error: ${err.message}\n\n${JSON.stringify(err.response?.data || err, null, 2)}`);
@@ -360,7 +360,7 @@ export default function EventFormPage() {
         <h1 className="text-2xl font-bold text-destructive mb-4">Error Loading Event</h1>
         <p>Could not load event data. Please try again.</p>
         <pre className="mt-2 text-xs bg-muted p-2 rounded">{errorEvent?.message}</pre>
-        <Button onClick={() => router.push("/dashboard/event")} className="mt-4">Back to Events</Button>
+        <Button onClick={() => router.push(returnUrl || "/dashboard/event")} className="mt-4">Back to Events</Button>
       </div>
     );
   }
@@ -610,7 +610,6 @@ export default function EventFormPage() {
                     description="Optional. Add relevant tags (comma-separated)."
                 />
                 
-                {/* Speakers Field Array UI */}
                 <div className="space-y-4">
                   <Label>Speakers</Label>
                   {speakerFields.map((speakerItem, index) => (
@@ -644,7 +643,7 @@ export default function EventFormPage() {
                        <FormField
                         control={control}
                         name={`speakers.${index}.image_id`} 
-                        render={({ field }) => ( // field.value here is speakers[index].image_id
+                        render={({ field }) => ( 
                           <FormItem>
                             <FormLabel className="text-xs">Image</FormLabel>
                              <div className="flex items-center gap-4">
@@ -815,7 +814,7 @@ export default function EventFormPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.back()}
+                  onClick={() => router.push(returnUrl || "/dashboard/event")} // Use returnUrl or fallback
                   disabled={mutationLoading}
                 >
                   Cancel
@@ -887,16 +886,14 @@ function EventFormSkeleton({ isEditing }: { isEditing: boolean }) {
                   <Skeleton className="h-4 w-1/6 mb-1" />
                   <Skeleton className="h-10 w-32" />
               </div>
-              {/* Tags skeleton */}
               <div className="space-y-1.5">
                  <Skeleton className="h-4 w-1/6 mb-1" />
                  <Skeleton className="h-10 w-full" />
               </div>
-              {/* Speakers skeleton */}
               <div className="space-y-4">
                 <Skeleton className="h-4 w-1/6 mb-1" />
-                <Skeleton className="h-24 w-full" /> {/* Placeholder for one speaker item */}
-                <Skeleton className="h-10 w-32" /> {/* Add Speaker button */}
+                <Skeleton className="h-24 w-full" /> 
+                <Skeleton className="h-10 w-32" /> 
               </div>
                <div className="space-y-1.5">
                    <Skeleton className="h-4 w-1/4 mb-1" />
