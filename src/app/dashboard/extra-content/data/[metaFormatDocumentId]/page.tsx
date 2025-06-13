@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useGetMetaFormat } from '@/lib/queries/meta-format';
 import { useGetMetaDataEntries, useDeleteMetaDataEntry, type UseGetMetaDataEntriesOptions } from '@/lib/queries/meta-data';
@@ -16,7 +16,7 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogHeader,
-  AlertDialogTitle as AlertDialogTitleComponent, // Renamed to avoid conflict
+  AlertDialogTitle as AlertDialogTitleComponent,
   AlertDialogDescription as AlertDialogDescriptionComponent, 
   AlertDialogFooter,
 } from '@/components/ui/alert-dialog';
@@ -47,9 +47,10 @@ import {
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
-  type CarouselApi, // Import CarouselApi type
+  type CarouselApi,
 } from "@/components/ui/carousel";
 import MediaRenderer from '../_components/media-renderer';
+import { useToast } from '@/hooks/use-toast';
 
 const getFieldName = (component: FormFormatComponent): string => {
   if (component.label && component.label.trim() !== '') {
@@ -72,6 +73,9 @@ type SortFieldMetaData = 'handle' | 'createdAt' | 'updatedAt' | 'publishedAt';
 type SortOrderMetaData = 'asc' | 'desc';
 
 const DEFAULT_PAGE_SIZE_METADATA = 9; 
+const DEFAULT_SORT_FIELD: SortFieldMetaData = 'createdAt';
+const DEFAULT_SORT_ORDER: SortOrderMetaData = 'desc';
+
 const PAGE_SIZE_OPTIONS_METADATA = [
     { label: "9 per page", value: "9" }, { label: "12 per page", value: "12" },
     { label: "24 per page", value: "24" }, { label: "48 per page", value: "48" },
@@ -86,39 +90,29 @@ const SORT_ORDER_OPTIONS_METADATA: { label: string; value: SortOrderMetaData }[]
   { label: "Ascending", value: "asc" }, { label: "Descending", value: "desc" },
 ];
 
-// New component for rendering individual carousels with lazy loading
 const EntryCarousel: React.FC<{ entry: MetaData; entryMediaIds: number[] }> = ({ entry, entryMediaIds }) => {
   const [carouselApi, setCarouselApi] = React.useState<CarouselApi | undefined>();
-  const [loadedSlides, setLoadedSlides] = React.useState<Set<number>>(new Set([0])); // Load first slide by default
+  const [loadedSlides, setLoadedSlides] = React.useState<Set<number>>(new Set([0])); 
 
   React.useEffect(() => {
-    if (!carouselApi) {
-      return;
-    }
-
+    if (!carouselApi) return;
     const handleSelect = () => {
       const selectedSnap = carouselApi.selectedScrollSnap();
       setLoadedSlides(prev => new Set(prev).add(selectedSnap));
     };
-    
-    // Initial load check
     const initialSnap = carouselApi.selectedScrollSnap();
     if (!loadedSlides.has(initialSnap)) {
         setLoadedSlides(prev => new Set(prev).add(initialSnap));
     }
-
     carouselApi.on("select", handleSelect);
-
     return () => {
-      if (carouselApi && typeof carouselApi.off === 'function') { // Check if off is a function
+      if (carouselApi && typeof carouselApi.off === 'function') {
           carouselApi.off("select", handleSelect);
       }
     };
-  }, [carouselApi, loadedSlides]); // Added loadedSlides to dependencies
+  }, [carouselApi, loadedSlides]);
 
-  if (entryMediaIds.length === 0) {
-    return null;
-  }
+  if (entryMediaIds.length === 0) return null;
 
   return (
     <div className="bg-muted border-b">
@@ -133,7 +127,7 @@ const EntryCarousel: React.FC<{ entry: MetaData; entryMediaIds: number[] }> = ({
           <CarouselContent>
             {entryMediaIds.map((mediaId, index) => (
               mediaId !== null && !isNaN(mediaId) && (
-                <CarouselItem key={`${entry.documentId}-media-${index}`}>
+                <CarouselItem key={`${entry.documentId || entry.id}-media-${index}`}>
                   <div className="p-0 aspect-video flex items-center justify-center bg-muted/30">
                     {loadedSlides.has(index) ? (
                       <MediaRenderer mediaId={mediaId} className="w-full h-48 object-cover" />
@@ -158,13 +152,16 @@ const EntryCarousel: React.FC<{ entry: MetaData; entryMediaIds: number[] }> = ({
 
 export default function MetaDataListingPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParamsHook = useSearchParams();
   const params = useParams();
+  const { toast } = useToast();
   const metaFormatDocumentId = params.metaFormatDocumentId as string;
 
   const [currentPage, setCurrentPage] = React.useState(1);
-  const [pageSize, setPageSize] = React.useState(() => getStoredPreference('metaDataPageSize', DEFAULT_PAGE_SIZE_METADATA));
-  const [sortField, setSortField] = React.useState<SortFieldMetaData>(() => getStoredPreference('metaDataSortField', 'createdAt'));
-  const [sortOrder, setSortOrder] = React.useState<SortOrderMetaData>(() => getStoredPreference('metaDataSortOrder', 'desc'));
+  const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE_METADATA);
+  const [sortField, setSortField] = React.useState<SortFieldMetaData>(DEFAULT_SORT_FIELD);
+  const [sortOrder, setSortOrder] = React.useState<SortOrderMetaData>(DEFAULT_SORT_ORDER);
   const [localHandleFilter, setLocalHandleFilter] = React.useState('');
   const [activeHandleFilter, setActiveHandleFilter] = React.useState<string | null>(null);
 
@@ -177,6 +174,7 @@ export default function MetaDataListingPage() {
     sortOrder,
     handleFilter: activeHandleFilter,
   };
+
   const { data: metaDataResponse, isLoading: isLoadingMetaData, isError: isErrorMetaData, error: errorMetaData, refetch: refetchMetaData, isFetching: isFetchingMetaData } = useGetMetaDataEntries(metaFormatDocumentId, metaDataQueryOptions);
   const metaDataEntries = metaDataResponse?.data || [];
   const paginationInfo = metaDataResponse?.meta?.pagination;
@@ -190,10 +188,41 @@ export default function MetaDataListingPage() {
   const [selectedEntryData, setSelectedEntryData] = React.useState<Record<string, any> | null>(null);
   const [selectedEntryForDialog, setSelectedEntryForDialog] = React.useState<MetaData | null>(null);
 
-  React.useEffect(() => { setStoredPreference('metaDataPageSize', pageSize); setCurrentPage(1); }, [pageSize]);
-  React.useEffect(() => { setStoredPreference('metaDataSortField', sortField); setCurrentPage(1); }, [sortField]);
-  React.useEffect(() => { setStoredPreference('metaDataSortOrder', sortOrder); setCurrentPage(1); }, [sortOrder]);
-  React.useEffect(() => { setCurrentPage(1); }, [activeHandleFilter]);
+  // Initialize state from URL or localStorage/defaults
+  React.useEffect(() => {
+    const pageFromUrl = parseInt(searchParamsHook.get('page') || '1', 10);
+    const limitFromUrl = parseInt(searchParamsHook.get('limit') || String(getStoredPreference('metaDataPageSize', DEFAULT_PAGE_SIZE_METADATA)), 10);
+    const sortByFromUrl = (searchParamsHook.get('sortBy') as SortFieldMetaData | null) || getStoredPreference('metaDataSortField', DEFAULT_SORT_FIELD);
+    const orderFromUrl = (searchParamsHook.get('order') as SortOrderMetaData | null) || getStoredPreference('metaDataSortOrder', DEFAULT_SORT_ORDER);
+    const handleFromUrl = searchParamsHook.get('handle') || '';
+
+    setCurrentPage(isNaN(pageFromUrl) ? 1 : pageFromUrl);
+    setPageSize(isNaN(limitFromUrl) ? DEFAULT_PAGE_SIZE_METADATA : limitFromUrl);
+    setSortField(sortByFromUrl as SortFieldMetaData);
+    setSortOrder(orderFromUrl as SortOrderMetaData);
+    setActiveHandleFilter(handleFromUrl || null); // Set active filter directly
+    setLocalHandleFilter(handleFromUrl); // Sync local input
+  }, [searchParamsHook]);
+
+
+  // Update URL when state changes
+  React.useEffect(() => {
+    const newSearchParams = new URLSearchParams();
+    if (currentPage !== 1) newSearchParams.set('page', String(currentPage));
+    if (pageSize !== DEFAULT_PAGE_SIZE_METADATA) newSearchParams.set('limit', String(pageSize));
+    if (sortField !== DEFAULT_SORT_FIELD) newSearchParams.set('sortBy', sortField);
+    if (sortOrder !== DEFAULT_SORT_ORDER) newSearchParams.set('order', sortOrder);
+    if (activeHandleFilter) newSearchParams.set('handle', activeHandleFilter);
+    
+    const query = newSearchParams.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+
+    // Save preferences
+    setStoredPreference('metaDataPageSize', pageSize);
+    setStoredPreference('metaDataSortField', sortField);
+    setStoredPreference('metaDataSortOrder', sortOrder);
+    // No need to store activeHandleFilter in localStorage as it's URL driven
+  }, [currentPage, pageSize, sortField, sortOrder, activeHandleFilter, pathname, router]);
 
   const handleDeleteConfirmation = (entry: MetaData) => {
     setMetaDataToDelete(entry);
@@ -205,8 +234,20 @@ export default function MetaDataListingPage() {
       deleteMetaDataMutation.mutate(
         { documentId: metaDataToDelete.documentId, metaFormatDocumentId: metaFormatDocumentId },
         {
-          onSuccess: () => { setIsAlertOpen(false); setMetaDataToDelete(null); },
-          onError: () => setIsAlertOpen(false)
+          onSuccess: () => {
+            // The hook's invalidation will cause a refetch.
+            // Check if the page would become empty.
+            if (metaDataEntries.length === 1 && currentPage > 1) {
+              setCurrentPage(currentPage - 1); // This will trigger URL update and refetch for new page
+            }
+            setIsAlertOpen(false);
+            setMetaDataToDelete(null);
+            // Toast handled by mutation hook
+          },
+          onError: () => {
+            setIsAlertOpen(false);
+            // Toast handled by mutation hook
+          }
         }
       );
     }
@@ -219,6 +260,7 @@ export default function MetaDataListingPage() {
   };
 
   const applyHandleFilter = () => {
+    setCurrentPage(1); // Reset to first page when filter changes
     setActiveHandleFilter(localHandleFilter.trim() === '' ? null : localHandleFilter.trim());
   };
 
@@ -226,7 +268,7 @@ export default function MetaDataListingPage() {
   const isError = isErrorMetaFormat || isErrorMetaData;
   const error = errorMetaFormat || errorMetaData;
 
-  if (isLoading && !metaDataResponse) {
+  if (isLoading && !metaDataResponse && !isErrorMetaFormat) {
     return <MetaDataPageSkeleton />;
   }
 
@@ -294,7 +336,7 @@ export default function MetaDataListingPage() {
                         value={localHandleFilter}
                         onChange={(e) => setLocalHandleFilter(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && applyHandleFilter()}
-                        className="h-9 text-xs"
+                        className="h-9 text-xs mt-1"
                         disabled={isLoadingMetaData || isFetchingMetaData}
                     />
                 </div>
@@ -312,21 +354,21 @@ export default function MetaDataListingPage() {
                             <div>
                                 <Label className="text-xs text-muted-foreground">Sort By</Label>
                                 <Select value={sortField} onValueChange={(value) => setSortField(value as SortFieldMetaData)} disabled={isLoadingMetaData || isFetchingMetaData}>
-                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sort by..." /></SelectTrigger>
+                                    <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="Sort by..." /></SelectTrigger>
                                     <SelectContent>{SORT_FIELD_OPTIONS_METADATA.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                             <div>
                                 <Label className="text-xs text-muted-foreground">Order</Label>
                                 <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrderMetaData)} disabled={isLoadingMetaData || isFetchingMetaData}>
-                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Order..." /></SelectTrigger>
+                                    <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="Order..." /></SelectTrigger>
                                     <SelectContent>{SORT_ORDER_OPTIONS_METADATA.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                             <div>
                                 <Label className="text-xs text-muted-foreground">Items/Page</Label>
                                 <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))} disabled={isLoadingMetaData || isFetchingMetaData}>
-                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Items per page" /></SelectTrigger>
+                                    <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="Items per page" /></SelectTrigger>
                                     <SelectContent>{PAGE_SIZE_OPTIONS_METADATA.map(opt => <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
@@ -339,7 +381,7 @@ export default function MetaDataListingPage() {
 
       {(isFetchingMetaData && metaDataEntries.length === 0) && <MetaDataPageSkeleton />}
 
-      {(!metaDataEntries || metaDataEntries.length === 0) && !isFetchingMetaData && (
+      {(!metaDataEntries || metaDataEntries.length === 0) && !isFetchingMetaData && !isLoading && (
          <Card className="col-span-full text-center py-12 shadow-sm">
             <CardContent className="flex flex-col items-center justify-center">
                 <PackageOpen className="h-16 w-16 text-muted-foreground mb-4" />
@@ -565,7 +607,7 @@ export default function MetaDataListingPage() {
                                             value ? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Yes</span> : <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">No</span>
                                         ) : Array.isArray(value) ? (
                                             value.map((item, i) => <code key={i} className="text-xs bg-muted px-1 py-0.5 rounded mr-1 mb-1 inline-block">{String(item)}</code>)
-                                        ) : typeof value === 'string' && value.startsWith('<') && value.endsWith('>') ? ( // Basic check for HTML content
+                                        ) : typeof value === 'string' && value.startsWith('<p>') && value.endsWith('</p>') && component.inputType === 'tip-tap' ? ( // Check for tip-tap specifically
                                             <div className="prose prose-sm dark:prose-invert max-w-none border rounded p-2 bg-background" dangerouslySetInnerHTML={{ __html: value }} />
                                         ) : (
                                             String(value)
@@ -645,4 +687,3 @@ function MetaDataPageSkeleton() {
     </div>
   );
 }
-
