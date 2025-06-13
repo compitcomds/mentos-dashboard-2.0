@@ -231,26 +231,28 @@ export default function MetaDataListingPage() {
   const [selectedEntryData, setSelectedEntryData] = React.useState<Record<string, any> | null>(null);
   const [selectedEntryForDialog, setSelectedEntryForDialog] = React.useState<MetaData | null>(null);
 
-  const updateUrl = React.useCallback((newParams: Record<string, string | null>) => {
+  const updateUrl = React.useCallback((newParams: Record<string, string | number | null>) => {
     const current = new URLSearchParams(Array.from(searchParams.entries()));
     let resetPageTo1 = false;
 
     Object.entries(newParams).forEach(([key, value]) => {
+      const stringValue = value === null || value === undefined ? null : String(value);
       const oldValue = current.get(key);
-      if (value === null || value === '') {
+
+      if (stringValue === null || stringValue === '') {
         current.delete(key);
       } else {
-        current.set(key, value);
+        current.set(key, stringValue);
       }
-      if (key !== 'page' && oldValue !== value) {
+      if (key !== 'page' && oldValue !== stringValue) {
         resetPageTo1 = true;
       }
     });
     
-    if (resetPageTo1 && !newParams.hasOwnProperty('page')) { // If a filter/sort changed, and page isn't explicitly set in this update
+    if (resetPageTo1 && !newParams.hasOwnProperty('page')) {
       current.delete('page'); // This implies page 1
-    } else if (newParams.page === '1') { // If explicitly setting to page 1, remove the param for cleaner URL
-      current.delete('page');
+    } else if (newParams.page === 1 || newParams.page === '1') {
+      current.delete('page'); // Explicitly setting to page 1 removes the param
     }
     
     router.push(`${pathname}?${current.toString()}`, { scroll: false });
@@ -258,7 +260,7 @@ export default function MetaDataListingPage() {
   
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= (paginationInfo?.pageCount || 1)) {
-      updateUrl({ page: String(newPage) });
+      updateUrl({ page: newPage });
     }
   };
 
@@ -294,14 +296,13 @@ export default function MetaDataListingPage() {
           onSuccess: () => {
             setIsAlertOpen(false);
             setMetaDataToDelete(null);
-            // Logic for page adjustment
             if (metaDataEntries.length === 1 && currentPage > 1) {
-              updateUrl({ page: String(currentPage - 1) }); // Navigate to previous page
+              updateUrl({ page: currentPage - 1 }); 
             } else {
-              // refetchMetaData(); // No need to call refetch, URL change will trigger TanStack Query
+              // No direct refetch needed, URL change (or lack thereof) + query invalidation handles it
             }
           },
-          onError: () => setIsAlertOpen(false) // Toast handled by hook
+          onError: () => setIsAlertOpen(false)
         }
       );
     }
@@ -329,7 +330,7 @@ export default function MetaDataListingPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
           <AlertDescription>{(error as Error)?.message || 'Could not load data.'}</AlertDescription>
-           <Button onClick={() => router.refresh()} className="mt-2" disabled={isFetchingMetaData}>
+           <Button onClick={() => refetchMetaData()} className="mt-2" disabled={isFetchingMetaData}>
              {isFetchingMetaData && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Retry
            </Button>
         </Alert>
@@ -633,8 +634,11 @@ export default function MetaDataListingPage() {
                         {metaFormat.from_formate.map(component => {
                             const fieldName = getFieldName(component);
                             let value = selectedEntryData[fieldName];
+                            let isHtmlContent = false;
+                            if(component.__component === 'dynamic-component.text-field' && component.inputType === 'tip-tap'){
+                                isHtmlContent = typeof value === 'string' && /<\/?[a-z][\s\S]*>/i.test(value);
+                            }
 
-                            const isHtmlContent = typeof value === 'string' && /<\/?[a-z][\s\S]*>/i.test(value) && (component.__component === 'dynamic-component.text-field' && component.inputType === 'tip-tap');
 
                             if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '' && !isHtmlContent)) {
                                 return (
