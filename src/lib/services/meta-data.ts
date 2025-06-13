@@ -202,6 +202,10 @@ export const getMetaDataEntry = async (documentId: string, userTenentId: string)
 
 // Update a MetaData entry
 export const updateMetaDataEntry = async (stringDocumentId: string, payload: Partial<Omit<CreateMetaDataPayload, 'meta_format' | 'tenent_id'>>, userTenentId: string): Promise<MetaData> => {
+  // Fetch the entry by documentId to get its numeric ID for the PUT request, if your API strictly requires numeric ID in path.
+  // However, if your API is set up to handle string documentId in the path for updates (e.g., PUT /meta-datas/your-string-doc-id),
+  // you can skip this fetch and use stringDocumentId directly.
+  // For now, assuming the API might need a numeric ID for the path parameter of a PUT request.
   const existingEntry = await getMetaDataEntry(stringDocumentId, userTenentId);
   if (!existingEntry || typeof existingEntry.id !== 'number') {
     throw new Error(`MetaData entry with documentId '${stringDocumentId}' not found or lacks a numeric ID for update.`);
@@ -238,24 +242,28 @@ export const updateMetaDataEntry = async (stringDocumentId: string, payload: Par
   }
 };
 
-// Delete a MetaData entry
+// Delete a MetaData entry using the string documentId directly in the path
 export const deleteMetaDataEntry = async (documentId: string, userTenentId: string): Promise<MetaData | void> => {
-  const existingEntry = await getMetaDataEntry(documentId, userTenentId);
-  if (!existingEntry || typeof existingEntry.id !== 'number') {
-    throw new Error(`MetaData entry with documentId '${documentId}' not found or lacks a numeric ID for deletion.`);
+  if (!documentId) {
+    throw new Error('Document ID is required to delete a MetaData entry.');
   }
-  const numericId = existingEntry.id;
-  const url = `/meta-datas/${numericId}`; // Use numeric ID for the DELETE request
+  // userTenentId is important for auth context and query invalidation,
+  // but the API path for deletion might just use the documentId.
+  const url = `/meta-datas/${documentId}`; // Use string documentId directly in the URL
 
-  console.log(`[deleteMetaDataEntry] Deleting MetaData entry (numeric ID: ${numericId}, string docId: ${documentId})`);
+  console.log(`[deleteMetaDataEntry] Deleting MetaData entry (documentId: ${documentId})`);
   try {
     const headers = await getAuthHeader();
     const response = await axiosInstance.delete<FindOne<MetaData>>(url, { headers });
-     if (response.status === 200 && response.data?.data) {
+    
+    if (response.status === 200 && response.data?.data) {
+      // If API returns the deleted object
       return response.data.data;
-    } else if (response.status === 204) { // Strapi might return 204 No Content on successful delete
+    } else if (response.status === 204) {
+      // If API returns No Content on successful delete
       return;
     }
+    // Handle other success statuses if necessary, or consider them unexpected
     console.warn(`[deleteMetaDataEntry] Unexpected success status ${response.status} when deleting ${documentId}. Data:`, response.data);
     throw new Error(`Failed to delete MetaData entry ${documentId}. Status: ${response.status}`);
   } catch (error: unknown) {
@@ -264,14 +272,18 @@ export const deleteMetaDataEntry = async (documentId: string, userTenentId: stri
       const status = error.response?.status;
       const errorDetails = error.response?.data?.error?.details;
       const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || error.message;
-      message = `API Error (Status ${status || 'unknown'}): ${errorMessage}. ${errorDetails ? 'Details: ' + JSON.stringify(errorDetails) : ''}`;
-      console.error(`[deleteMetaDataEntry] Failed (${status || 'unknown'}):`, error.response?.data);
+      
+      if (status === 404) {
+        message = `MetaData entry with documentId ${documentId} not found.`;
+      } else {
+        message = `API Error (Status ${status || 'unknown'}): ${errorMessage}. ${errorDetails ? 'Details: ' + JSON.stringify(errorDetails) : ''}`;
+      }
+      console.error(`[deleteMetaDataEntry] Failed (Status ${status || 'unknown'}):`, error.response?.data);
     } else if (error instanceof Error) {
       message = error.message;
+    } else {
+      console.error(`[deleteMetaDataEntry] Unknown Error:`, error);
     }
-    console.error(`[deleteMetaDataEntry] Error: ${message}`, error);
     throw new Error(message);
   }
 };
-
-    
