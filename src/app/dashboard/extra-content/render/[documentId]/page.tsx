@@ -383,6 +383,8 @@ export default function RenderExtraContentPage() {
   const metaFormatDocumentId = params.documentId as string;
   const action = searchParams.get("action") || "create";
   const metaDataEntryDocumentIdParam = searchParams.get("entry");
+  const returnUrlParam = searchParams.get("returnUrl");
+
 
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const {
@@ -697,6 +699,23 @@ export default function RenderExtraContentPage() {
       JSON.stringify(processedData, null, 2)
     );
 
+    const navigateToListingPage = () => {
+        if (returnUrlParam) {
+            try {
+                const decodedReturnUrl = decodeURIComponent(returnUrlParam);
+                 if (decodedReturnUrl.startsWith('/dashboard/extra-content/data/')) {
+                    router.push(decodedReturnUrl);
+                    return;
+                 }
+                 console.warn("Invalid returnUrl structure, falling back:", decodedReturnUrl);
+            } catch (e) {
+                console.error("Error decoding returnUrl, falling back:", e);
+            }
+        }
+        router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`);
+    };
+
+
     if (action === "create") {
       const payload: CreateMetaDataPayload = {
         tenent_id: currentUser.tenent_id,
@@ -710,7 +729,7 @@ export default function RenderExtraContentPage() {
       createMetaDataMutation.mutate(payload, {
         onSuccess: () => {
           toast({ title: "Success", description: "Data entry created." });
-          router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`);
+          navigateToListingPage();
         },
         onError: (error: Error) => commonErrorHandling(error, payload.handle),
       });
@@ -735,9 +754,7 @@ export default function RenderExtraContentPage() {
         {
           onSuccess: () => {
             toast({ title: "Success", description: "Data entry updated." });
-            router.push(
-              `/dashboard/extra-content/data/${metaFormatDocumentId}`
-            );
+            navigateToListingPage();
           },
           onError: (error: Error) =>
             commonErrorHandling(error, updatePayload.handle),
@@ -896,9 +913,21 @@ export default function RenderExtraContentPage() {
     <div className="p-4 md:p-6 space-y-6">
       <Button
         variant="outline"
-        onClick={() =>
-          router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`)
-        }
+        onClick={() => {
+          if (returnUrlParam) {
+            try {
+              const decodedReturnUrl = decodeURIComponent(returnUrlParam);
+               if (decodedReturnUrl.startsWith('/dashboard/extra-content/data/')) {
+                router.push(decodedReturnUrl);
+                return;
+              }
+              console.warn("Invalid returnUrl structure on Back button, falling back:", decodedReturnUrl);
+            } catch (e) {
+              console.error("Error decoding returnUrl on Back button, falling back:", e);
+            }
+          }
+          router.push(`/dashboard/extra-content/data/${metaFormatDocumentId}`);
+        }}
       >
         &larr; Back to Entries for {metaFormat.name || "this Extra Content"}
       </Button>
