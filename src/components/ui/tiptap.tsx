@@ -1,4 +1,3 @@
-
 import React, { useCallback, useEffect, useState, useRef, memo } from "react";
 import { EditorContent, useEditor, BubbleMenu } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -73,8 +72,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
       extensions: [
         StarterKit.configure({
           heading: { levels: [1, 2, 3], HTMLAttributes: {} },
-          bulletList: { HTMLAttributes: { class: 'list-disc pl-6' } }, // Added classes for visibility
-          orderedList: { HTMLAttributes: { class: 'list-decimal pl-6' } }, // Added classes for visibility
+          bulletList: { HTMLAttributes: { class: "list-disc pl-6" } }, // Added classes for visibility
+          orderedList: { HTMLAttributes: { class: "list-decimal pl-6" } }, // Added classes for visibility
           blockquote: { HTMLAttributes: {} },
           codeBlock: false,
           horizontalRule: false,
@@ -148,45 +147,66 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
       if (!editor) return;
       const { from, to, empty } = editor.state.selection;
 
-      if (empty) { // No text selected, behavior can be to prompt or do nothing
+      if (empty) {
+        // No text selected, behavior can be to prompt or do nothing
+        const existingUrl = editor.getAttributes("link").href;
+        const url = window.prompt("Enter URL:", existingUrl || "https://");
+        if (url === null) return; // User cancelled
+        if (url === "") {
+          editor.chain().focus().extendMarkRange("link").unsetLink().run();
+        } else {
+          let finalUrl = url;
+          if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+            finalUrl = `https://${url}`;
+          }
+          editor
+            .chain()
+            .focus()
+            .setLink({ href: finalUrl, target: "_blank" })
+            .run();
+        }
+      } else {
+        // Text is selected
+        if (editor.isActive("link")) {
+          // If selected text is already a link, open bubble to edit
+          // Tiptap's bubble menu for links should handle this when a link is clicked/focused.
+          // We can also explicitly unset it if we want a toggle behavior.
+          // For now, let's make it prompt like above for consistency, or rely on bubble menu.
           const existingUrl = editor.getAttributes("link").href;
-          const url = window.prompt("Enter URL:", existingUrl || "https://");
-          if (url === null) return; // User cancelled
+          const url = window.prompt(
+            "Edit URL (leave empty to remove):",
+            existingUrl || "https://"
+          );
+          if (url === null) return;
           if (url === "") {
-              editor.chain().focus().extendMarkRange("link").unsetLink().run();
+            editor.chain().focus().extendMarkRange("link").unsetLink().run();
           } else {
-              let finalUrl = url;
-              if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
-                  finalUrl = `https://${url}`;
-              }
-              editor.chain().focus().setLink({ href: finalUrl, target: '_blank' }).run();
+            let finalUrl = url;
+            if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+              finalUrl = `https://${url}`;
+            }
+            editor
+              .chain()
+              .focus()
+              .extendMarkRange("link")
+              .setLink({ href: finalUrl, target: "_blank" })
+              .run();
           }
-      } else { // Text is selected
-          if (editor.isActive("link")) { // If selected text is already a link, open bubble to edit
-              // Tiptap's bubble menu for links should handle this when a link is clicked/focused.
-              // We can also explicitly unset it if we want a toggle behavior.
-              // For now, let's make it prompt like above for consistency, or rely on bubble menu.
-              const existingUrl = editor.getAttributes("link").href;
-              const url = window.prompt("Edit URL (leave empty to remove):", existingUrl || "https://");
-              if (url === null) return;
-              if (url === "") {
-                editor.chain().focus().extendMarkRange("link").unsetLink().run();
-              } else {
-                let finalUrl = url;
-                if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
-                    finalUrl = `https://${url}`;
-                }
-                editor.chain().focus().extendMarkRange("link").setLink({ href: finalUrl, target: '_blank' }).run();
-              }
-          } else { // Apply new link to selected text
-              const url = window.prompt("Enter URL:", "https://");
-              if (url === null || url === "") return; // User cancelled or entered empty
-              let finalUrl = url;
-              if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
-                  finalUrl = `https://${url}`;
-              }
-              editor.chain().focus().extendMarkRange("link").setLink({ href: finalUrl, target: '_blank' }).run();
+        } else {
+          // Apply new link to selected text
+          const url = window.prompt("Enter URL:", "https://");
+          if (url === null || url === "") return; // User cancelled or entered empty
+          let finalUrl = url;
+          if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+            finalUrl = `https://${url}`;
           }
+          editor
+            .chain()
+            .focus()
+            .extendMarkRange("link")
+            .setLink({ href: finalUrl, target: "_blank" })
+            .run();
+        }
       }
     }, [editor]);
 
@@ -237,14 +257,19 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
     const toggleSourceMode = () => {
       const newMode = !isSourceMode;
       if (editor) {
-        if (newMode) { // Switching TO source mode
+        if (newMode) {
+          // Switching TO source mode
           setSourceContent(editor.getHTML());
-        } else { // Switching FROM source mode (back to WYSIWYG)
+        } else {
+          // Switching FROM source mode (back to WYSIWYG)
           const currentSource = sourceContent;
           const editorHtml = editor.getHTML();
-           // Only set content if sourceContent has actually changed from what editor had
-           // or if the content prop changed externally while in source mode.
-          if (editorHtml !== currentSource || (content !== editorHtml && content !== currentSource)) {
+          // Only set content if sourceContent has actually changed from what editor had
+          // or if the content prop changed externally while in source mode.
+          if (
+            editorHtml !== currentSource ||
+            (content !== editorHtml && content !== currentSource)
+          ) {
             editor.commands.setContent(currentSource, true); // true to parse and emit update
           }
         }
@@ -258,22 +283,21 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
 
     useEffect(() => {
       const handleEscape = (event: KeyboardEvent) => {
-        if (event.key === 'Escape' && isFullScreenView) {
+        if (event.key === "Escape" && isFullScreenView) {
           setIsFullScreenView(false);
         }
       };
       if (isFullScreenView) {
-        document.body.style.overflow = 'hidden'; // Prevent body scroll
-        window.addEventListener('keydown', handleEscape);
+        document.body.style.overflow = "hidden"; // Prevent body scroll
+        window.addEventListener("keydown", handleEscape);
       } else {
-        document.body.style.overflow = '';
+        document.body.style.overflow = "";
       }
       return () => {
-        document.body.style.overflow = '';
-        window.removeEventListener('keydown', handleEscape);
+        document.body.style.overflow = "";
+        window.removeEventListener("keydown", handleEscape);
       };
     }, [isFullScreenView]);
-
 
     if (!editor) {
       return (
@@ -293,7 +317,9 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
         type: "button",
         icon: isFullScreenView ? Minimize : Expand,
         action: toggleFullScreen,
-        tooltip: isFullScreenView ? "Exit Fullscreen" : "Fullscreen (Esc to exit)",
+        tooltip: isFullScreenView
+          ? "Exit Fullscreen"
+          : "Fullscreen (Esc to exit)",
         id: "fullscreen",
       },
       {
@@ -504,13 +530,17 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
           ref={editorContainerRef}
           className={cn(
             "border border-border rounded-md flex flex-col",
-            isFullScreenView ? "fixed inset-0 z-50 bg-background p-0" : className // Apply fullscreen styles
+            isFullScreenView
+              ? "fixed inset-0 z-50 bg-background p-0"
+              : className // Apply fullscreen styles
           )}
         >
-          <div className={cn(
+          <div
+            className={cn(
               "flex items-center px-2 py-1.5 border-b border-border flex-wrap gap-1 bg-muted/50 flex-shrink-0",
               isFullScreenView ? "rounded-t-none" : "rounded-t-md" // Adjust rounding for fullscreen
-            )}>
+            )}
+          >
             {toolbarItems.map((item) => {
               if (item.type === "separator") {
                 return (
@@ -526,7 +556,9 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                   <DropdownMenu key={item.id}>
                     <DropdownMenuTrigger
                       asChild
-                      disabled={(isSourceMode && item.id !== 'source') || !editor}
+                      disabled={
+                        (isSourceMode && item.id !== "source") || !editor
+                      }
                     >
                       <Button
                         variant="ghost"
@@ -557,7 +589,12 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
                   key={item.id}
                   onClick={item.action}
                   isActive={item.isActive}
-                  disabled={item.disabled || (!editor && item.id !== 'fullscreen' && item.id !== 'source')}
+                  disabled={
+                    item.disabled ||
+                    (!editor &&
+                      item.id !== "fullscreen" &&
+                      item.id !== "source")
+                  }
                   tooltip={item.tooltip}
                 >
                   <item.icon className="w-4 h-4" />
@@ -622,10 +659,12 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
             </BubbleMenu>
           )}
 
-          <div className={cn(
+          <div
+            className={cn(
               "flex-1 overflow-y-auto editor-content-area-wrapper",
               isFullScreenView ? "p-4" : "" // Add padding in fullscreen
-            )}>
+            )}
+          >
             {isSourceMode ? (
               <Textarea
                 value={sourceContent}
@@ -637,8 +676,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = memo(
               <EditorContent
                 editor={editor}
                 className={cn(
-                    "prose dark:prose-invert max-w-none p-4 h-full min-h-[300px] focus:outline-none editor-content-area",
-                    isFullScreenView ? "rounded-none" : "rounded-b-md"
+                  "prose dark:prose-invert max-w-none p-4 h-full min-h-[300px] focus:outline-none editor-content-area",
+                  isFullScreenView ? "rounded-none" : "rounded-b-md"
                 )}
               />
             )}
@@ -708,4 +747,3 @@ const ToolbarButton = memo(
 ToolbarButton.displayName = "ToolbarButton";
 
 export default TipTapEditor;
-
