@@ -3,6 +3,7 @@
 
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'; // Ensure useSearchParams is imported
+import { useQueryClient } from '@tanstack/react-query'; // Import useQueryClient
 import {
   LayoutDashboard,
   PenSquare,
@@ -56,6 +57,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams(); // Initialize useSearchParams
+  const queryClient = useQueryClient(); // Get query client instance
   const { toast } = useToast();
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
 
@@ -197,6 +199,7 @@ export default function DashboardLayout({
 
   const handleLogout = async () => {
     await removeAccessToken();
+    queryClient.clear(); // Clear the cache on logout
     toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
     router.push('/login');
   };
