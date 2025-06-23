@@ -16,8 +16,8 @@ export function useCurrentUser() {
   return useQuery<User, Error>({
     queryKey: USER_QUERY_KEY,
     queryFn: fetchCurrentUser,
-    staleTime: 1000 * 60 * 15, // 15 minutes data is considered fresh
-    gcTime: 1000 * 60 * 60,   // 1 hour garbage collection time
+    staleTime: 1000 * 60 * 60 * 24, // 24 hours
+    gcTime: 1000 * 60 * 60 * 25,   // 25 hours garbage collection time
     retry: 1,                 // Retry once on failure
     refetchOnWindowFocus: false, // Don't refetch just because the window gained focus
   });
