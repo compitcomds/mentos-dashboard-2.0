@@ -413,7 +413,7 @@ export default function EventPage() {
             ) : (
                <EventCardGrid
                  events={events}
-                 onDelete={(id: string) => { const eventToDelete = events.find(e => String(e.id) === id || e.documentId === id); if (eventToDelete) handleDelete(eventToDelete);}}
+                 onDelete={handleDelete}
                  deleteMutation={deleteMutation}
                 />
             )

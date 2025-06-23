@@ -29,13 +29,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Event } from '@/types/event'; // Make sure this path is correct
+import type { Event } from '@/types/event';
 
-type deleteMutationTypes = UseMutationResult<Event | void, Error,string, unknown> | UseMutationResult<void | Event, Error, { documentId: string; numericId?: string | undefined; }, unknown>
+type deleteMutationTypes = UseMutationResult<void | Event, Error, { documentId: string; numericId?: string | undefined; }, unknown>
 
 interface EventCardGridProps {
   events: Event[];
-  onDelete: (id: string) => void;
+  onDelete: (event: Event) => void; // Changed to accept the full Event object
   deleteMutation: deleteMutationTypes;
 }
 
@@ -90,7 +90,7 @@ export default function EventCardGrid({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                    <Link href={`/dashboard/event/${event.id}`}>
+                    <Link href={`/dashboard/event/${event.documentId || event.id}`}>
                       <Pencil className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -105,7 +105,7 @@ export default function EventCardGrid({
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        disabled={deleteMutation.isPending && deleteMutation.variables === String(event.id)}
+                        disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === event.documentId}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -123,11 +123,11 @@ export default function EventCardGrid({
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => onDelete(String(event.id))}
-                      disabled={deleteMutation.isPending && deleteMutation.variables === String(event.id)}
+                      onClick={() => onDelete(event)} // Pass the full event object
+                      disabled={deleteMutation.isPending && deleteMutation.variables?.documentId === event.documentId}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      {deleteMutation.isPending && deleteMutation.variables === String(event.id) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {deleteMutation.isPending && deleteMutation.variables?.documentId === event.documentId && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Delete
                     </AlertDialogAction>
                   </AlertDialogFooter>
