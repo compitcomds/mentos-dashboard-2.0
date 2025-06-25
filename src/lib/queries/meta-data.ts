@@ -8,7 +8,7 @@ import {
   getMetaDataEntry,
   updateMetaDataEntry,
   deleteMetaDataEntry,
-  type GetMetaDataEntriesParams, // Import params type
+  type GetMetaDataEntriesParams,
 } from "@/lib/services/meta-data";
 import type { MetaData, CreateMetaDataPayload } from "@/types/meta-data";
 import type { FindMany } from "@/types/strapi_response";
@@ -42,6 +42,18 @@ export const META_DATA_ENTRY_DETAIL_QUERY_KEY = (
   userTenentId?: string
 ) => ["metaDataEntry", documentId || "detail", userTenentId || "all"];
 
+const getDefaultMetaDataEntries = (pageSize?: number) => ({
+  data: [],
+  meta: {
+    pagination: {
+      page: 1,
+      pageSize: pageSize || 10,
+      pageCount: 0,
+      total: 0,
+    },
+  },
+});
+
 export function useGetMetaDataEntries(
   metaFormatDocumentId: string,
   options?: UseGetMetaDataEntriesOptions
@@ -58,38 +70,18 @@ export function useGetMetaDataEntries(
       sortOrder,
       handleFilter,
     }),
-    queryFn: () => {
+    queryFn: async () => {
       if (!userTenentId) {
         console.warn(
           "useGetMetaDataEntries: User tenent_id not available. Returning empty array."
         );
-        return Promise.resolve({
-          data: [],
-          meta: {
-            pagination: {
-              page: 1,
-              pageSize: pageSize || 10,
-              pageCount: 0,
-              total: 0,
-            },
-          },
-        });
+        return getDefaultMetaDataEntries(pageSize);
       }
       if (!metaFormatDocumentId) {
         console.warn(
           "useGetMetaDataEntries: metaFormatDocumentId not available. Returning empty array."
         );
-        return Promise.resolve({
-          data: [],
-          meta: {
-            pagination: {
-              page: 1,
-              pageSize: pageSize || 10,
-              pageCount: 0,
-              total: 0,
-            },
-          },
-        });
+        return getDefaultMetaDataEntries(pageSize);
       }
       const params: GetMetaDataEntriesParams = {
         metaFormatDocumentId,
@@ -100,18 +92,19 @@ export function useGetMetaDataEntries(
         sortOrder,
         handleFilter,
       };
-      return getMetaDataEntries(params);
+      return await getMetaDataEntries(params);
     },
     enabled: !!userTenentId && !!metaFormatDocumentId && !isLoadingUser,
   });
 }
 
-export function useCreateMetaDataEntry(documentId: string) {
+export function useCreateMetaDataEntry(id?: number) {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
   return useMutation<MetaData, Error, CreateMetaDataPayload>({
     mutationFn: (payload) => {
+      if (!id) throw new Error("Empty <id> of the form being filled.");
       if (!currentUser?.tenent_id) {
         throw new Error(
           "User tenent_id is not available. Cannot create MetaData entry."
@@ -121,16 +114,15 @@ export function useCreateMetaDataEntry(documentId: string) {
         ...payload,
         tenent_id: currentUser.tenent_id,
         user: currentUser.id,
-        meta_format: documentId,
+        meta_format: id,
       });
     },
     onSuccess: (data, variables) => {
-      // `variables` here is the CreateMetaDataPayload
       toast({
         title: "Success",
         description: "MetaData entry created successfully.",
       });
-      const metaFormatDocId = variables.meta_format; // This is the string documentId from the input payload
+      const metaFormatDocId = variables.meta_format;
 
       if (metaFormatDocId) {
         queryClient.invalidateQueries({

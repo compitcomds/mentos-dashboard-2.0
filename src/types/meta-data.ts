@@ -1,6 +1,5 @@
-
-import type { User } from './auth';
-import type { MetaFormat } from './meta-format';
+import type { User } from "./auth";
+import type { MetaFormat } from "./meta-format";
 
 export interface MetaData {
   id?: number;
@@ -18,7 +17,7 @@ export interface MetaData {
 
 export interface CreateMetaDataPayload {
   tenent_id: string;
-  meta_format: string; // documentId of the MetaFormat
+  meta_format?: number; // id of the MetaFormat
   user?: number | null; // User ID
   meta_data: Record<string, any>;
   publishedAt?: string | null; // For draft/publish functionality
