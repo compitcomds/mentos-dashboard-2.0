@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -122,21 +123,27 @@ export function useCreateMetaDataEntry(id?: number) {
         title: "Success",
         description: "MetaData entry created successfully.",
       });
-      const metaFormatDocId = variables.meta_format;
+
+      // Get documentId from the populated meta_format relation in the response
+      const metaFormatDocId =
+        typeof data.meta_format === "object" && data.meta_format?.documentId
+          ? data.meta_format.documentId
+          : null;
 
       if (metaFormatDocId) {
+        console.log(
+          `[useCreateMetaDataEntry] Success. Invalidating entries for metaFormatDocId: ${metaFormatDocId}`
+        );
         queryClient.invalidateQueries({
-          queryKey: [
-            "metaDataEntries",
+          queryKey: META_DATA_ENTRIES_QUERY_KEY(
             metaFormatDocId,
-            currentUser?.tenent_id,
-          ],
+            currentUser?.tenent_id
+          ),
         });
       } else {
         console.warn(
-          "Created MetaData entry: metaFormatDocumentId was not found in creation payload variables. Invalidating entries generically.",
-          data,
-          variables
+          "Created MetaData entry, but metaFormat.documentId was not found in the response. Invalidating entries generically.",
+          data
         );
         queryClient.invalidateQueries({ queryKey: ["metaDataEntries"] });
       }

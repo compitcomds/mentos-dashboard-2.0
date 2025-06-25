@@ -1,3 +1,4 @@
+
 "use server";
 
 import type { MetaData, CreateMetaDataPayload } from "@/types/meta-data";
@@ -136,10 +137,11 @@ export const createMetaDataEntry = async (
   try {
     const headers = await getAuthHeader();
     console.log({ data: payload });
+    // Add populate parameter to get meta_format in response
     const response = await axiosInstance.post<FindOne<MetaData>>(
       url,
       { data: payload },
-      { headers }
+      { headers, params: { populate: "meta_format" } }
     );
     if (!response.data || !response.data.data) {
       throw new Error(
@@ -151,7 +153,6 @@ export const createMetaDataEntry = async (
       response.data.data
     );
     return response.data.data;
-    return {} as any;
   } catch (error: unknown) {
     let message = `Failed to create MetaData entry.`;
     if (error instanceof AxiosError) {
