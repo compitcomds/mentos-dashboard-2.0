@@ -342,7 +342,7 @@ export default function WebMediaPage() {
                   </div>
 
                   <div className="pt-3 border-t mt-3">
-                    <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1.5">
+                    <Label className="text-xs text-muted-foreground mb-1  flex items-center gap-1.5">
                       <TagIcon className="h-3.5 w-3.5" /> Filter by Tags
                     </Label>
                     <TagFilterControl
