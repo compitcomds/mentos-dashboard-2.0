@@ -90,7 +90,7 @@ export default function DashboardPage() {
       <QuickNav />
 
       {/* Placeholder for a chart or recent activity feed */}
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* <div className="grid gap-6 md:grid-cols-2">
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -119,7 +119,7 @@ export default function DashboardPage() {
             [List of Recent Documents Would Go Here]
           </CardContent>
         </Card>
-      </div>
+      </div> */}
     </div>
   );
 }
