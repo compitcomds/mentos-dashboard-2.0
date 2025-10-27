@@ -104,7 +104,7 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
 
        <SidebarFooter className="p-4 lg:p-6 border-t border-sidebar-border w-full">
          <div className="text-xs text-muted-foreground group-data-[state=collapsed]:hidden text-center">
-           © {new Date().getFullYear()} {siteName}
+           this is developed by compitcom.com
          </div>
        </SidebarFooter>
     </Sidebar>
