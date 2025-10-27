@@ -193,6 +193,7 @@ export default function BlogFormPage() {
 
   const [isSeoSyncEnabled, setIsSeoSyncEnabled] = useState(true);
   const manualSlugEditRef = useRef(false);
+  const manualCanonicalUrlEditRef = useRef(false); // Ref for canonical URL manual edit
 
   const {
     data: blogData,
@@ -218,13 +219,14 @@ export default function BlogFormPage() {
   const watchedAuthor = watch("author", "");
   const watchedImage = watch("image");
   const watchedStatus = watch("Blog_status");
-  const watchedCanonicalUrl = watch("seo_blog.canonicalURL", "");
+  const watchedSlug = watch("slug");
+  const watchedCategoryId = watch("categories");
   
   const watchedMetaTitle = watch("seo_blog.metaTitle", "");
   const watchedMetaDesc = watch("seo_blog.metaDescription", "");
   const watchedOgTitle = watch("seo_blog.openGraph.ogTitle", "");
   const watchedOgDesc = watch("seo_blog.openGraph.ogDescription", "");
-
+  const watchedCanonicalUrl = watch("seo_blog.canonicalURL", "");
 
   // Auto-slug generation
   useEffect(() => {
@@ -234,6 +236,32 @@ export default function BlogFormPage() {
         setValue('slug', newSlug, { shouldValidate: true, shouldDirty: true });
     }
   }, [watchedTitle, setValue, form]);
+
+  // Canonical URL Generation
+  useEffect(() => {
+    if (manualCanonicalUrlEditRef.current || !currentUser?.blog_url_builder || !watchedSlug) return;
+    
+    const template = currentUser.blog_url_builder;
+    const category = fetchedCategories?.find(c => c.id === watchedCategoryId);
+    
+    // Simple parser for the template: "base" + var + "separator" + var
+    let finalUrl = template;
+    
+    // Replace "slug"
+    finalUrl = finalUrl.replace(/\bslug\b/g, watchedSlug || '');
+    
+    // Replace <blog-set.slug>
+    finalUrl = finalUrl.replace(/<blog-set\.slug>/g, category?.slug || '');
+
+    // Replace quoted strings and plus signs
+    finalUrl = finalUrl.replace(/"/g, '').replace(/\s*\+\s*/g, '');
+
+    if (form.getValues('seo_blog.canonicalURL') !== finalUrl) {
+      setValue('seo_blog.canonicalURL', finalUrl, { shouldValidate: true, shouldDirty: true });
+    }
+
+  }, [watchedSlug, watchedCategoryId, currentUser?.blog_url_builder, fetchedCategories, setValue, form]);
+
 
   // SEO Sync logic
   useEffect(() => {
@@ -1189,6 +1217,10 @@ export default function BlogFormPage() {
                                   value={field.value ?? ""}
                                   placeholder="https://example.com/original-post"
                                   disabled={isSubmittingForm}
+                                  onChange={(e) => {
+                                      manualCanonicalUrlEditRef.current = true;
+                                      field.onChange(e);
+                                  }}
                                 />
                               </FormControl>
                               <FormDescription>

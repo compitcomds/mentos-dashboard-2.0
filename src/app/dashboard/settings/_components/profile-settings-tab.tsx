@@ -39,6 +39,7 @@ export default function ProfileSettingsTab() {
       site_name: '',
       site_url: '',
       logo_url: '',
+      blog_url_builder: '', // Initialize new field
     },
   });
 
@@ -70,6 +71,7 @@ export default function ProfileSettingsTab() {
         site_name: currentUser.site_name || '',
         site_url: currentUser.site_url || '',
         logo_url: currentUser.logo_url || '',
+        blog_url_builder: currentUser.blog_url_builder || '', // Set new field
       });
     }
   }, [currentUser, profileForm]);
@@ -314,6 +316,20 @@ export default function ProfileSettingsTab() {
                         <Input placeholder="https://example.com/logo.png" {...field} value={field.value || ''} disabled={updateUserProfileMutation.isPending} />
                       </FormControl>
                       <FormDescription>Full URL to your site's logo. Used for structured data.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={profileForm.control}
+                  name="blog_url_builder"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Blog URL Template</FormLabel>
+                      <FormControl>
+                        <Input placeholder='"https://mysite.com/" + <blog-set.slug> + "/" + slug' {...field} value={field.value || ''} disabled={updateUserProfileMutation.isPending} />
+                      </FormControl>
+                      <FormDescription>Template for generating Canonical URLs. Use "slug" for the post slug and &lt;blog-set.slug&gt; for category slug.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

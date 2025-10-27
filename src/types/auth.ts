@@ -48,6 +48,7 @@ export const profileSchema = z.object({
   site_name: z.string().optional().or(z.literal('')),
   site_url: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
   logo_url: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
+  blog_url_builder: z.string().optional().or(z.literal('')), // New field for the template
 });
 export type ProfileFormValues = z.infer<typeof profileSchema>;
 
@@ -151,4 +152,5 @@ export interface User {
     site_name?: string | null;
     site_url?: string | null;
     logo_url?: string | null;
+    blog_url_builder?: string | null; // New field for URL template
 }
