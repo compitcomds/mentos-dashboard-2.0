@@ -53,6 +53,7 @@ export default function BlogCardGrid({
         const authorName = post.author || 'N/A';
         const categoryName = post.categories?.name ?? 'N/A';
         const createdAtDate = post.createdAt ? new Date(post.createdAt as string) : null;
+        const publicUrl = post.seo_blog?.canonicalURL || post.seo_blog?.openGraph?.ogUrl || `/blog/${post.slug}`;
 
         return (
           <Card key={post.id} className="flex flex-col">
@@ -100,8 +101,8 @@ export default function BlogCardGrid({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-                    {/* Assuming public blog view path, adjust if necessary */}
-                    <Link href={`/blog/${post.slug}`} target="_blank">
+                    {/* Use the dynamically determined public URL */}
+                    <Link href={publicUrl} target="_blank">
                       <Eye className="h-4 w-4" />
                     </Link>
                   </Button>

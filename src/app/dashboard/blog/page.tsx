@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -661,6 +662,7 @@ export default function BlogPage() {
                       const editLink = `/dashboard/blog/${
                         post.documentId || post.id
                       }?returnUrl=${encodeURIComponent(currentFullUrl)}`;
+                      const publicUrl = post.seo_blog?.canonicalURL || post.seo_blog?.openGraph?.ogUrl || `/blog/${post.slug}`;
 
                       return (
                         <TableRow key={post.id}>
@@ -728,7 +730,7 @@ export default function BlogPage() {
                                     className="h-8 w-8"
                                   >
                                     <Link
-                                      href={`/blog/${post.slug}`}
+                                      href={publicUrl}
                                       target="_blank"
                                     >
                                       <Eye className="h-4 w-4" />
