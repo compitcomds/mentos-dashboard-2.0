@@ -123,7 +123,11 @@ export default function Header({ userName, onLogout, menuItems, logoUrl }: Heade
                   <UserCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                 </AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium hidden md:inline-block">{userName}</span>
+              {logoUrl ? (
+                <Image src={logoUrl} alt="Site Logo" width={80} height={32} className="h-8 w-auto hidden md:inline-block" unoptimized />
+              ) : (
+                <span className="text-sm font-medium hidden md:inline-block">{userName}</span>
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
