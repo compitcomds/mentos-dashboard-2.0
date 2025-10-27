@@ -39,7 +39,7 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
   const { state } = useSidebar(); // Get sidebar state
   const { data: currentUser } = useCurrentUser(); // Fetch user data
   const logoUrl = currentUser?.logo_url || null; // Get logo URL
-  const siteName = "Mentos Api"; // Hardcode site name as requested
+  const siteName = currentUser?.site_name || "Mentos Api"; // Use site name from user settings, fallback to "Mentos Api"
 
   // menuItems prop already includes the updated label and path from DashboardLayout
   const updatedMenuItems = menuItems;
@@ -53,14 +53,13 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
              "flex h-14 items-center", // Base styles, height adjusted
              state === 'expanded'
                ? "px-4 lg:px-6 justify-between" // Expanded: padding, space between Brand and Trigger
-               : "px-2 flex-col justify-center items-center py-2 gap-1" // Collapsed: less padding, column, centered, small gap
+               : "px-2 justify-center" // Collapsed: centered
            )}
          >
             <Link
               href="/dashboard"
               className={cn(
-                "flex items-center gap-2 font-semibold", 
-                state === 'collapsed' && "flex-col justify-center",
+                "flex items-center gap-2 font-semibold",
                 state === 'expanded' ? "text-lg" : "text-base"
               )}
               aria-label={state === 'expanded' ? `${siteName} Dashboard` : "Dashboard"}
@@ -76,7 +75,7 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
             </Link>
 
            <SidebarTrigger
-             className={cn("h-7 w-7")} // Basic styling, positioning handled by parent div's flex properties
+             className={cn("h-7 w-7", state === 'expanded' ? 'ml-auto' : 'hidden')} // Use ml-auto for spacing, hide when collapsed (as it's outside the flow)
            >
              {/* Explicitly pass the icons to SidebarTrigger */}
              {state === 'expanded' ? <ChevronLeft /> : <ChevronRight />}
