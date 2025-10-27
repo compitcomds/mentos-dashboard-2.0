@@ -239,9 +239,9 @@ export default function BlogFormPage() {
 
   // Canonical URL Generation
   useEffect(() => {
-    if (manualCanonicalUrlEditRef.current || !currentUser?.blog_url_builder || !watchedSlug) return;
+    if (manualCanonicalUrlEditRef.current || !currentUser?.bolg_url_builder || !watchedSlug) return;
     
-    const template = currentUser.blog_url_builder;
+    const template = currentUser.bolg_url_builder;
     const category = fetchedCategories?.find(c => c.id === watchedCategoryId);
 
     const parts = template.split('+').map(part => part.trim());
@@ -261,7 +261,7 @@ export default function BlogFormPage() {
       setValue('seo_blog.canonicalURL', finalUrl, { shouldValidate: true, shouldDirty: true });
     }
 
-  }, [watchedSlug, watchedCategoryId, currentUser?.blog_url_builder, fetchedCategories, setValue, form]);
+  }, [watchedSlug, watchedCategoryId, currentUser?.bolg_url_builder, fetchedCategories, setValue, form]);
 
 
   // SEO Sync logic

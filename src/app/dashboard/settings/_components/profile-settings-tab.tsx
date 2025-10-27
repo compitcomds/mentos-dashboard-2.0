@@ -39,7 +39,7 @@ export default function ProfileSettingsTab() {
       site_name: '',
       site_url: '',
       logo_url: '',
-      blog_url_builder: '', // Initialize new field
+      bolg_url_builder: '', // Initialize new field
     },
   });
 
@@ -71,7 +71,7 @@ export default function ProfileSettingsTab() {
         site_name: currentUser.site_name || '',
         site_url: currentUser.site_url || '',
         logo_url: currentUser.logo_url || '',
-        blog_url_builder: currentUser.blog_url_builder || '', // Set new field
+        bolg_url_builder: currentUser.bolg_url_builder || '', // Set new field
       });
     }
   }, [currentUser, profileForm]);
@@ -322,7 +322,7 @@ export default function ProfileSettingsTab() {
                 />
                 <FormField
                   control={profileForm.control}
-                  name="blog_url_builder"
+                  name="bolg_url_builder"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Blog URL Template</FormLabel>
