@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter, useParams, useSearchParams } from "next/navigation"; // Added useSearchParams
-import { useEffect, useState, useCallback } from "react";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   useForm,
   SubmitHandler,
@@ -38,8 +38,6 @@ import type {
   CreateBlogPayload,
   GetMediaUrlFunction,
   GetTagValuesFunction,
-  SeoBlogPayload,
-  OpenGraphPayload,
 } from "@/types/blog";
 import type { Categorie } from "@/types/category";
 import type { OtherTag } from "@/types/common";
@@ -50,7 +48,7 @@ import { Textarea } from "@/components/ui/textarea";
 import MediaSelectorDialog from "@/app/dashboard/web-media/_components/media-selector-dialog";
 import NextImage from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { blogFormSchema, seoBlogSchema, openGraphSchema } from "@/types/blog";
+import { blogFormSchema, openGraphSchema } from "@/types/blog";
 import {
   Form,
   FormControl,
@@ -64,6 +62,13 @@ import { useCurrentUser } from "@/lib/queries/user";
 import { useGetCategories } from "@/lib/queries/category";
 import { format } from "date-fns";
 import type { CombinedMediaData } from "@/types/media";
+import { Switch } from "@/components/ui/switch";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || "";
 
@@ -86,11 +91,11 @@ const getTagValues: GetTagValuesFunction = (tagField) => {
   return tagField.map((t) => t.tag_value).filter(Boolean) as string[];
 };
 
-const formatStructuredData = (data: any): string | null => {
+const formatStructuredData = (data: any): string => {
   if (typeof data === "string") {
     try {
-      JSON.parse(data);
-      return data;
+      const parsed = JSON.parse(data);
+      return JSON.stringify(parsed, null, 2);
     } catch {
       return data.trim() !== ""
         ? data
@@ -104,6 +109,16 @@ const formatStructuredData = (data: any): string | null => {
     }
   }
   return '{ "@context": "https://schema.org", "@type": "Article" }';
+};
+
+const slugify = (text: string): string => {
+    return text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')       // Replace spaces with -
+      .replace(/[^\w\-]+/g, '')   // Remove all non-word chars except -
+      .replace(/\-\-+/g, '-');    // Replace multiple - with single -
 };
 
 const defaultFormValues: BlogFormValues = {
@@ -140,23 +155,23 @@ const defaultFormValues: BlogFormValues = {
 
 export default function BlogFormPage() {
   const params = useParams();
-  const searchParams = useSearchParams(); // Get searchParams
+  const searchParams = useSearchParams();
   const blogDocumentIdFromUrl = params?.id as string | undefined;
   const isEditing = blogDocumentIdFromUrl && blogDocumentIdFromUrl !== "new";
   const router = useRouter();
   const { toast } = useToast();
   const { data: currentUser, isLoading: isLoadingUser } = useCurrentUser();
   const userTenentId = currentUser?.tenent_id;
-  const returnUrl = searchParams.get("returnUrl"); // Read returnUrl
+  const returnUrl = searchParams.get("returnUrl");
 
   const {
     data: fetchedCategoriesData,
     isLoading: isLoadingCategories,
     isError: isCategoriesError,
-  } = useGetCategories(); 
-  const fetchedCategories = fetchedCategoriesData?.data; 
+  } = useGetCategories();
+  const fetchedCategories = fetchedCategoriesData?.data;
 
-  const [isLoadingComponent, setIsLoadingComponent] = useState(true); 
+  const [isLoadingComponent, setIsLoadingComponent] = useState(true);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
@@ -176,12 +191,15 @@ export default function BlogFormPage() {
     string | null
   >(null);
 
+  const [isSeoSyncEnabled, setIsSeoSyncEnabled] = useState(true);
+  const manualSlugEditRef = useRef(false);
+
   const {
     data: blogData,
     isLoading: isLoadingBlog,
     isError: isErrorBlog,
     error: errorBlog,
-  } = useGetBlog(isEditing ? blogDocumentIdFromUrl : null); 
+  } = useGetBlog(isEditing ? blogDocumentIdFromUrl : null);
 
   const createMutation = useCreateBlog();
   const updateMutation = useUpdateBlog();
@@ -189,16 +207,84 @@ export default function BlogFormPage() {
   const form = useForm<BlogFormValues>({
     resolver: zodResolver(blogFormSchema),
     defaultValues: defaultFormValues,
+    mode: 'onChange',
   });
 
-  const { control, handleSubmit, reset, setValue, watch } = form;
+  const { control, handleSubmit, reset, setValue, watch, trigger } = form;
 
   const watchedTitle = watch("title", "");
   const watchedExcerpt = watch("excerpt", "");
+  const watchedTags = watch("tags", "");
+  const watchedAuthor = watch("author", "");
+  const watchedImage = watch("image");
+  const watchedStatus = watch("Blog_status");
+  const watchedCanonicalUrl = watch("seo_blog.canonicalURL", "");
+  
   const watchedMetaTitle = watch("seo_blog.metaTitle", "");
   const watchedMetaDesc = watch("seo_blog.metaDescription", "");
   const watchedOgTitle = watch("seo_blog.openGraph.ogTitle", "");
   const watchedOgDesc = watch("seo_blog.openGraph.ogDescription", "");
+
+
+  // Auto-slug generation
+  useEffect(() => {
+    if (manualSlugEditRef.current) return;
+    const newSlug = slugify(watchedTitle);
+    if (form.getValues('slug') !== newSlug) {
+        setValue('slug', newSlug, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [watchedTitle, setValue, form]);
+
+  // SEO Sync logic
+  useEffect(() => {
+    if (isSeoSyncEnabled) {
+      // Sync titles
+      setValue('seo_blog.metaTitle', watchedTitle.substring(0, 60), { shouldValidate: true });
+      setValue('seo_blog.openGraph.ogTitle', watchedTitle.substring(0, 70), { shouldValidate: true });
+
+      // Sync descriptions
+      setValue('seo_blog.metaDescription', watchedExcerpt.substring(0, 160), { shouldValidate: true });
+      setValue('seo_blog.openGraph.ogDescription', watchedExcerpt.substring(0, 200), { shouldValidate: true });
+        
+      // Sync images
+      setValue('seo_blog.metaImage', watchedImage, { shouldValidate: true });
+      setValue('seo_blog.openGraph.ogImage', watchedImage, { shouldValidate: true });
+
+      // Sync tags to keywords
+      setValue('seo_blog.keywords', watchedTags, { shouldValidate: true });
+        
+       // Sync canonical URL to OG URL
+       setValue('seo_blog.openGraph.ogUrl', watchedCanonicalUrl, { shouldValidate: true });
+
+    }
+  }, [isSeoSyncEnabled, watchedTitle, watchedExcerpt, watchedImage, watchedTags, watchedCanonicalUrl, setValue]);
+    
+   // JSON-LD generation
+   useEffect(() => {
+    const featuredImageUrl = imagePreviews.featured || '';
+
+    const jsonData = {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": watchedTitle,
+      "image": featuredImageUrl,
+      "author": {
+        "@type": "Person",
+        "name": watchedAuthor || 'Site Author',
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Your Site Name", // Placeholder
+        "logo": {
+          "@type": "ImageObject",
+          "url": "/app-logo.png" // Placeholder
+        }
+      },
+      "datePublished": watchedStatus === 'published' && blogData?.publishedAt ? format(new Date(blogData.publishedAt), 'yyyy-MM-dd') : (watchedStatus === 'published' ? format(new Date(), 'yyyy-MM-dd') : '')
+    };
+    setValue('seo_blog.structuredData', formatStructuredData(jsonData));
+  }, [watchedTitle, watchedAuthor, watchedStatus, blogData?.publishedAt, imagePreviews.featured, setValue]);
+
 
   useEffect(() => {
     if (isLoadingUser) return;
@@ -302,7 +388,7 @@ export default function BlogFormPage() {
     router,
     toast,
     isCategoriesError,
-    returnUrl, // Add returnUrl to dependency array
+    returnUrl,
   ]);
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -417,6 +503,14 @@ export default function BlogFormPage() {
       });
       return;
     }
+    
+    // Rerunning validation to catch any potential last-minute sync issues
+    const isFormValid = await trigger();
+    if (!isFormValid) {
+        toast({ variant: 'destructive', title: 'Validation Error', description: 'Please check the form for errors before submitting.' });
+        return;
+    }
+
 
     const mutationOptions = {
       onSuccess: () => {
@@ -551,7 +645,7 @@ export default function BlogFormPage() {
           type="button"
           variant="outline"
           onClick={() => openMediaSelector(target)}
-          disabled={isSubmittingForm}
+          disabled={isSubmittingForm || (isSeoSyncEnabled && target !== 'image')}
         >
           <ImageIcon className="mr-2 h-4 w-4" />
           {previewUrl ? "Change Image" : "Select Image"}
@@ -574,7 +668,7 @@ export default function BlogFormPage() {
               size="icon"
               className="absolute -top-2 -right-2 h-5 w-5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => removeSelectedImage(target)}
-              disabled={isSubmittingForm}
+              disabled={isSubmittingForm || (isSeoSyncEnabled && target !== 'image')}
             >
               <X className="h-3 w-3" />
             </Button>
@@ -626,17 +720,17 @@ export default function BlogFormPage() {
                     </FormControl>
                     <div className="flex justify-between items-center">
                       <FormDescription>
-                        Min 10, Max 100 chars. Required.
+                        Min 10, Max 70 chars. Required.
                       </FormDescription>
                       <span
                         className={cn(
                           "text-xs",
-                          watchedTitle.length < 10 || watchedTitle.length > 100
+                          watchedTitle.length < 10 || watchedTitle.length > 70
                             ? "text-destructive"
                             : "text-muted-foreground"
                         )}
                       >
-                        {watchedTitle.length}/100
+                        {watchedTitle.length}/70
                       </span>
                     </div>
                     <FormMessage />
@@ -657,6 +751,10 @@ export default function BlogFormPage() {
                         placeholder="e.g., my-awesome-post"
                         {...field}
                         disabled={isSubmittingForm}
+                        onChange={(e) => {
+                            manualSlugEditRef.current = true;
+                            field.onChange(e);
+                        }}
                       />
                     </FormControl>
                     <FormDescription>
@@ -685,18 +783,18 @@ export default function BlogFormPage() {
                     </FormControl>
                     <div className="flex justify-between items-center">
                       <FormDescription>
-                        Required. Max 250 chars.
+                        Required. Max 180 chars.
                       </FormDescription>
                       <span
                         className={cn(
                           "text-xs",
                           watchedExcerpt.length === 0 ||
-                            watchedExcerpt.length > 250
+                            watchedExcerpt.length > 180
                             ? "text-destructive"
                             : "text-muted-foreground"
                         )}
                       >
-                        {watchedExcerpt.length} / 250
+                        {watchedExcerpt.length} / 180
                       </span>
                     </div>
                     <FormMessage />
@@ -940,380 +1038,393 @@ export default function BlogFormPage() {
                 />
               </div>
 
-              <div className="space-y-6 pt-6 border-t">
-                <h2 className="text-xl font-semibold tracking-tight">
-                  SEO & Social Sharing
-                </h2>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Meta Settings</CardTitle>
-                    <CardDescription>
-                      Optimize for search engines.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <FormField
-                      control={control}
-                      name="seo_blog.metaTitle"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Meta Title{" "}
-                            <span className="text-destructive">*</span>
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              value={field.value ?? ""}
-                              placeholder="Compelling title (max 60 chars)"
-                              disabled={isSubmittingForm}
-                            />
-                          </FormControl>
-                          <div className="flex justify-between items-center">
-                            <FormDescription>
-                              Max 60 chars. Required.
-                            </FormDescription>
-                            <span
-                              className={cn(
-                                "text-xs",
-                                (watchedMetaTitle?.length ?? 0) === 0 ||
-                                  (watchedMetaTitle?.length ?? 0) > 60
-                                  ? "text-destructive"
-                                  : "text-muted-foreground"
-                              )}
-                            >
-                              {watchedMetaTitle?.length ?? 0}/60
-                            </span>
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+              <Accordion type="single" collapsible defaultValue={isSeoSyncEnabled ? "" : "seo-section"} value={isSeoSyncEnabled ? "" : "seo-section"} onValueChange={(value) => !value && setIsSeoSyncEnabled(true)}>
+                <AccordionItem value="seo-section" className="border-t pt-4">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Switch
+                        id="seo-sync-toggle"
+                        checked={isSeoSyncEnabled}
+                        onCheckedChange={setIsSeoSyncEnabled}
                     />
-                    <FormField
-                      control={control}
-                      name="seo_blog.metaDescription"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Meta Description{" "}
-                            <span className="text-destructive">*</span>
-                          </FormLabel>
-                          <FormControl>
-                            <Textarea
-                              {...field}
-                              value={field.value ?? ""}
-                              placeholder="Short summary (50-160 chars)"
-                              rows={2}
-                              disabled={isSubmittingForm}
-                            />
-                          </FormControl>
-                          <div className="flex justify-between items-center">
-                            <FormDescription>
-                              Min 50, Max 160 chars. Required.
-                            </FormDescription>
-                            <span
-                              className={cn(
-                                "text-xs",
-                                (watchedMetaDesc?.length ?? 0) < 50 ||
-                                  (watchedMetaDesc?.length ?? 0) > 160
-                                  ? "text-destructive"
-                                  : "text-muted-foreground"
-                              )}
-                            >
-                              {watchedMetaDesc?.length ?? 0}/160
-                            </span>
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={control}
-                      name="seo_blog.metaImage"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Meta Image</FormLabel>
-                          <FormControl>
-                            <ImageSelectorButton target="seo_blog.metaImage" />
-                          </FormControl>
-                          <FormDescription>
-                            Optional. Recommended size: 1200x630px.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={control}
-                      name="seo_blog.keywords"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Keywords</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              value={field.value ?? ""}
-                              placeholder="Enter comma-separated keywords"
-                              disabled={isSubmittingForm}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Optional. Comma-separated keywords.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={control}
-                      name="seo_blog.canonicalURL"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Canonical URL</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              value={field.value ?? ""}
-                              placeholder="https://example.com/original-post"
-                              disabled={isSubmittingForm}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Optional. If this content is copied from another
-                            source.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={control}
-                      name="seo_blog.metaRobots"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Meta Robots</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              value={field.value ?? "index, follow"}
-                              placeholder="index, follow"
-                              disabled={isSubmittingForm}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Optional. Controls search engine indexing.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={control}
-                      name="seo_blog.metaViewport"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Meta Viewport</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              value={
-                                field.value ??
-                                "width=device-width, initial-scale=1.0"
-                              }
-                              placeholder="width=device-width, initial-scale=1.0"
-                              disabled={isSubmittingForm}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Optional. Defines viewport settings for mobile
-                            devices.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={control}
-                      name="seo_blog.structuredData"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Structured Data (JSON-LD)</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              {...field}
-                              value={field.value ?? ""}
-                              placeholder='{ "@context": "https://schema.org", ... }'
-                              rows={5}
-                              disabled={isSubmittingForm}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Optional. Must be valid JSON. Helps search engines
-                            understand content.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-
-                {form.watch("seo_blog") && (
-                  <Card className="bg-muted/50">
-                    <CardHeader>
-                      <CardTitle className="text-lg">
-                        Open Graph (Social Sharing)
-                      </CardTitle>
-                      <CardDescription>
-                        Customize how content appears on social media.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <FormField
-                        control={control}
-                        name="seo_blog.openGraph.ogTitle"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              OG Title{" "}
-                              <span className="text-destructive">*</span>
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                value={field.value ?? ""}
-                                placeholder="Title for social (max 70 chars)"
-                                disabled={isSubmittingForm}
-                              />
-                            </FormControl>
-                            <div className="flex justify-between items-center">
-                              <FormDescription>
-                                Max 70 chars. Required.
-                              </FormDescription>
-                              <span
-                                className={cn(
-                                  "text-xs",
-                                  (watchedOgTitle?.length ?? 0) === 0 ||
-                                    (watchedOgTitle?.length ?? 0) > 70
-                                    ? "text-destructive"
-                                    : "text-muted-foreground"
-                                )}
-                              >
-                                {watchedOgTitle?.length ?? 0}/70
-                              </span>
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={control}
-                        name="seo_blog.openGraph.ogDescription"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              OG Description{" "}
-                              <span className="text-destructive">*</span>
-                            </FormLabel>
-                            <FormControl>
-                              <Textarea
-                                {...field}
-                                value={field.value ?? ""}
-                                placeholder="Description for social (max 200 chars)"
-                                rows={2}
-                                disabled={isSubmittingForm}
-                              />
-                            </FormControl>
-                            <div className="flex justify-between items-center">
-                              <FormDescription>
-                                Max 200 chars. Required.
-                              </FormDescription>
-                              <span
-                                className={cn(
-                                  "text-xs",
-                                  (watchedOgDesc?.length ?? 0) === 0 ||
-                                    (watchedOgDesc?.length ?? 0) > 200
-                                    ? "text-destructive"
-                                    : "text-muted-foreground"
-                                )}
-                              >
-                                {watchedOgDesc?.length ?? 0}/200
-                              </span>
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={control}
-                        name="seo_blog.openGraph.ogImage"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>OG Image</FormLabel>
-                            <FormControl>
-                              <ImageSelectorButton target="seo_blog.openGraph.ogImage" />
-                            </FormControl>
-                            <FormDescription>
-                              Optional. Recommended size: 1200x630px.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={control}
-                        name="seo_blog.openGraph.ogUrl"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>OG URL</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                value={field.value ?? ""}
-                                placeholder="URL for social sharing (e.g., blog post URL)"
-                                disabled={isSubmittingForm}
-                              />
-                            </FormControl>
-                            <FormDescription>Optional.</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={control}
-                        name="seo_blog.openGraph.ogType"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>OG Type</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value ?? "article"}
-                              disabled={isSubmittingForm}
-                            >
+                    <FormLabel htmlFor="seo-sync-toggle" className="font-normal cursor-pointer">
+                        Automatically populate SEO & Social fields from main content
+                    </FormLabel>
+                  </div>
+                  <AccordionTrigger className={cn("text-xl font-semibold tracking-tight hover:no-underline", isSeoSyncEnabled && "cursor-default")} onClick={(e) => isSeoSyncEnabled && e.preventDefault()}>
+                      SEO & Social Sharing
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-6 pt-2">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Meta Settings</CardTitle>
+                        <CardDescription>
+                          Optimize for search engines.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <FormField
+                          control={control}
+                          name="seo_blog.metaTitle"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                Meta Title{" "}
+                                <span className="text-destructive">*</span>
+                              </FormLabel>
                               <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select OG type" />
-                                </SelectTrigger>
+                                <Input
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  placeholder="Compelling title (max 60 chars)"
+                                  disabled={isSubmittingForm || isSeoSyncEnabled}
+                                />
                               </FormControl>
-                              <SelectContent>
-                                <SelectItem value="article">Article</SelectItem>
-                                <SelectItem value="website">Website</SelectItem>
-                                <SelectItem value="book">Book</SelectItem>
-                                <SelectItem value="profile">Profile</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormDescription>
-                              Optional. Usually 'article' for blog posts.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+                              <div className="flex justify-between items-center">
+                                <FormDescription>
+                                  Max 60 chars. Required.
+                                </FormDescription>
+                                <span
+                                  className={cn(
+                                    "text-xs",
+                                    (watchedMetaTitle?.length ?? 0) === 0 ||
+                                      (watchedMetaTitle?.length ?? 0) > 60
+                                      ? "text-destructive"
+                                      : "text-muted-foreground"
+                                  )}
+                                >
+                                  {watchedMetaTitle?.length ?? 0}/60
+                                </span>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={control}
+                          name="seo_blog.metaDescription"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                Meta Description{" "}
+                                <span className="text-destructive">*</span>
+                              </FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  placeholder="Short summary (50-160 chars)"
+                                  rows={2}
+                                  disabled={isSubmittingForm || isSeoSyncEnabled}
+                                />
+                              </FormControl>
+                              <div className="flex justify-between items-center">
+                                <FormDescription>
+                                  Min 50, Max 160 chars. Required.
+                                </FormDescription>
+                                <span
+                                  className={cn(
+                                    "text-xs",
+                                    (watchedMetaDesc?.length ?? 0) < 50 ||
+                                      (watchedMetaDesc?.length ?? 0) > 160
+                                      ? "text-destructive"
+                                      : "text-muted-foreground"
+                                  )}
+                                >
+                                  {watchedMetaDesc?.length ?? 0}/160
+                                </span>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={control}
+                          name="seo_blog.metaImage"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Meta Image</FormLabel>
+                              <FormControl>
+                                <ImageSelectorButton target="seo_blog.metaImage" />
+                              </FormControl>
+                              <FormDescription>
+                                Optional. Recommended size: 1200x630px.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={control}
+                          name="seo_blog.keywords"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Keywords</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  placeholder="Enter comma-separated keywords"
+                                  disabled={isSubmittingForm || isSeoSyncEnabled}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Optional. Comma-separated keywords.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={control}
+                          name="seo_blog.canonicalURL"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Canonical URL</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  placeholder="https://example.com/original-post"
+                                  disabled={isSubmittingForm}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Optional. If this content is copied from another
+                                source.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={control}
+                          name="seo_blog.metaRobots"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Meta Robots</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  value={field.value ?? "index, follow"}
+                                  placeholder="index, follow"
+                                  disabled={isSubmittingForm}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Optional. Controls search engine indexing.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={control}
+                          name="seo_blog.metaViewport"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Meta Viewport</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  value={
+                                    field.value ??
+                                    "width=device-width, initial-scale=1.0"
+                                  }
+                                  placeholder="width=device-width, initial-scale=1.0"
+                                  disabled={isSubmittingForm}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Optional. Defines viewport settings for mobile
+                                devices.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={control}
+                          name="seo_blog.structuredData"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Structured Data (JSON-LD)</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  placeholder='{ "@context": "https://schema.org", ... }'
+                                  rows={5}
+                                  disabled={isSubmittingForm}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Optional. Must be valid JSON. Helps search engines
+                                understand content.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </CardContent>
+                    </Card>
+
+                    {form.watch("seo_blog") && (
+                      <Card className="bg-muted/50">
+                        <CardHeader>
+                          <CardTitle className="text-lg">
+                            Open Graph (Social Sharing)
+                          </CardTitle>
+                          <CardDescription>
+                            Customize how content appears on social media.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <FormField
+                            control={control}
+                            name="seo_blog.openGraph.ogTitle"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>
+                                  OG Title{" "}
+                                  <span className="text-destructive">*</span>
+                                </FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    value={field.value ?? ""}
+                                    placeholder="Title for social (max 70 chars)"
+                                    disabled={isSubmittingForm || isSeoSyncEnabled}
+                                  />
+                                </FormControl>
+                                <div className="flex justify-between items-center">
+                                  <FormDescription>
+                                    Max 70 chars. Required.
+                                  </FormDescription>
+                                  <span
+                                    className={cn(
+                                      "text-xs",
+                                      (watchedOgTitle?.length ?? 0) === 0 ||
+                                        (watchedOgTitle?.length ?? 0) > 70
+                                        ? "text-destructive"
+                                        : "text-muted-foreground"
+                                    )}
+                                  >
+                                    {watchedOgTitle?.length ?? 0}/70
+                                  </span>
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={control}
+                            name="seo_blog.openGraph.ogDescription"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>
+                                  OG Description{" "}
+                                  <span className="text-destructive">*</span>
+                                </FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    {...field}
+                                    value={field.value ?? ""}
+                                    placeholder="Description for social (max 200 chars)"
+                                    rows={2}
+                                    disabled={isSubmittingForm || isSeoSyncEnabled}
+                                  />
+                                </FormControl>
+                                <div className="flex justify-between items-center">
+                                  <FormDescription>
+                                    Max 200 chars. Required.
+                                  </FormDescription>
+                                  <span
+                                    className={cn(
+                                      "text-xs",
+                                      (watchedOgDesc?.length ?? 0) === 0 ||
+                                        (watchedOgDesc?.length ?? 0) > 200
+                                        ? "text-destructive"
+                                        : "text-muted-foreground"
+                                    )}
+                                  >
+                                    {watchedOgDesc?.length ?? 0}/200
+                                  </span>
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={control}
+                            name="seo_blog.openGraph.ogImage"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>OG Image</FormLabel>
+                                <FormControl>
+                                  <ImageSelectorButton target="seo_blog.openGraph.ogImage" />
+                                </FormControl>
+                                <FormDescription>
+                                  Optional. Recommended size: 1200x630px.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={control}
+                            name="seo_blog.openGraph.ogUrl"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>OG URL</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    value={field.value ?? ""}
+                                    placeholder="URL for social sharing (e.g., blog post URL)"
+                                    disabled={isSubmittingForm || isSeoSyncEnabled}
+                                  />
+                                </FormControl>
+                                <FormDescription>Optional.</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={control}
+                            name="seo_blog.openGraph.ogType"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>OG Type</FormLabel>
+                                <Select
+                                  onValueChange={field.onChange}
+                                  value={field.value ?? "article"}
+                                  disabled={isSubmittingForm}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select OG type" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="article">Article</SelectItem>
+                                    <SelectItem value="website">Website</SelectItem>
+                                    <SelectItem value="book">Book</SelectItem>
+                                    <SelectItem value="profile">Profile</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormDescription>
+                                  Optional. Usually 'article' for blog posts.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </CardContent>
+                      </Card>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </CardContent>
 
             <CardFooter className="flex flex-col items-end space-y-4 p-4 border-t flex-shrink-0 bg-background sticky bottom-0">
@@ -1331,7 +1442,7 @@ export default function BlogFormPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.push(returnUrl || "/dashboard/blog")} // Use returnUrl or fallback
+                  onClick={() => router.push(returnUrl || "/dashboard/blog")}
                   disabled={isSubmittingForm}
                 >
                   Cancel

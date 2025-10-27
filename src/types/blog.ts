@@ -1,4 +1,3 @@
-
 import type { Media } from './media';
 import type { Categorie } from './category'; // Changed from BlogSet to Categorie
 import type { User } from './auth';
@@ -81,10 +80,10 @@ export type SeoBlogPayload = z.infer<typeof seoBlogSchema>;
 export const blogFormSchema = z.object({
     title: z.string()
       .min(10, { message: "Title must be at least 10 characters." })
-      .max(100, { message: "Title must be at most 100 characters." }),
+      .max(70, { message: "Title must be at most 70 characters." }),
     excerpt: z.string()
       .min(1, { message: "Excerpt is required." })
-      .max(250, { message: "Excerpt must be at most 250 characters." }),
+      .max(180, { message: "Excerpt must be at most 180 characters." }),
     slug: z.string()
       .min(1, { message: "Slug is required." })
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: "Slug must be lowercase alphanumeric with hyphens" }),
