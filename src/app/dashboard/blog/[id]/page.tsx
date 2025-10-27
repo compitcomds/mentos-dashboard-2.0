@@ -243,18 +243,19 @@ export default function BlogFormPage() {
     
     const template = currentUser.blog_url_builder;
     const category = fetchedCategories?.find(c => c.id === watchedCategoryId);
-    
-    // Simple parser for the template: "base" + var + "separator" + var
-    let finalUrl = template;
-    
-    // Replace "slug"
-    finalUrl = finalUrl.replace(/\bslug\b/g, watchedSlug || '');
-    
-    // Replace <blog-set.slug>
-    finalUrl = finalUrl.replace(/<blog-set\.slug>/g, category?.slug || '');
 
-    // Replace quoted strings and plus signs
-    finalUrl = finalUrl.replace(/"/g, '').replace(/\s*\+\s*/g, '');
+    const parts = template.split('+').map(part => part.trim());
+    const finalUrl = parts.map(part => {
+        if (part.startsWith('"') && part.endsWith('"')) {
+            return part.slice(1, -1); // It's a string literal
+        } else if (part === 'slug') {
+            return watchedSlug || ''; // The post slug
+        } else if (part === '<blog-set.slug>') {
+            return category?.slug || ''; // The category slug
+        }
+        return ''; // Or handle other variables if they exist
+    }).join('');
+
 
     if (form.getValues('seo_blog.canonicalURL') !== finalUrl) {
       setValue('seo_blog.canonicalURL', finalUrl, { shouldValidate: true, shouldDirty: true });
