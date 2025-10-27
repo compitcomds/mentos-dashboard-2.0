@@ -58,16 +58,21 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
          >
             <Link
               href="/dashboard"
-              className={cn("flex items-center gap-2 font-semibold", state === 'collapsed' && "flex-col")}
+              className={cn(
+                "flex items-center gap-2 font-semibold", 
+                state === 'collapsed' && "flex-col justify-center",
+                state === 'expanded' ? "text-lg" : "text-base"
+              )}
               aria-label={state === 'expanded' ? `${siteName} Dashboard` : "Dashboard"}
             >
               {logoUrl ? (
                 <Image src={logoUrl} alt={`${siteName} Logo`} width={32} height={32} className="h-8 w-auto rounded-sm object-contain" unoptimized />
               ) : (
-                <span className={cn(state === 'expanded' ? "text-lg" : "text-xl font-bold")}>
-                    {state === 'expanded' ? siteName : siteName.charAt(0).toUpperCase() || 'M'}
+                <span className="p-2 bg-muted rounded-md text-xl font-bold">
+                    {siteName.charAt(0).toUpperCase()}
                 </span>
               )}
+               {state === 'expanded' && <span className="inline-block">{siteName}</span>}
             </Link>
 
            <SidebarTrigger
