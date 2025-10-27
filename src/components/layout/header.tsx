@@ -1,7 +1,9 @@
+
 "use client";
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image"; // Import Next.js Image component
 import { usePathname } from "next/navigation";
 import { Menu, LogOut, UserCircle, LucideIcon, Settings, CreditCard } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,11 +37,12 @@ interface HeaderProps {
   userName: string;
   onLogout: () => void;
   menuItems: MenuItem[];
+  logoUrl: string | null; // Add logoUrl prop
 }
 
 const environment = process.env.NEXT_PUBLIC_ENVIRONMENT || "production";
 
-export default function Header({ userName, onLogout, menuItems }: HeaderProps) {
+export default function Header({ userName, onLogout, menuItems, logoUrl }: HeaderProps) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const mobileMenuItems = menuItems;
@@ -66,7 +69,11 @@ export default function Header({ userName, onLogout, menuItems }: HeaderProps) {
               <SheetTitle asChild>
                 <div className="flex h-12 items-center gap-2 px-3 lg:px-4">
                   <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-                    <span className="text-md sm:text-lg font-semibold">Mentos</span>
+                    {logoUrl ? (
+                        <Image src={logoUrl} alt="Site Logo" width={32} height={32} className="h-8 w-auto rounded-sm object-contain" unoptimized />
+                    ) : (
+                        <span className="text-md sm:text-lg font-semibold">Mentos</span>
+                    )}
                   </Link>
                 </div>
               </SheetTitle>

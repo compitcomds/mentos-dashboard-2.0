@@ -62,7 +62,7 @@ export default function DashboardLayout({
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
 
   const { data: currentUser, isLoading: isLoadingUser, isError: isUserError, error: userError } = useCurrentUser();
-  const { data: metaFormats, isLoading: isLoadingMetaFormats, isError: isErrorMetaFormats } = useGetMetaFormats();
+  const { data: metaFormats, isLoading: isLoadingMetaFormats, isError: isErrorMetaFormats } = useGetMetaFormats({staleTime: 1000 * 60 * 60 * 24});
   const { data: payments, isLoading: isLoadingPayments, isError: isErrorPayments } = useGetPayments();
 
   const [menuItems, setMenuItems] = React.useState<MenuItem[]>(initialStaticMenuItems);
@@ -71,6 +71,7 @@ export default function DashboardLayout({
   const [isDashboardLocked, setIsDashboardLocked] = React.useState(false);
 
   const userName = currentUser?.username || 'User';
+  const logoUrl = currentUser?.logo_url || null; // Get logo URL
 
   React.useEffect(() => {
     const checkAuthStatusAndFetchToken = async () => {
@@ -242,6 +243,7 @@ export default function DashboardLayout({
           userName={userName}
           onLogout={handleLogout}
           menuItems={menuItems}
+          logoUrl={logoUrl}
         />
         <main className="flex-1 overflow-y-auto p-4 lg:p-8 bg-muted/40 relative">
           {effectiveLock ? (
