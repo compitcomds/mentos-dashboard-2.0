@@ -104,7 +104,7 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
 
        <SidebarFooter className="p-4 lg:p-6 border-t border-sidebar-border w-full">
          <div className="text-xs text-muted-foreground group-data-[state=collapsed]:hidden text-center">
-           this is developed by compitcom.com
+           Developed by <a href="https://compitcom.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">compitcom.com</a>
          </div>
        </SidebarFooter>
     </Sidebar>
