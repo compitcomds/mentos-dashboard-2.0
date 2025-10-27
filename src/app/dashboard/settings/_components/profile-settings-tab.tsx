@@ -36,6 +36,9 @@ export default function ProfileSettingsTab() {
       state: '',
       postal_code: '',
       country: '',
+      site_name: '',
+      site_url: '',
+      logo_url: '',
     },
   });
 
@@ -64,6 +67,9 @@ export default function ProfileSettingsTab() {
         state: parts[3] || '',
         postal_code: parts[4] || '',
         country: parts[5] || '',
+        site_name: currentUser.site_name || '',
+        site_url: currentUser.site_url || '',
+        logo_url: currentUser.logo_url || '',
       });
     }
   }, [currentUser, profileForm]);
@@ -268,6 +274,50 @@ export default function ProfileSettingsTab() {
                   )}
                 />
               </div>
+
+               <h3 className="text-md font-medium pt-4 border-t">Site Configuration</h3>
+                <FormField
+                  control={profileForm.control}
+                  name="site_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Site Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Your Awesome Site" {...field} value={field.value || ''} disabled={updateUserProfileMutation.isPending} />
+                      </FormControl>
+                      <FormDescription>Used for publisher name in structured data.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={profileForm.control}
+                  name="site_url"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Site URL</FormLabel>
+                      <FormControl>
+                        <Input placeholder="https://example.com" {...field} value={field.value || ''} disabled={updateUserProfileMutation.isPending} />
+                      </FormControl>
+                      <FormDescription>The main URL of your website.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={profileForm.control}
+                  name="logo_url"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Logo URL</FormLabel>
+                      <FormControl>
+                        <Input placeholder="https://example.com/logo.png" {...field} value={field.value || ''} disabled={updateUserProfileMutation.isPending} />
+                      </FormControl>
+                      <FormDescription>Full URL to your site's logo. Used for structured data.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               
               {profileForm.formState.errors.root && (
                   <FormMessage>{profileForm.formState.errors.root.message}</FormMessage>

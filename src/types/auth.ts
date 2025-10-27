@@ -45,6 +45,9 @@ export const profileSchema = z.object({
   state: z.string().optional().or(z.literal('')),
   postal_code: z.string().optional().or(z.literal('')),
   country: z.string().optional().or(z.literal('')),
+  site_name: z.string().optional().or(z.literal('')),
+  site_url: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
+  logo_url: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
 });
 export type ProfileFormValues = z.infer<typeof profileSchema>;
 
@@ -145,4 +148,7 @@ export interface User {
     full_name?: string | null; // Custom field for full name
     phone?: string | number | null; // Custom field for phone
     address?: string | null; // Custom field for address
+    site_name?: string | null;
+    site_url?: string | null;
+    logo_url?: string | null;
 }

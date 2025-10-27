@@ -262,6 +262,9 @@ export default function BlogFormPage() {
    // JSON-LD generation
    useEffect(() => {
     const featuredImageUrl = imagePreviews.featured || '';
+    const publisherName = currentUser?.site_name || "Your Site Name";
+    const publisherLogoUrl = currentUser?.logo_url || "/app-logo.png";
+
 
     const jsonData = {
       "@context": "https://schema.org",
@@ -274,16 +277,16 @@ export default function BlogFormPage() {
       },
       "publisher": {
         "@type": "Organization",
-        "name": "Your Site Name", // Placeholder
+        "name": publisherName,
         "logo": {
           "@type": "ImageObject",
-          "url": "/app-logo.png" // Placeholder
+          "url": publisherLogoUrl
         }
       },
       "datePublished": watchedStatus === 'published' && blogData?.publishedAt ? format(new Date(blogData.publishedAt), 'yyyy-MM-dd') : (watchedStatus === 'published' ? format(new Date(), 'yyyy-MM-dd') : '')
     };
     setValue('seo_blog.structuredData', formatStructuredData(jsonData));
-  }, [watchedTitle, watchedAuthor, watchedStatus, blogData?.publishedAt, imagePreviews.featured, setValue]);
+  }, [watchedTitle, watchedAuthor, watchedStatus, blogData?.publishedAt, imagePreviews.featured, setValue, currentUser]);
 
 
   useEffect(() => {
@@ -1572,4 +1575,3 @@ function BlogFormSkeleton({ isEditing }: { isEditing: boolean }) {
     </div>
   );
 }
-
