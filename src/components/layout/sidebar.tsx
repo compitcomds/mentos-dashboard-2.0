@@ -39,7 +39,7 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
   const { state } = useSidebar(); // Get sidebar state
   const { data: currentUser } = useCurrentUser(); // Fetch user data
   const logoUrl = currentUser?.logo_url || null; // Get logo URL
-  const siteName = currentUser?.site_name || "Mentos Api"; // Use site name from user settings, fallback to "Mentos Api"
+  const siteName = "Mentos"; // Static name
 
   // menuItems prop already includes the updated label and path from DashboardLayout
   const updatedMenuItems = menuItems;
