@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -112,13 +111,13 @@ const formatStructuredData = (data: any): string => {
 };
 
 const slugify = (text: string): string => {
-    return text
-      .toString()
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, '-')       // Replace spaces with -
-      .replace(/[^\w\-]+/g, '')   // Remove all non-word chars except -
-      .replace(/\-\-+/g, '-');    // Replace multiple - with single -
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-") // Replace spaces with -
+    .replace(/[^\w\-]+/g, "") // Remove all non-word chars except -
+    .replace(/\-\-+/g, "-"); // Replace multiple - with single -
 };
 
 const defaultFormValues: BlogFormValues = {
@@ -208,7 +207,7 @@ export default function BlogFormPage() {
   const form = useForm<BlogFormValues>({
     resolver: zodResolver(blogFormSchema),
     defaultValues: defaultFormValues,
-    mode: 'onChange',
+    mode: "onChange",
   });
 
   const { control, handleSubmit, reset, setValue, watch, trigger } = form;
@@ -221,7 +220,7 @@ export default function BlogFormPage() {
   const watchedStatus = watch("Blog_status");
   const watchedSlug = watch("slug");
   const watchedCategoryId = watch("categories");
-  
+
   const watchedMetaTitle = watch("seo_blog.metaTitle", "");
   const watchedMetaDesc = watch("seo_blog.metaDescription", "");
   const watchedOgTitle = watch("seo_blog.openGraph.ogTitle", "");
@@ -232,91 +231,137 @@ export default function BlogFormPage() {
   useEffect(() => {
     if (manualSlugEditRef.current) return;
     const newSlug = slugify(watchedTitle);
-    if (form.getValues('slug') !== newSlug) {
-        setValue('slug', newSlug, { shouldValidate: true, shouldDirty: true });
+    if (form.getValues("slug") !== newSlug) {
+      setValue("slug", newSlug, { shouldValidate: true, shouldDirty: true });
     }
   }, [watchedTitle, setValue, form]);
 
   // Canonical URL Generation
   useEffect(() => {
-    if (manualCanonicalUrlEditRef.current || !currentUser?.bolg_url_builder || !watchedSlug) return;
-    
+    if (
+      manualCanonicalUrlEditRef.current ||
+      !currentUser?.bolg_url_builder ||
+      !watchedSlug
+    )
+      return;
+
     const template = currentUser.bolg_url_builder;
-    const category = fetchedCategories?.find(c => c.id === watchedCategoryId);
+    const category = fetchedCategories?.find((c) => c.id === watchedCategoryId);
 
-    const parts = template.split('+').map(part => part.trim());
-    const finalUrl = parts.map(part => {
+    const parts = template.split("+").map((part) => part.trim());
+    const finalUrl = parts
+      .map((part) => {
         if (part.startsWith('"') && part.endsWith('"')) {
-            return part.slice(1, -1); // It's a string literal
-        } else if (part === 'slug') {
-            return watchedSlug || ''; // The post slug
-        } else if (part === '<blog-set.slug>') {
-            return category?.slug || ''; // The category slug
+          return part.slice(1, -1); // It's a string literal
+        } else if (part === "slug") {
+          return watchedSlug || ""; // The post slug
+        } else if (part === "<blog-set.slug>") {
+          return category?.slug || ""; // The category slug
         }
-        return ''; // Or handle other variables if they exist
-    }).join('');
+        return ""; // Or handle other variables if they exist
+      })
+      .join("");
 
-
-    if (form.getValues('seo_blog.canonicalURL') !== finalUrl) {
-      setValue('seo_blog.canonicalURL', finalUrl, { shouldValidate: true, shouldDirty: true });
+    if (form.getValues("seo_blog.canonicalURL") !== finalUrl) {
+      setValue("seo_blog.canonicalURL", finalUrl, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
     }
-
-  }, [watchedSlug, watchedCategoryId, currentUser?.bolg_url_builder, fetchedCategories, setValue, form]);
-
+  }, [
+    watchedSlug,
+    watchedCategoryId,
+    currentUser?.bolg_url_builder,
+    fetchedCategories,
+    setValue,
+    form,
+  ]);
 
   // SEO Sync logic
   useEffect(() => {
     if (isSeoSyncEnabled) {
       // Sync titles
-      setValue('seo_blog.metaTitle', watchedTitle.substring(0, 60), { shouldValidate: true });
-      setValue('seo_blog.openGraph.ogTitle', watchedTitle.substring(0, 70), { shouldValidate: true });
+      setValue("seo_blog.metaTitle", watchedTitle.substring(0, 60), {
+        shouldValidate: true,
+      });
+      setValue("seo_blog.openGraph.ogTitle", watchedTitle.substring(0, 70), {
+        shouldValidate: true,
+      });
 
       // Sync descriptions
-      setValue('seo_blog.metaDescription', watchedExcerpt.substring(0, 160), { shouldValidate: true });
-      setValue('seo_blog.openGraph.ogDescription', watchedExcerpt.substring(0, 200), { shouldValidate: true });
-        
+      setValue("seo_blog.metaDescription", watchedExcerpt.substring(0, 160), {
+        shouldValidate: true,
+      });
+      setValue(
+        "seo_blog.openGraph.ogDescription",
+        watchedExcerpt.substring(0, 200),
+        { shouldValidate: true }
+      );
+
       // Sync images
-      setValue('seo_blog.metaImage', watchedImage, { shouldValidate: true });
-      setValue('seo_blog.openGraph.ogImage', watchedImage, { shouldValidate: true });
+      setValue("seo_blog.metaImage", watchedImage, { shouldValidate: true });
+      setValue("seo_blog.openGraph.ogImage", watchedImage, {
+        shouldValidate: true,
+      });
 
       // Sync tags to keywords
-      setValue('seo_blog.keywords', watchedTags, { shouldValidate: true });
-        
-       // Sync canonical URL to OG URL
-       setValue('seo_blog.openGraph.ogUrl', watchedCanonicalUrl, { shouldValidate: true });
+      setValue("seo_blog.keywords", watchedTags, { shouldValidate: true });
 
+      // Sync canonical URL to OG URL
+      setValue("seo_blog.openGraph.ogUrl", watchedCanonicalUrl, {
+        shouldValidate: true,
+      });
     }
-  }, [isSeoSyncEnabled, watchedTitle, watchedExcerpt, watchedImage, watchedTags, watchedCanonicalUrl, setValue]);
-    
-   // JSON-LD generation
-   useEffect(() => {
-    const featuredImageUrl = imagePreviews.featured || '';
+  }, [
+    isSeoSyncEnabled,
+    watchedTitle,
+    watchedExcerpt,
+    watchedImage,
+    watchedTags,
+    watchedCanonicalUrl,
+    setValue,
+  ]);
+
+  // JSON-LD generation
+  useEffect(() => {
+    const featuredImageUrl = imagePreviews.featured || "";
     const publisherName = currentUser?.site_name || "Your Site Name";
     const publisherLogoUrl = currentUser?.logo_url || "/app-logo.png";
-
 
     const jsonData = {
       "@context": "https://schema.org",
       "@type": "Article",
-      "headline": watchedTitle,
-      "image": featuredImageUrl,
-      "author": {
+      headline: watchedTitle,
+      image: featuredImageUrl,
+      author: {
         "@type": "Person",
-        "name": watchedAuthor || 'Site Author',
+        name: watchedAuthor || "Site Author",
       },
-      "publisher": {
+      publisher: {
         "@type": "Organization",
-        "name": publisherName,
-        "logo": {
+        name: publisherName,
+        logo: {
           "@type": "ImageObject",
-          "url": publisherLogoUrl
-        }
+          url: publisherLogoUrl,
+        },
       },
-      "datePublished": watchedStatus === 'published' && blogData?.publishedAt ? format(new Date(blogData.publishedAt), 'yyyy-MM-dd') : (watchedStatus === 'published' ? format(new Date(), 'yyyy-MM-dd') : '')
+      datePublished:
+        watchedStatus === "published" && blogData?.publishedAt
+          ? format(new Date(blogData.publishedAt), "yyyy-MM-dd")
+          : watchedStatus === "published"
+          ? format(new Date(), "yyyy-MM-dd")
+          : "",
     };
-    setValue('seo_blog.structuredData', formatStructuredData(jsonData));
-  }, [watchedTitle, watchedAuthor, watchedStatus, blogData?.publishedAt, imagePreviews.featured, setValue, currentUser]);
-
+    setValue("seo_blog.structuredData", formatStructuredData(jsonData));
+  }, [
+    watchedTitle,
+    watchedAuthor,
+    watchedStatus,
+    blogData?.publishedAt,
+    imagePreviews.featured,
+    setValue,
+    currentUser,
+  ]);
 
   useEffect(() => {
     if (isLoadingUser) return;
@@ -331,7 +376,12 @@ export default function BlogFormPage() {
       );
     }
 
-    if (isEditing && blogData && !isLoadingBlog && (fetchedCategories || !isCategoriesError)) {
+    if (
+      isEditing &&
+      blogData &&
+      !isLoadingBlog &&
+      (fetchedCategories || !isCategoriesError)
+    ) {
       setIsLoadingComponent(true);
       if (blogData.tenent_id !== userTenentId) {
         toast({
@@ -413,7 +463,7 @@ export default function BlogFormPage() {
     isEditing,
     blogData,
     isLoadingBlog,
-    fetchedCategories, 
+    fetchedCategories,
     reset,
     isLoadingUser,
     userTenentId,
@@ -430,9 +480,14 @@ export default function BlogFormPage() {
   const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.key === "," || e.key === "Enter") && tagInput.trim()) {
       e.preventDefault();
-      const newTag = tagInput.trim();
-      if (!tags.includes(newTag) && tags.length < 15) {
-        const newTags = [...tags, newTag];
+      const enteredTags = tagInput
+        .trim()
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => !tags.includes(tag));
+
+      if (tags.length < 15) {
+        const newTags = [...tags, ...enteredTags];
         setTags(newTags);
         setValue("tags", newTags.join(", "), { shouldValidate: true });
       } else if (tags.length >= 15) {
@@ -535,14 +590,17 @@ export default function BlogFormPage() {
       });
       return;
     }
-    
+
     // Rerunning validation to catch any potential last-minute sync issues
     const isFormValid = await trigger();
     if (!isFormValid) {
-        toast({ variant: 'destructive', title: 'Validation Error', description: 'Please check the form for errors before submitting.' });
-        return;
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please check the form for errors before submitting.",
+      });
+      return;
     }
-
 
     const mutationOptions = {
       onSuccess: () => {
@@ -572,22 +630,21 @@ export default function BlogFormPage() {
           .filter(Boolean)
           .map((tagVal) => ({ tag_value: tagVal }))
       : [];
-    
-    const { author: formAuthor, ...restOfData } = data;
 
+    const { author: formAuthor, ...restOfData } = data;
 
     const payload: CreateBlogPayload = {
       ...restOfData,
       tags: tagsPayload,
       tenent_id: userTenentId,
-      categories: data.categories, 
+      categories: data.categories,
       seo_blog: data.seo_blog
         ? {
             ...data.seo_blog,
             openGraph: data.seo_blog.openGraph ?? openGraphSchema.parse({}),
           }
         : undefined,
-      author: formAuthor, 
+      author: formAuthor,
       sub_category: data.sub_category || null,
     };
 
@@ -596,9 +653,9 @@ export default function BlogFormPage() {
     if (isEditing && blogData?.id && blogData.documentId) {
       updateMutation.mutate(
         {
-          id: blogData.id, 
+          id: blogData.id,
           blog: payload,
-          documentIdForInvalidation: blogData.documentId, 
+          documentIdForInvalidation: blogData.documentId,
         },
         mutationOptions
       );
@@ -677,7 +734,9 @@ export default function BlogFormPage() {
           type="button"
           variant="outline"
           onClick={() => openMediaSelector(target)}
-          disabled={isSubmittingForm || (isSeoSyncEnabled && target !== 'image')}
+          disabled={
+            isSubmittingForm || (isSeoSyncEnabled && target !== "image")
+          }
         >
           <ImageIcon className="mr-2 h-4 w-4" />
           {previewUrl ? "Change Image" : "Select Image"}
@@ -700,7 +759,9 @@ export default function BlogFormPage() {
               size="icon"
               className="absolute -top-2 -right-2 h-5 w-5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => removeSelectedImage(target)}
-              disabled={isSubmittingForm || (isSeoSyncEnabled && target !== 'image')}
+              disabled={
+                isSubmittingForm || (isSeoSyncEnabled && target !== "image")
+              }
             >
               <X className="h-3 w-3" />
             </Button>
@@ -784,8 +845,8 @@ export default function BlogFormPage() {
                         {...field}
                         disabled={isSubmittingForm}
                         onChange={(e) => {
-                            manualSlugEditRef.current = true;
-                            field.onChange(e);
+                          manualSlugEditRef.current = true;
+                          field.onChange(e);
                         }}
                       />
                     </FormControl>
@@ -874,8 +935,8 @@ export default function BlogFormPage() {
                   )}
                 />
               </div>
-              
-               <FormField
+
+              <FormField
                 control={control}
                 name="sub_category"
                 render={({ field }) => (
@@ -998,7 +1059,8 @@ export default function BlogFormPage() {
                         }
                         disabled={
                           isLoadingCategories ||
-                          (fetchedCategories && fetchedCategories.length === 0) ||
+                          (fetchedCategories &&
+                            fetchedCategories.length === 0) ||
                           isSubmittingForm ||
                           isCategoriesError
                         }
@@ -1011,7 +1073,8 @@ export default function BlogFormPage() {
                                   ? "Loading..."
                                   : isCategoriesError
                                   ? "Error loading"
-                                  : (fetchedCategories && fetchedCategories.length === 0)
+                                  : fetchedCategories &&
+                                    fetchedCategories.length === 0
                                   ? "No categories"
                                   : "Select category"
                               }
@@ -1020,13 +1083,13 @@ export default function BlogFormPage() {
                         </FormControl>
                         <SelectContent>
                           {fetchedCategories?.map((category: Categorie) => (
-                              <SelectItem
-                                key={category.id}
-                                value={category.id!.toString()}
-                              >
-                                {category.name}
-                              </SelectItem>
-                            ))}
+                            <SelectItem
+                              key={category.id}
+                              value={category.id!.toString()}
+                            >
+                              {category.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormDescription>Optional.</FormDescription>
@@ -1070,20 +1133,36 @@ export default function BlogFormPage() {
                 />
               </div>
 
-              <Accordion type="single" collapsible defaultValue={isSeoSyncEnabled ? "" : "seo-section"} value={isSeoSyncEnabled ? "" : "seo-section"} onValueChange={(value) => !value && setIsSeoSyncEnabled(true)}>
+              <Accordion
+                type="single"
+                collapsible
+                defaultValue={isSeoSyncEnabled ? "" : "seo-section"}
+                value={isSeoSyncEnabled ? "" : "seo-section"}
+                onValueChange={(value) => !value && setIsSeoSyncEnabled(true)}
+              >
                 <AccordionItem value="seo-section" className="border-t pt-4">
                   <div className="flex items-center space-x-2 mb-4">
                     <Switch
-                        id="seo-sync-toggle"
-                        checked={isSeoSyncEnabled}
-                        onCheckedChange={setIsSeoSyncEnabled}
+                      id="seo-sync-toggle"
+                      checked={isSeoSyncEnabled}
+                      onCheckedChange={setIsSeoSyncEnabled}
                     />
-                    <FormLabel htmlFor="seo-sync-toggle" className="font-normal cursor-pointer">
-                        Automatically populate SEO & Social fields from main content
+                    <FormLabel
+                      htmlFor="seo-sync-toggle"
+                      className="font-normal cursor-pointer"
+                    >
+                      Automatically populate SEO & Social fields from main
+                      content
                     </FormLabel>
                   </div>
-                  <AccordionTrigger className={cn("text-xl font-semibold tracking-tight hover:no-underline", isSeoSyncEnabled && "cursor-default")} onClick={(e) => isSeoSyncEnabled && e.preventDefault()}>
-                      SEO & Social Sharing
+                  <AccordionTrigger
+                    className={cn(
+                      "text-xl font-semibold tracking-tight hover:no-underline",
+                      isSeoSyncEnabled && "cursor-default"
+                    )}
+                    onClick={(e) => isSeoSyncEnabled && e.preventDefault()}
+                  >
+                    SEO & Social Sharing
                   </AccordionTrigger>
                   <AccordionContent className="space-y-6 pt-2">
                     <Card>
@@ -1108,7 +1187,9 @@ export default function BlogFormPage() {
                                   {...field}
                                   value={field.value ?? ""}
                                   placeholder="Compelling title (max 60 chars)"
-                                  disabled={isSubmittingForm || isSeoSyncEnabled}
+                                  disabled={
+                                    isSubmittingForm || isSeoSyncEnabled
+                                  }
                                 />
                               </FormControl>
                               <div className="flex justify-between items-center">
@@ -1146,7 +1227,9 @@ export default function BlogFormPage() {
                                   value={field.value ?? ""}
                                   placeholder="Short summary (50-160 chars)"
                                   rows={2}
-                                  disabled={isSubmittingForm || isSeoSyncEnabled}
+                                  disabled={
+                                    isSubmittingForm || isSeoSyncEnabled
+                                  }
                                 />
                               </FormControl>
                               <div className="flex justify-between items-center">
@@ -1196,7 +1279,9 @@ export default function BlogFormPage() {
                                   {...field}
                                   value={field.value ?? ""}
                                   placeholder="Enter comma-separated keywords"
-                                  disabled={isSubmittingForm || isSeoSyncEnabled}
+                                  disabled={
+                                    isSubmittingForm || isSeoSyncEnabled
+                                  }
                                 />
                               </FormControl>
                               <FormDescription>
@@ -1219,8 +1304,8 @@ export default function BlogFormPage() {
                                   placeholder="https://example.com/original-post"
                                   disabled={isSubmittingForm}
                                   onChange={(e) => {
-                                      manualCanonicalUrlEditRef.current = true;
-                                      field.onChange(e);
+                                    manualCanonicalUrlEditRef.current = true;
+                                    field.onChange(e);
                                   }}
                                 />
                               </FormControl>
@@ -1294,8 +1379,8 @@ export default function BlogFormPage() {
                                 />
                               </FormControl>
                               <FormDescription>
-                                Optional. Must be valid JSON. Helps search engines
-                                understand content.
+                                Optional. Must be valid JSON. Helps search
+                                engines understand content.
                               </FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -1329,7 +1414,9 @@ export default function BlogFormPage() {
                                     {...field}
                                     value={field.value ?? ""}
                                     placeholder="Title for social (max 70 chars)"
-                                    disabled={isSubmittingForm || isSeoSyncEnabled}
+                                    disabled={
+                                      isSubmittingForm || isSeoSyncEnabled
+                                    }
                                   />
                                 </FormControl>
                                 <div className="flex justify-between items-center">
@@ -1367,7 +1454,9 @@ export default function BlogFormPage() {
                                     value={field.value ?? ""}
                                     placeholder="Description for social (max 200 chars)"
                                     rows={2}
-                                    disabled={isSubmittingForm || isSeoSyncEnabled}
+                                    disabled={
+                                      isSubmittingForm || isSeoSyncEnabled
+                                    }
                                   />
                                 </FormControl>
                                 <div className="flex justify-between items-center">
@@ -1417,7 +1506,9 @@ export default function BlogFormPage() {
                                     {...field}
                                     value={field.value ?? ""}
                                     placeholder="URL for social sharing (e.g., blog post URL)"
-                                    disabled={isSubmittingForm || isSeoSyncEnabled}
+                                    disabled={
+                                      isSubmittingForm || isSeoSyncEnabled
+                                    }
                                   />
                                 </FormControl>
                                 <FormDescription>Optional.</FormDescription>
@@ -1442,10 +1533,16 @@ export default function BlogFormPage() {
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="article">Article</SelectItem>
-                                    <SelectItem value="website">Website</SelectItem>
+                                    <SelectItem value="article">
+                                      Article
+                                    </SelectItem>
+                                    <SelectItem value="website">
+                                      Website
+                                    </SelectItem>
                                     <SelectItem value="book">Book</SelectItem>
-                                    <SelectItem value="profile">Profile</SelectItem>
+                                    <SelectItem value="profile">
+                                      Profile
+                                    </SelectItem>
                                   </SelectContent>
                                 </Select>
                                 <FormDescription>

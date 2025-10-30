@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -69,7 +68,6 @@ import {
 } from "@/components/ui/tooltip";
 import type { Blog } from "@/types/blog";
 import type { Media } from "@/types/media";
-import type { FindMany } from "@/types/strapi_response";
 import { useCurrentUser } from "@/lib/queries/user";
 import BlogCardGrid from "./_components/blog-card-grid";
 import { Input } from "@/components/ui/input";
@@ -92,9 +90,6 @@ import {
 } from "@/components/ui/accordion";
 import { Label } from "@/components/ui/label";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { cn } from "@/lib/utils";
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL_no_api || "";
 
 type ViewMode = "table" | "card";
 type SortField = "createdAt" | "updatedAt" | "publishedAt" | "title";
@@ -303,18 +298,6 @@ export default function BlogPage() {
 
   const filteredBlogPosts = React.useMemo(() => {
     if (!blogData?.data) return [];
-    // Server-side filtering for search/category is now done by the API query, so client-side filtering might not be needed
-    // unless you want to further refine client-side after initial API fetch.
-    // For simplicity, assuming API handles the primary filtering based on URL params.
-    // Client-side filtering can be re-added if necessary.
-    // Current implementation assumes 'blogData.data' is already filtered by the API.
-    // If we were still doing client-side search after API fetch:
-    // return blogData.data.filter(post => {
-    //   const matchesSearchTerm = post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    //                             (post.slug && post.slug.toLowerCase().includes(searchTerm.toLowerCase()));
-    //   const matchesCategory = !selectedCategoryId || (post.categories && String(post.categories.id) === selectedCategoryId);
-    //   return matchesSearchTerm && matchesCategory;
-    // });
     return blogData.data;
   }, [blogData?.data, searchTerm, selectedCategoryId]);
 
@@ -662,7 +645,10 @@ export default function BlogPage() {
                       const editLink = `/dashboard/blog/${
                         post.documentId || post.id
                       }?returnUrl=${encodeURIComponent(currentFullUrl)}`;
-                      const publicUrl = post.seo_blog?.canonicalURL || post.seo_blog?.openGraph?.ogUrl || `/blog/${post.slug}`;
+                      const publicUrl =
+                        post.seo_blog?.canonicalURL ||
+                        post.seo_blog?.openGraph?.ogUrl ||
+                        `/blog/${post.slug}`;
 
                       return (
                         <TableRow key={post.id}>
@@ -729,10 +715,7 @@ export default function BlogPage() {
                                     variant="ghost"
                                     className="h-8 w-8"
                                   >
-                                    <Link
-                                      href={publicUrl}
-                                      target="_blank"
-                                    >
+                                    <Link href={publicUrl} target="_blank">
                                       <Eye className="h-4 w-4" />
                                     </Link>
                                   </Button>
