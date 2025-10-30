@@ -553,9 +553,9 @@ export default function QueryFormsPage() {
           escapeCsvCell(
             item.publishedAt
               ? format(
-                  parseISO(String(item.publishedAt)),
-                  "yyyy-MM-dd HH:mm:ss"
-                )
+                parseISO(String(item.publishedAt)),
+                "yyyy-MM-dd HH:mm:ss"
+              )
               : ""
           ),
           escapeCsvCell(mediaCount),
@@ -829,7 +829,7 @@ export default function QueryFormsPage() {
         </Card>
 
         {(pageIsLoading && !queryFormsData) ||
-        (isFetching && !queryFormsData) ? (
+          (isFetching && !queryFormsData) ? (
           <QueryFormsPageSkeleton viewMode={viewMode} pageSize={pageSize} />
         ) : null}
 
@@ -1058,7 +1058,7 @@ export default function QueryFormsPage() {
 
       {selectedQueryForm && (
         <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-          <DialogContent className="sm:min-w-[90%] max-h-[85vh] flex flex-col">
+          <DialogContent className="sm:min-w-[90%] max-h-[100vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>
                 Query Details: {selectedQueryForm.name || "N/A"}
@@ -1068,8 +1068,8 @@ export default function QueryFormsPage() {
               </DialogDescription>
             </DialogHeader>
             <ScrollArea className="flex-1 min-h-0">
-              <div className="py-4 space-y-3 text-sm grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-1 space-y-2 bg-muted/50 p-4 rounded-lg border">
+              <div className="py-4 space-y-3 text-sm grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-1 space-y-2 bg-muted/50 p-4 rounded-lg border h-full overflow-y-auto">
                   <DetailItem label="Name" value={selectedQueryForm.name} />
                   <DetailItem label="Email" value={selectedQueryForm.email} />
                   <DetailItem
@@ -1097,9 +1097,9 @@ export default function QueryFormsPage() {
                     value={
                       selectedQueryForm.createdAt
                         ? format(
-                            parseISO(String(selectedQueryForm.createdAt)),
-                            "PPP p"
-                          )
+                          parseISO(String(selectedQueryForm.createdAt)),
+                          "PPP p"
+                        )
                         : undefined
                     }
                   />
@@ -1108,15 +1108,15 @@ export default function QueryFormsPage() {
                     value={
                       selectedQueryForm.publishedAt
                         ? format(
-                            parseISO(String(selectedQueryForm.publishedAt)),
-                            "PPP p"
-                          )
+                          parseISO(String(selectedQueryForm.publishedAt)),
+                          "PPP p"
+                        )
                         : undefined
                     }
                   />
                 </div>
 
-                <div className="md:col-span-2 space-y-4">
+                <div className="md:col-span-1 space-y-4">
                   {selectedQueryForm.media &&
                     selectedQueryForm.media.length > 0 && (
                       <Card>
@@ -1144,11 +1144,10 @@ export default function QueryFormsPage() {
                                   mediaItem.url
                                     ? mediaItem.url.startsWith("http")
                                       ? mediaItem.url
-                                      : `${
-                                          process.env
-                                            .NEXT_PUBLIC_API_BASE_URL_no_api ||
-                                          ""
-                                        }${mediaItem.url}`
+                                      : `${process.env
+                                        .NEXT_PUBLIC_API_BASE_URL_no_api ||
+                                      ""
+                                      }${mediaItem.url}`
                                     : "#"
                                 }
                                 target="_blank"
@@ -1171,29 +1170,61 @@ export default function QueryFormsPage() {
 
                   {selectedQueryForm.other_meta &&
                     Object.keys(selectedQueryForm.other_meta).length > 0 && (
-                      <Card>
+                      <Card className="overflow-auto">
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center gap-2">
                             <Code2 className="h-4 w-4 text-primary" /> Other
                             Metadata (JSON)
                           </CardTitle>
                         </CardHeader>
-                        <CardContent>
-                          <pre className="text-xs bg-muted p-3 rounded-md border w-full overflow-auto max-h-60">
-                            {(() => {
-                              try {
-                                const jsonData =
-                                  typeof selectedQueryForm.other_meta ===
-                                  "string"
-                                    ? JSON.parse(selectedQueryForm.other_meta)
-                                    : selectedQueryForm.other_meta;
-                                return JSON.stringify(jsonData, null, 2);
-                              } catch (e) {
-                                return String(selectedQueryForm.other_meta);
-                              }
-                            })()}
-                          </pre>
+                        <CardContent className="flex flex-col md:flex-row gap-2">
+                          {/* Left: Raw JSON view */}
+                          <div className="w-full md:w-1/2">
+                            <h3 className="text-sm font-semibold mb-2">Raw Data</h3>
+                            <pre className="text-xs bg-muted p-3 rounded-md border w-full overflow-auto max-h-60">
+                              {(() => {
+                                try {
+                                  const jsonData =
+                                    typeof selectedQueryForm.other_meta === "string"
+                                      ? JSON.parse(selectedQueryForm.other_meta)
+                                      : selectedQueryForm.other_meta;
+                                  return JSON.stringify(jsonData, null, 2);
+                                } catch (e) {
+                                  return String(selectedQueryForm.other_meta);
+                                }
+                              })()}
+                            </pre>
+                          </div>
+
+                          {/* Right: Formatted data view */}
+                          <div className="w-full md:w-1/2">
+                            <h3 className="text-sm font-semibold mb-2">Formatted View</h3>
+                            <div className="bg-muted p-3 rounded-md border w-full overflow-auto max-h-60 text-sm space-y-2">
+                              {(() => {
+                                try {
+                                  const jsonData =
+                                    typeof selectedQueryForm.other_meta === "string"
+                                      ? JSON.parse(selectedQueryForm.other_meta)
+                                      : selectedQueryForm.other_meta;
+
+                                  if (typeof jsonData === "object" && jsonData !== null) {
+                                    return Object.entries(jsonData).map(([key, value]) => (
+                                      <div key={key} className="flex justify-between border-b border-border py-1">
+                                        <span className="font-medium text-muted-foreground">{key}</span>
+                                        <span className="text-right break-all">{String(value)}</span>
+                                      </div>
+                                    ));
+                                  } else {
+                                    return <div>{String(jsonData)}</div>;
+                                  }
+                                } catch (e) {
+                                  return <div>{String(selectedQueryForm.other_meta)}</div>;
+                                }
+                              })()}
+                            </div>
+                          </div>
                         </CardContent>
+
                       </Card>
                     )}
                 </div>
@@ -1228,9 +1259,8 @@ const DetailItem: React.FC<{
         {label}:
       </strong>
       <div
-        className={`col-span-2 ${
-          preWrap ? "whitespace-pre-wrap break-words" : "truncate"
-        } text-xs sm:text-sm`}
+        className={`col-span-2 ${preWrap ? "whitespace-pre-wrap break-words" : "truncate"
+          } text-xs sm:text-sm`}
       >
         {badge ? (
           <Badge

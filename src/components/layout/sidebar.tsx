@@ -65,7 +65,7 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
               aria-label={state === 'expanded' ? `${siteName} Dashboard` : "Dashboard"}
             >
               {logoUrl ? (
-                <Image src={logoUrl} alt={`${siteName} Logo`} width={32} height={32} className="h-8 w-auto rounded-sm object-contain" unoptimized />
+                <Image src={logoUrl} alt={`${siteName} Logo`} width={32} height={32} className="h-8 w-auto hidden rounded-sm object-contain" unoptimized />
               ) : (
                 <span className="p-2 bg-muted rounded-md text-xl font-bold">
                     {siteName.charAt(0).toUpperCase()}
@@ -75,7 +75,7 @@ export default function SidebarNav({ menuItems }: SidebarNavProps) {
             </Link>
 
            <SidebarTrigger
-             className={cn("h-7 w-7", state === 'expanded' ? 'ml-auto' : 'hidden')} // Use ml-auto for spacing, hide when collapsed (as it's outside the flow)
+             className={cn("h-7 w-7", state === 'expanded' ? 'ml-auto' : 'block')} // Use ml-auto for spacing, hide when collapsed (as it's outside the flow)
            >
              {/* Explicitly pass the icons to SidebarTrigger */}
              {state === 'expanded' ? <ChevronLeft /> : <ChevronRight />}
